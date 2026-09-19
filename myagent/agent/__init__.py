@@ -13,6 +13,20 @@ from myagent.agent.taskbrain import (
     ToolRegistry,
     UserProfileStore,
 )
+from myagent.agent.search import (
+    BraveSearchProvider,
+    SearchResult,
+    WebResearchWorker,
+    WebSearchProvider,
+)
+from myagent.agent.tasks import (
+    CodexReadOnlyWorker,
+    FunctionTaskWorker,
+    TaskManager,
+    TaskRecord,
+    TaskStatus,
+    TaskStore,
+)
 
 __all__ = [
     "AgentBrain",
@@ -32,4 +46,14 @@ __all__ = [
     "STTProvider",
     "TTSProvider",
     "VoiceAgent",
+    "FunctionTaskWorker",
+    "CodexReadOnlyWorker",
+    "TaskManager",
+    "TaskRecord",
+    "TaskStatus",
+    "TaskStore",
+    "BraveSearchProvider",
+    "SearchResult",
+    "WebSearchProvider",
+    "WebResearchWorker",
 ]

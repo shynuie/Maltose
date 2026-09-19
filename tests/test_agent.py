@@ -20,6 +20,8 @@ from myagent.agent import (
     ToolRegistry,
     UserProfileStore,
     VoiceAgent,
+    TaskManager,
+    TaskStore,
 )
 from myagent.agent.cli import build_parser
 from myagent.voice import (
@@ -273,6 +275,39 @@ class TaskBrainTest(unittest.TestCase):
                 "id": "default",
                 "display_name": "Marvin",
             })
+
+    def test_taskbrain_exposes_task_tools_and_scopes_plan_to_user(self) -> None:
+        class NoopModel:
+            def complete(self, messages, tools):
+                return {"choices": [{"message": {"content": "ok"}}]}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            task_manager = TaskManager(TaskStore(Path(tmpdir) / "tasks.sqlite3"))
+            brain = TaskBrain(NoopModel(), task_manager=task_manager)
+            result = brain.tools.execute(
+                "create_task_plan",
+                {
+                    "tasks": [
+                        {"task_id": "one", "title": "分析檔案", "worker_type": "codex_readonly"}
+                    ]
+                },
+            )
+            self.assertEqual(result["tasks"][0]["user_id"], "default")
+            self.assertEqual(
+                {tool["function"]["name"] for tool in brain.tools.schemas()},
+                {
+                    "remember",
+                    "recall",
+                    "return_to_standby",
+                    "create_task_plan",
+                    "get_task_status",
+                    "list_tasks",
+                    "cancel_task",
+                    "retry_task",
+                },
+            )
+            task_manager.shutdown()
+            task_manager.store.close()
 
 
 class VoiceAgentTest(unittest.TestCase):

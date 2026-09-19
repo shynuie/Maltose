@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-Build a local TaskBrain behind the completed voice frontend. Use the OpenAI API as the initial model backend, while the primary runtime owns tool registration, LanceDB-backed semantic memory, and future MCP/skills adapters.
+Build a local multi-task orchestration layer behind TaskBrain. A single voice command should be able to produce a bounded task plan, run independent work in parallel, monitor task state, and report meaningful progress without repeatedly sending full logs and conversation history to the LLM.
 
 ## Done
 
@@ -46,11 +46,18 @@ Build a local TaskBrain behind the completed voice frontend. Use the OpenAI API 
 - Added deterministic wake-only handling: a transcript containing only `麥芽糖`/`麦芽糖` replies `我在` without calling the LLM.
 - Made the post-wake acknowledgement default to `我在` after the 0.8-second follow-up window.
 - Added `return_to_standby` conversation-control tool for phrases such as `退下吧` and `沒事了`.
+- Committed the current prototype as `9445bf5` (`Build local TaskBrain prototype`).
 - Added pluggable `SpeakerIdentifier`, `SpeakerResult`, and `TurnContext` interfaces.
 - Added parallel STT and speaker-identification workers for each completed utterance.
 - Passed speaker-resolved `user_id` into TaskBrain and scoped memory/profile tools to that user.
 - Added built-in `remember` and `recall` tools and a bounded tool execution loop.
 - Added 49 unit tests covering the TaskBrain, memory, identity context, and voice flow.
+- Added the first local multi-task slice: SQLite `TaskStore`, durable task lifecycle, dependency-aware `TaskManager`, bounded worker pool, and TaskBrain task-management tools.
+- Added 58 unit tests covering task persistence, parallel execution, dependencies, cancellation/retry, user scoping, and safe handling of unregistered worker types.
+- Added a read-only `CodexReadOnlyWorker` using `codex exec --sandbox read-only`, with bounded runtime, output limits, ephemeral sessions, and safe failure handling.
+- Added the web-search design: provider abstraction for quick searches now, with a separate multi-page research worker planned later.
+- Added `WebSearchProvider`, Brave Search integration, and the optional TaskBrain `web_search` tool with bounded results, timeout, source URLs, and freshness filters.
+- Added a bounded `WebResearchWorker` that runs multiple searches, deduplicates source URLs, reports progress, and returns a capped structured result for later LLM summarization.
 
 ## Architecture: Voice I/O + Agent Brain
 
@@ -126,7 +133,7 @@ KWS wake_detected
   - Installed the vector-memory extra and verified LanceDB migration/search with 49 tests.
   - Implemented the speaker identification framework; concrete speaker model and enrollment flow remain.
   - Remaining: run the live LanceDB voice smoke test, then add a concrete local speaker model.
-- **Next**: add MCP client and skills loader adapters that expose capabilities through `ToolRegistry`.
+- **Next**: add MCP client and skills loader adapters that expose capabilities through `ToolRegistry`, then connect them to TaskManager workers.
 - **Conversation lifecycle**: one wake starts a session; silence timeout ends the session but never exits the process.
 
 ### Phase 2b: Optional OpenClaw Integration
@@ -173,6 +180,66 @@ Support hands-free background listening activated only when a keyword is spoken:
   - Short audio tones for standby ready, wake word recognized, and auto-shutdown.
 - **Streaming STT**:
   - Real-time partial transcript streaming.
+
+### Phase 5: Multi-task Agent Orchestration (Next)
+
+Build a bounded local task system rather than a fully distributed multi-agent runtime.
+
+**Implementation status:** Initial task state and orchestration slice is implemented. The current version persists plans, supports registered Python workers, includes a read-only Codex worker, and can optionally expose Brave web search plus bounded multi-query research to TaskBrain. Full page extraction, MCP, Skills, and write-capable workers are not connected yet.
+
+- **Task request**:
+  - Convert one user command into a structured task plan.
+  - Ask for confirmation when the plan includes file changes, external side effects, or destructive actions.
+  - Give an immediate concise acknowledgement describing the planned work.
+- **Task graph**:
+  - Represent tasks as a DAG with `task_id`, `parent_task_id`, dependencies, worker type, status, progress, result summary, error, timestamps, and `user_id`.
+  - Run independent tasks concurrently; serialize dependent tasks.
+  - Start with a local SQLite task store. Do not use the vector memory database for active task state.
+- **Task lifecycle**:
+  - `pending -> running -> waiting -> succeeded | failed | cancelled`.
+  - Support status queries, cancellation, retry, and final result aggregation.
+  - Keep task state durable across a process restart.
+- **Worker model**:
+  - Add a `TaskWorker` protocol and bounded worker pool, initially limited to 2-3 concurrent tasks.
+  - Implement read-only Codex worker first through `codex exec --sandbox read-only`.
+  - Add a separate write-capable Codex worker only behind explicit user confirmation and `workspace-write` sandboxing.
+  - Later adapt MCP tools and skills into workers without coupling them to the voice layer.
+- **Web search**:
+  - Add a `WebSearchProvider` protocol and a provider adapter with explicit timeout, result-count, and response-size limits.
+  - Expose `web_search` to TaskBrain for short current-information queries.
+  - Preserve title, URL, snippet, and publication metadata so responses can cite sources.
+  - Treat search content as untrusted data and never allow it to override agent instructions or directly trigger side effects.
+  - Add a separate `web_research` worker later for multi-query, multi-page research and progress reporting.
+- **Progress and notification**:
+  - Track progress from deterministic worker events, process output, and task state rather than polling the LLM every few seconds.
+  - Do not announce short tasks; announce long-running tasks after an initial threshold and then at a bounded interval.
+  - Never interrupt active user speech; queue notifications for a safe TTS point.
+  - Let the user ask for status, cancel a task, or request a concise final summary.
+- **Token and safety budgets**:
+  - Use one planner call per user request and send each worker only its scoped context.
+  - Re-plan only after a worker failure or a dependency result that requires a decision.
+  - Bound task count, worker runtime, retries, output size, and total planner/tool rounds.
+  - Redact secrets from worker logs and never pass arbitrary shell commands directly from voice input.
+- **Initial tools**:
+  - `create_task_plan`
+  - `get_task_status`
+  - `list_tasks`
+  - `cancel_task`
+  - `retry_task`
+  - `return_to_standby`
+
+Initial target flow:
+
+```text
+Voice command
+    -> STT + speaker identity
+    -> TaskBrain planner
+    -> TaskManager persists task DAG
+    -> bounded worker pool executes independent tasks
+    -> event-driven progress notifications
+    -> TaskBrain summarizes final results
+    -> TTS response
+```
 
 ## Current Voice Flows
 

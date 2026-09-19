@@ -15,6 +15,8 @@ from myagent.agent.taskbrain import (
     TaskBrain,
     UserProfileStore,
 )
+from myagent.agent.tasks import CodexReadOnlyWorker, TaskManager, TaskStore
+from myagent.agent.search import BraveSearchProvider, WebResearchWorker
 from myagent.logging import configure_logging
 from myagent.voice import create_wake_word_detector, load_wake_word_config
 from myagent.voice.listen_cli import _parse_device
@@ -73,6 +75,41 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--taskbrain-model", default="gpt-5.6-luna")
     parser.add_argument("--taskbrain-reasoning-effort", default="none")
     parser.add_argument("--taskbrain-timeout", type=float, default=120.0)
+    parser.add_argument(
+        "--taskbrain-search",
+        choices=("none", "brave"),
+        default="none",
+        help="Web search provider for TaskBrain.",
+    )
+    parser.add_argument(
+        "--taskbrain-search-token",
+        help="Brave Search API token. Defaults to BRAVE_SEARCH_API_KEY.",
+    )
+    parser.add_argument("--taskbrain-search-timeout", type=float, default=10.0)
+    parser.add_argument(
+        "--taskbrain-tasks",
+        type=Path,
+        default=Path("data/tasks.sqlite3"),
+        help="SQLite database for durable task state.",
+    )
+    parser.add_argument(
+        "--taskbrain-max-workers",
+        type=int,
+        default=2,
+        help="Maximum concurrent local task workers.",
+    )
+    parser.add_argument(
+        "--taskbrain-codex-cwd",
+        type=Path,
+        default=Path.cwd(),
+        help="Working directory for read-only Codex tasks.",
+    )
+    parser.add_argument(
+        "--taskbrain-codex-timeout",
+        type=float,
+        default=300.0,
+        help="Maximum runtime for one read-only Codex task in seconds.",
+    )
     parser.add_argument(
         "--taskbrain-memory",
         type=Path,
@@ -235,6 +272,27 @@ def main() -> None:
         else:
             memory = MemoryStore(args.taskbrain_memory, embedder=embedder)
             profile = None
+        task_manager = TaskManager(
+            TaskStore(args.taskbrain_tasks),
+            max_workers=args.taskbrain_max_workers,
+        )
+        task_manager.register_worker(
+            "codex_readonly",
+            CodexReadOnlyWorker(
+                cwd=args.taskbrain_codex_cwd,
+                timeout=args.taskbrain_codex_timeout,
+            ),
+        )
+        search_provider = None
+        if args.taskbrain_search == "brave":
+            search_provider = BraveSearchProvider(
+                api_key=args.taskbrain_search_token,
+                timeout=args.taskbrain_search_timeout,
+            )
+            task_manager.register_worker(
+                "web_research",
+                WebResearchWorker(search_provider),
+            )
         brain = TaskBrain(
             model=OpenAICompatibleTaskModel(
                 endpoint=args.taskbrain_url,
@@ -245,6 +303,8 @@ def main() -> None:
             ),
             memory=memory,
             profile=profile,
+            task_manager=task_manager,
+            search_provider=search_provider,
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)
