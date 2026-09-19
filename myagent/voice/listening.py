@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Protocol
 
+from myagent.voice.wake import WakeWordDetector, WakeWordGate
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,9 @@ class VADSettings:
     def pre_roll_frames(self) -> int:
         return max(0, _ceil_div(self.pre_roll_ms, self.frame_ms))
 
+    def frames_for_ms(self, duration_ms: int) -> int:
+        return max(0, _ceil_div(duration_ms, self.frame_ms))
+
 
 def _ceil_div(value: int, divisor: int) -> int:
     return -(-value // divisor)
@@ -80,6 +84,7 @@ class Utterance:
 class ListeningEvent:
     kind: str
     utterance: Utterance | None = None
+    keyword: str | None = None
 
 
 class VoiceActivityDetector(Protocol):
@@ -114,6 +119,34 @@ class UtteranceSegmenter:
     @property
     def in_speech(self) -> bool:
         return self._in_speech
+
+    def start_with_frames(self, frames: list[bytes]) -> list[ListeningEvent]:
+        for frame in frames:
+            if len(frame) != self._settings.frame_byte_count:
+                raise ValueError(
+                    f"Expected {self._settings.frame_byte_count} bytes per frame, "
+                    f"got {len(frame)}."
+                )
+
+        self._in_speech = True
+        self._silence_frames = 0
+        self._voiced_frames = self._settings.start_trigger_frames
+        self._utterance_frames = list(frames)
+        self._pre_roll.clear()
+        return [ListeningEvent(kind="speech_started")]
+
+    def prepend_frames(self, frames: list[bytes]) -> None:
+        for frame in frames:
+            if len(frame) != self._settings.frame_byte_count:
+                raise ValueError(
+                    f"Expected {self._settings.frame_byte_count} bytes per frame, "
+                    f"got {len(frame)}."
+                )
+
+        if not self._in_speech or not frames:
+            return
+
+        self._utterance_frames = list(frames) + self._utterance_frames
 
     def process_frame(self, pcm_frame: bytes) -> list[ListeningEvent]:
         if len(pcm_frame) != self._settings.frame_byte_count:
@@ -177,6 +210,9 @@ def microphone_events(
     settings: VADSettings,
     device: str | int | None = None,
     standby_timeout: float | None = None,
+    wake_word_detector: WakeWordDetector | None = None,
+    wake_ack_delay: float = 0.8,
+    wake_buffer_ms: int = 1000,
 ) -> Iterator[ListeningEvent]:
     import time
     import sounddevice as sd
@@ -184,6 +220,11 @@ def microphone_events(
     audio_queue: queue.Queue[bytes] = queue.Queue()
     detector = WebRTCVoiceActivityDetector(settings.aggressiveness)
     segmenter = UtteranceSegmenter(detector, settings)
+    wake_gate = WakeWordGate(wake_word_detector) if wake_word_detector is not None else None
+    wake_detected = wake_gate is None
+    wake_ack_deadline: float | None = None
+    wake_buffer: deque[bytes] = deque(maxlen=settings.frames_for_ms(wake_buffer_ms))
+    pending_wake_frames: list[bytes] = []
 
     def callback(indata, _frames, _time, status) -> None:
         if status:
@@ -200,6 +241,14 @@ def microphone_events(
     ):
         standby_start = time.monotonic()
         while True:
+            if wake_ack_deadline is not None and time.monotonic() >= wake_ack_deadline:
+                wake_ack_deadline = None
+                pending_wake_frames = []
+                yield ListeningEvent(kind="wake_ack_requested")
+                _drain_audio_queue(audio_queue)
+                standby_start = time.monotonic()
+                continue
+
             if not segmenter.in_speech and standby_timeout is not None:
                 if (time.monotonic() - standby_start) >= standby_timeout:
                     yield ListeningEvent(kind="standby_timeout")
@@ -210,7 +259,25 @@ def microphone_events(
             except queue.Empty:
                 continue
 
+            if not wake_detected and wake_gate is not None:
+                wake_buffer.append(pcm_frame)
+                hit = wake_gate.process_frame(pcm_frame, settings.sample_rate)
+                if hit is None:
+                    continue
+
+                wake_detected = True
+                wake_ack_deadline = time.monotonic() + max(0.0, wake_ack_delay)
+                pending_wake_frames = list(wake_buffer)
+                yield ListeningEvent(kind="wake_detected", keyword=hit.keyword)
+                standby_start = time.monotonic()
+                continue
+
             events = segmenter.process_frame(pcm_frame)
+            if any(event.kind == "speech_started" for event in events):
+                if pending_wake_frames:
+                    segmenter.prepend_frames(pending_wake_frames)
+                    pending_wake_frames = []
+                wake_ack_deadline = None
             if segmenter.in_speech:
                 standby_start = time.monotonic()
 
@@ -221,6 +288,14 @@ def list_input_devices() -> str:
     import sounddevice as sd
 
     return str(sd.query_devices())
+
+
+def _drain_audio_queue(audio_queue: queue.Queue[bytes]) -> None:
+    while True:
+        try:
+            audio_queue.get_nowait()
+        except queue.Empty:
+            return
 
 
 def write_utterance_wav(path: Path, utterance: Utterance) -> None:

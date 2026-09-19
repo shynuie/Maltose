@@ -1,6 +1,7 @@
 __pycache__/
 .venv/
 recordings/
+models/
 
 # Python
 *.py[cod]

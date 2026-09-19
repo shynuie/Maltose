@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from myagent.logging import configure_logging
-from myagent.voice import FasterWhisperSTT, STTRequest
+from myagent.voice import STTRequest, create_stt_provider
 
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Transcribe audio using local faster-whisper.")
     parser.add_argument("--file", required=True, type=Path, help="Audio file to transcribe.")
     parser.add_argument("--model", default="small", help="Whisper model size. Default: small.")
+    parser.add_argument(
+        "--provider",
+        choices=("faster-whisper", "fun-asr-nano", "qwen3-asr-0.6b"),
+        default="qwen3-asr-0.6b",
+    )
     parser.add_argument("--language", default="zh", help="Language hint. Default: zh.")
     parser.add_argument("--device", default="cpu", help="Inference device. Default: cpu.")
     parser.add_argument("--compute-type", default="int8", help="Inference compute type. Default: int8.")
@@ -30,7 +35,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     configure_logging()
     args = build_parser().parse_args()
-    result = FasterWhisperSTT().transcribe(
+    result = create_stt_provider(
+        provider=args.provider,
+        model=args.model,
+        device=args.device,
+        compute_type=args.compute_type,
+    ).transcribe(
         STTRequest(
             audio_path=args.file,
             model_size=args.model,

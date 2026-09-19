@@ -1,5 +1,12 @@
 """Voice features for MyAgent."""
 
+from .audio import (
+    AudioStats,
+    NormalizationResult,
+    measure_utterance,
+    normalize_pcm_peak,
+    normalize_utterance_peak,
+)
 from .listening import (
     ListeningEvent,
     Utterance,
@@ -10,17 +17,36 @@ from .listening import (
 )
 from .stt import (
     FasterWhisperSTT,
+    FunASRNanoSTT,
+    Qwen3ASRSTT,
     STTRequest,
     STTResult,
     STTSegment,
     normalize_mandarin_transcript,
+    create_stt_provider,
 )
 from .tts import MacOSSayTTS, TTSRequest
+from .wake import (
+    GainWakeWordDetector,
+    SherpaOnnxKWSConfig,
+    SherpaOnnxKeywordSpotter,
+    WakeWordConfig,
+    WakeWordDetector,
+    WakeWordGate,
+    WakeWordHit,
+    create_wake_word_detector,
+    load_wake_word_config,
+)
 
 __all__ = [
     "FasterWhisperSTT",
+    "FunASRNanoSTT",
+    "Qwen3ASRSTT",
+    "AudioStats",
+    "GainWakeWordDetector",
     "ListeningEvent",
     "MacOSSayTTS",
+    "NormalizationResult",
     "STTRequest",
     "STTResult",
     "STTSegment",
@@ -28,7 +54,19 @@ __all__ = [
     "Utterance",
     "UtteranceSegmenter",
     "VADSettings",
+    "SherpaOnnxKWSConfig",
+    "SherpaOnnxKeywordSpotter",
+    "WakeWordConfig",
+    "WakeWordDetector",
+    "WakeWordGate",
+    "WakeWordHit",
+    "create_wake_word_detector",
+    "create_stt_provider",
+    "load_wake_word_config",
+    "measure_utterance",
     "microphone_events",
     "normalize_mandarin_transcript",
+    "normalize_pcm_peak",
+    "normalize_utterance_peak",
     "write_utterance_wav",
 ]

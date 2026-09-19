@@ -57,6 +57,9 @@ class VoiceAgentTest(unittest.TestCase):
             _settings: VADSettings,
             _device: str | int | None,
             _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
         ) -> Iterator[ListeningEvent]:
             yield ListeningEvent(kind="standby_timeout")
 
@@ -84,6 +87,9 @@ class VoiceAgentTest(unittest.TestCase):
             _settings: VADSettings,
             _device: str | int | None,
             _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
         ) -> Iterator[ListeningEvent]:
             yield ListeningEvent(kind="speech_started")
             yield ListeningEvent(kind="speech_ended", utterance=fake_utterance)
@@ -120,6 +126,9 @@ class VoiceAgentTest(unittest.TestCase):
             _settings: VADSettings,
             _device: str | int | None,
             _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
         ) -> Iterator[ListeningEvent]:
             nonlocal call_count
             call_count += 1
@@ -158,6 +167,9 @@ class VoiceAgentTest(unittest.TestCase):
             _settings: VADSettings,
             _device: str | int | None,
             _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
         ) -> Iterator[ListeningEvent]:
             yield ListeningEvent(kind="speech_started")
             yield ListeningEvent(kind="speech_ended", utterance=fake_utterance)
@@ -180,6 +192,81 @@ class VoiceAgentTest(unittest.TestCase):
             self.assertEqual(agent.state, AgentState.SHUTDOWN)
             self.assertEqual(len(fake_tts.synthesize_calls), 0)
 
+    def test_speaks_wake_ack_when_requested_before_followup_listening(self) -> None:
+        fake_stt = FakeSTT(transcript="打開窗簾")
+        fake_tts = FakeTTS()
+        fake_utterance = _make_fake_utterance()
+
+        def fake_listener(
+            _settings: VADSettings,
+            _device: str | int | None,
+            _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
+        ) -> Iterator[ListeningEvent]:
+            yield ListeningEvent(kind="wake_detected", keyword="麥芽糖")
+            yield ListeningEvent(kind="wake_ack_requested")
+            yield ListeningEvent(kind="speech_started")
+            yield ListeningEvent(kind="speech_ended", utterance=fake_utterance)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = VoiceAgent(
+                config=AgentConfig(
+                    standby_timeout=5.0,
+                    wake_ack_text="我在",
+                    output_dir=Path(tmpdir),
+                ),
+                brain=EchoBrain(prefix="Echo: "),
+                transcriber=fake_stt,
+                speaker=fake_tts,
+                listener_factory=fake_listener,
+            )
+
+            agent.run()
+
+            self.assertEqual(
+                [call.text for call in fake_tts.synthesize_calls],
+                ["我在", "Echo: 打開窗簾"],
+            )
+
+    def test_does_not_speak_wake_ack_when_followup_starts_immediately(self) -> None:
+        fake_stt = FakeSTT(transcript="打開窗簾")
+        fake_tts = FakeTTS()
+        fake_utterance = _make_fake_utterance()
+
+        def fake_listener(
+            _settings: VADSettings,
+            _device: str | int | None,
+            _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
+        ) -> Iterator[ListeningEvent]:
+            yield ListeningEvent(kind="wake_detected", keyword="麥芽糖")
+            yield ListeningEvent(kind="speech_started")
+            yield ListeningEvent(kind="speech_ended", utterance=fake_utterance)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = VoiceAgent(
+                config=AgentConfig(
+                    standby_timeout=5.0,
+                    wake_ack_text="我在",
+                    output_dir=Path(tmpdir),
+                ),
+                brain=EchoBrain(prefix="Echo: "),
+                transcriber=fake_stt,
+                speaker=fake_tts,
+                listener_factory=fake_listener,
+            )
+
+            agent.run()
+
+            self.assertEqual(
+                [call.text for call in fake_tts.synthesize_calls],
+                ["Echo: 打開窗簾"],
+            )
+
 
 class AgentCLITest(unittest.TestCase):
     def test_parses_cli_args(self) -> None:
@@ -193,12 +280,18 @@ class AgentCLITest(unittest.TestCase):
                 "3",
                 "--reply-prefix",
                 "回覆：",
+                "--wake-ack",
+                "我在",
+                "--wake-ack-delay",
+                "0.6",
             ]
         )
         self.assertEqual(args.timeout, 15.5)
         self.assertTrue(args.continuous)
         self.assertEqual(args.max_turns, 3)
         self.assertEqual(args.reply_prefix, "回覆：")
+        self.assertEqual(args.wake_ack, "我在")
+        self.assertEqual(args.wake_ack_delay, 0.6)
 
 
 if __name__ == "__main__":

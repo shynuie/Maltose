@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-Connect the MyAgent voice frontend (ears and mouth) directly to OpenClaw ("龍蝦") as the backend brain via its Gateway API, while planning keyword wake word mode and STT hallucination filtering.
+Connect the completed local voice frontend directly to OpenClaw ("龍蝦") as the backend brain via its Gateway API. The next application-level concern is converting imperfect STT text into constrained intents before tool execution.
 
 ## Done
 
@@ -17,6 +17,21 @@ Connect the MyAgent voice frontend (ears and mouth) directly to OpenClaw ("龍�
 - Added `VoiceAgent` with standby timeout, state machine, and `EchoBrain`.
 - Added `myagent` and `myagent-run` CLI entrypoints with continuous and single-turn modes.
 - Verified live voice interactions and timeout auto-shutdown with physical microphone.
+- Added optional `WakeWordGate` abstraction and sherpa-onnx KWS config loading.
+- Downloaded and configured sherpa-onnx KWS model locally.
+- Added `myagent-wake-test` and `myagent-wake-monitor` CLI tools.
+- Verified `麥芽糖` wake detection on Xiaomi microphone device 3.
+- Verified `wake_detected -> VAD -> utterance wav -> Whisper STT` with `myagent-listen`.
+- Added optional Fun-ASR-Nano STT provider and compared it against faster-whisper on five wake-command samples; Nano is currently better on the sample batch but remains experimental because it can retain or misrecognize wake-word audio.
+- Added Qwen3-ASR-0.6B STT provider. It produced semantically correct commands on 5/5 English samples and 5/5 Chinese command intents; first model initialization is long.
+- Switched the default STT provider to Qwen3-ASR-0.6B; faster-whisper and Fun-ASR-Nano remain selectable fallbacks.
+- Added optional delayed `--wake-ack` short TTS acknowledgement after wake detection.
+- Added `--wake-buffer-ms` ring buffer for one-shot wake commands; default is 1000 ms.
+- Added STT model warmup at startup with a silent WAV and a spoken ready prompt after initialization.
+- Qwen3-ASR-0.6B is now the default STT provider; alternatives remain selectable with `--stt-provider`.
+- Added local English and Chinese command batches for STT comparison.
+- Verified the complete wake -> VAD -> normalized audio -> Qwen3-ASR -> TTS path.
+- All 34 unit tests pass.
 
 ## Architecture: Voice I/O + Agent Brain
 
@@ -55,16 +70,26 @@ Skip building custom scratch agent workflows or intermediate tool frameworks. Co
     4. OpenClaw response text is returned to MyAgent.
     5. MyAgent speaks the response via local TTS.
 
-### Phase 3: Keyword / Wake Word Mode
+### Phase 3: Streaming Keyword / Wake Word Mode (Done: Usable First Pass)
 Support hands-free background listening activated only when a keyword is spoken:
-- **Transcript-based Keyword Matching**:
-  - Zero extra acoustic dependencies; supports arbitrary Mandarin/English keywords (e.g. `--keyword "小助手"`, `--keyword "龍蝦"`).
-- **Interaction Flows**:
-  - *One-shot*: "小助手，今天天氣如何？" -> Strips keyword, processes "今天天氣如何？".
-  - *Two-stage*: "小助手" -> Speaks acknowledgement ("我在") -> Enters standby listening for follow-up command.
-  - *Background conversation*: If the keyword is absent, the utterance is silently ignored.
+- **Primary approach: sherpa-onnx KWS WakeWordGate**:
+  - Keep the microphone stream open and process short PCM frames continuously.
+  - Do not continuously write audio files for wake detection.
+  - Use sherpa-onnx KWS to emit `wake_detected` before the existing VAD utterance capture starts.
+  - Store wake configuration in a TOML file, including model paths, token file, tokenized `keywords_file`, threshold, score, provider, and thread count.
+- **Fallback approach: transcript-based keyword matching**:
+  - Keep as a secondary/fallback mode because it requires no KWS model.
+  - Use only after VAD/STT, so it is less efficient and more exposed to Whisper hallucinations.
+- **Initial interaction flow: two-stage wake**:
+  - "麥芽糖" -> `wake_detected` -> wait briefly for follow-up speech.
+  - If speech starts before `--wake-ack-delay`, prepend the wake ring buffer and process the command directly.
+  - If no speech starts before the delay, optionally acknowledge ("我在") and keep listening for the follow-up command.
+- **Later interaction flow: one-shot wake**:
+  - "小助手，今天天氣如何？" -> preserve a short ring buffer around the wake event, strip or ignore the wake phrase, process the remaining command.
+- **Background conversation**:
+  - If KWS does not detect the keyword, audio never reaches Whisper.
 
-### Phase 4: Voice Pipeline Enhancements
+### Phase 4: Voice Pipeline Enhancements (Next)
 - **Whisper Hallucination Mitigation**:
   - Filter out very short utterances (< 1.2s) or configure Whisper `no_speech_threshold` to avoid subtitle artifacts (e.g. "字幕by索兰娅").
 - **Interruptible TTS**:
@@ -84,6 +109,7 @@ audio file -> STT provider -> text output
 mic audio -> VAD -> utterance audio file
 mic audio -> VAD -> STT -> TTS echo reply
 mic audio -> VAD -> standby timeout -> auto shutdown
+mic audio -> KWS WakeWordGate -> wake_detected -> VAD -> utterance audio file
 ```
 
 Optional listening transcription:
