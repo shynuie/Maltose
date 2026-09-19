@@ -4,6 +4,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+MANDARIN_PUNCTUATION = str.maketrans(
+    {
+        ",": "，",
+        ".": "。",
+        "?": "？",
+        "!": "！",
+        ":": "：",
+        ";": "；",
+    }
+)
+
+
 @dataclass(frozen=True)
 class STTRequest:
     audio_path: Path
@@ -56,12 +68,13 @@ class FasterWhisperSTT:
         segment_values = []
         raw_text_parts = []
         for segment in segments_iter:
-            raw_text_parts.append(segment.text)
+            normalized_segment_text = normalize_mandarin_transcript(segment.text)
+            raw_text_parts.append(normalized_segment_text)
             segment_values.append(
                 STTSegment(
                     start=segment.start,
                     end=segment.end,
-                    text=segment.text.strip(),
+                    text=normalized_segment_text.strip(),
                 )
             )
 
@@ -74,3 +87,7 @@ class FasterWhisperSTT:
             duration=getattr(info, "duration", None),
             segments=segments,
         )
+
+
+def normalize_mandarin_transcript(text: str) -> str:
+    return text.translate(MANDARIN_PUNCTUATION)

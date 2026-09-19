@@ -42,6 +42,44 @@ The default STT language hint is Mandarin Chinese:
 uv run myagent-stt --file input.wav --language zh
 ```
 
+Mandarin transcripts normalize common ASCII punctuation to Chinese punctuation.
+
+## Listening
+
+Listen from the microphone and save each detected utterance:
+
+```sh
+uv run myagent-listen
+```
+
+List available audio devices:
+
+```sh
+uv run myagent-listen --list-devices
+```
+
+Optionally transcribe each utterance after it is saved:
+
+```sh
+uv run myagent-listen --transcribe
+```
+
+Runtime output uses timestamped logs:
+
+```text
+2026-09-19 16:20:34 INFO myagent.voice.listen_cli - speech_started
+```
+
+## Voice Loop
+
+Run a minimal local listen-transcribe-speak loop:
+
+```sh
+uv run myagent-voice-loop --device 4 --max-turns 1
+```
+
+The first voice loop replies by echoing the transcript through local TTS.
+
 ## Notes
 
 - Keep the README lightweight until the core design is decided.

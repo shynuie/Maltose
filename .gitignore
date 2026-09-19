@@ -1,5 +1,6 @@
 __pycache__/
 .venv/
+recordings/
 *.py[cod]
 *.aiff
 *.wav

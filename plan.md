@@ -12,16 +12,21 @@ Build the voice system first, starting with simple text-to-speech and speech-to-
 - Added basic TTS tests.
 - Added local faster-whisper STT for audio files.
 - Added `myagent-stt` CLI entrypoint.
+- Added `myagent-listen` for microphone capture and VAD-based utterance files.
+- Added a minimal listen-transcribe-speak voice loop.
 
-## Current Voice Flow
+## Current Voice Flows
 
-The current implemented flow is:
+Implemented flows:
 
 ```text
+text -> TTS provider -> speech/audio file
 audio file -> STT provider -> text output
+mic audio -> VAD -> utterance audio file
+mic audio -> VAD -> STT -> TTS echo reply
 ```
 
-The next step is live listening with local utterance segmentation:
+Optional listening transcription:
 
 ```text
 mic audio -> VAD -> utterance audio file -> STT provider -> text output
@@ -68,21 +73,21 @@ These values are starting points. Mandarin speech may need a slightly longer end
 
 ## Listening Milestones
 
-1. Add microphone capture dependencies and a small audio input module.
-2. Add a VAD-based utterance segmenter.
-3. Add a listening CLI:
+1. Done: Add microphone capture dependencies and a small audio input module.
+2. Done: Add a VAD-based utterance segmenter.
+3. Done: Add a listening CLI:
 
    ```sh
    uv run myagent-listen
    ```
 
-4. Save each finalized utterance as a WAV file:
+4. Done: Save each finalized utterance as a WAV file:
 
    ```sh
    recordings/utterance-001.wav
    ```
 
-5. Print listening events:
+5. Done: Print listening events:
 
    ```text
    listening...
@@ -90,13 +95,14 @@ These values are starting points. Mandarin speech may need a slightly longer end
    speech_ended recordings/utterance-001.wav duration=2.4s
    ```
 
-6. Add optional STT after utterance finalization:
+6. Done: Add optional STT after utterance finalization:
 
    ```sh
    uv run myagent-listen --transcribe
    ```
 
-7. Add interruption events:
+7. Next: Test with real Mandarin speech and tune VAD thresholds.
+8. Next: Add interruption events:
 
    ```text
    speech_started -> interrupt current TTS
@@ -114,7 +120,7 @@ Use faster-whisper for the first STT implementation.
 
 ## Near-Term Recommendation
 
-Build `myagent-listen` next. Keep it focused on capture, VAD, and utterance files before coupling it tightly to STT or agent behavior.
+Test `myagent-listen` with real Mandarin speech and tune the VAD thresholds before coupling it tightly to agent behavior.
 
 OpenAI Whisper API can remain a future fallback, but it is not the default path.
 

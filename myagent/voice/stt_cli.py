@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
+from myagent.logging import configure_logging
 from myagent.voice import FasterWhisperSTT, STTRequest
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    configure_logging()
     args = build_parser().parse_args()
     result = FasterWhisperSTT().transcribe(
         STTRequest(
@@ -37,7 +43,12 @@ def main() -> None:
 
     if args.segments:
         for segment in result.segments:
-            print(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}")
+            logger.info(
+                "segment start=%.2fs end=%.2fs text=%s",
+                segment.start,
+                segment.end,
+                segment.text,
+            )
         return
 
-    print(result.text)
+    logger.info("transcript text=%s", result.text)

@@ -4,7 +4,15 @@ from unittest.mock import MagicMock, patch
 import tempfile
 import unittest
 
-from myagent.voice import FasterWhisperSTT, STTRequest
+from myagent.voice import FasterWhisperSTT, STTRequest, normalize_mandarin_transcript
+
+
+class NormalizeMandarinTranscriptTest(unittest.TestCase):
+    def test_normalizes_ascii_punctuation(self) -> None:
+        self.assertEqual(
+            normalize_mandarin_transcript("好,來工作吧! OK?"),
+            "好，來工作吧！ OK？",
+        )
 
 
 class FasterWhisperSTTTest(unittest.TestCase):
@@ -25,7 +33,7 @@ class FasterWhisperSTTTest(unittest.TestCase):
         model.transcribe.return_value = (
             [
                 SimpleNamespace(start=0.0, end=1.2, text=" 你好"),
-                SimpleNamespace(start=1.2, end=2.4, text="，今天測試。"),
+                SimpleNamespace(start=1.2, end=2.4, text=",今天測試."),
             ],
             SimpleNamespace(language="zh", duration=2.4),
         )
@@ -43,6 +51,7 @@ class FasterWhisperSTTTest(unittest.TestCase):
         self.assertEqual(result.language, "zh")
         self.assertEqual(result.duration, 2.4)
         self.assertEqual(len(result.segments), 2)
+        self.assertEqual(result.segments[1].text, "，今天測試。")
 
 
 if __name__ == "__main__":

@@ -6,11 +6,15 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "faster-whisper>=1.1.1",
+    "sounddevice>=0.5.0",
+    "webrtcvad-wheels>=2.0.14",
 ]
 
 [project.scripts]
+myagent-listen = "myagent.voice.listen_cli:main"
 myagent-stt = "myagent.voice.stt_cli:main"
 myagent-tts = "myagent.voice.cli:main"
+myagent-voice-loop = "myagent.voice.loop_cli:main"
 
 [build-system]
 requires = ["hatchling"]
