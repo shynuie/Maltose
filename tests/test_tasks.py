@@ -45,6 +45,49 @@ class TaskManagerTest(unittest.TestCase):
             manager.shutdown()
             store.close()
 
+    def test_completion_notifications_are_scoped_and_consumed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
+            manager = TaskManager(store)
+            manager.register_worker("local", FunctionTaskWorker(lambda _data: "done"))
+            record = manager.create_plan(
+                [{"title": "Notify me", "worker_type": "local"}],
+                user_id="marvin",
+            )[0]
+
+            deadline = time.time() + 2
+            while time.time() < deadline:
+                if manager.get_status(record.id)["status"] == TaskStatus.SUCCEEDED:
+                    break
+                time.sleep(0.01)
+
+            self.assertEqual(manager.drain_notifications("other"), [])
+            notifications = manager.drain_notifications("marvin")
+            self.assertEqual(notifications[0]["title"], "Notify me")
+            self.assertEqual(
+                [item["status"] for item in notifications],
+                [TaskStatus.SUCCEEDED],
+            )
+            self.assertEqual(manager.drain_notifications("marvin"), [])
+            manager.shutdown()
+            store.close()
+
+    def test_plan_size_is_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
+            manager = TaskManager(store, max_tasks_per_plan=2)
+            manager.register_worker("local", FunctionTaskWorker(lambda _data: "done"))
+            with self.assertRaises(ValueError):
+                manager.create_plan(
+                    [
+                        {"title": "one", "worker_type": "local"},
+                        {"title": "two", "worker_type": "local"},
+                        {"title": "three", "worker_type": "local"},
+                    ]
+                )
+            manager.shutdown()
+            store.close()
+
     @patch("myagent.agent.tasks.subprocess.run")
     def test_codex_worker_uses_read_only_sandbox(self, run) -> None:
         run.return_value.returncode = 0

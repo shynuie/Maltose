@@ -235,6 +235,8 @@ class VoiceAgent:
                     pending_turn = interrupted_utterance
                     conversation_active = True
                     logger.info("speaking_barge_in followup_queued")
+                else:
+                    self._speak_task_notifications()
 
                 consume_standby = getattr(self.brain, "consume_return_to_standby", None)
                 if callable(consume_standby) and consume_standby():
@@ -262,6 +264,20 @@ class VoiceAgent:
         end_session = getattr(self.brain, "end_session", None)
         if callable(end_session):
             end_session()
+
+    def _speak_task_notifications(self) -> None:
+        consume = getattr(self.brain, "consume_task_notifications", None)
+        if not callable(consume):
+            return
+        for text in consume():
+            logger.info("task_notification text=%s", text)
+            self.speaker.synthesize(
+                TTSRequest(
+                    text=text,
+                    voice=self.config.tts_voice,
+                    rate=self.config.tts_rate,
+                )
+            )
 
     def _warm_up_transcriber(self) -> None:
         warmup = getattr(self.transcriber, "warmup", None)

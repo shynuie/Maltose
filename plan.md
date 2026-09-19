@@ -2,7 +2,40 @@
 
 ## Current Focus
 
-Build a local multi-task orchestration layer behind TaskBrain. A single voice command should be able to produce a bounded task plan, run independent work in parallel, monitor task state, and report meaningful progress without repeatedly sending full logs and conversation history to the LLM.
+Continue the local multi-task orchestration layer behind TaskBrain. Planner execution, durable task state, short-term session memory, completion summaries, and throttled progress notifications are working. The next focus is MCP/Skills integration and durable task recovery.
+
+## Status At A Glance
+
+### Completed
+
+- Always-on voice loop with KWS wake word, VAD, Qwen3-ASR-0.6B STT, normalization, and macOS TTS.
+- Wake-only acknowledgement, 10-second conversation timeout, explicit return-to-standby control, and cancellable barge-in TTS.
+- Bounded in-memory conversation sessions. Context is retained between wake and standby, then cleared without entering long-term memory.
+- TaskBrain with OpenAI-compatible model access, bounded tool loop, and tools for memory, profile, tasks, standby control, and web search.
+- LanceDB vector memory with local Qwen3-Embedding-0.6B, JSON migration/fallback, and user-scoped memories.
+- Structured `user_profile` storage linked to memories through `user_id`.
+- Temporary trusted-user fallback until speaker recognition is implemented.
+- Brave web search and bounded multi-query `web_research` worker.
+- Initial Planner behavior through `create_task_plan`: the model can turn a request into a bounded task DAG.
+- SQLite task store, dependency-aware scheduling, bounded parallel workers, status queries, cancellation, retry, and read-only Codex worker.
+- Runtime task completion/failure notifications scoped by user and announced at a safe TTS boundary.
+- LLM-generated concise summaries for completed task results, plus throttled 25/50/75% progress notifications.
+- 70 automated tests covering voice flow, memory, identity, tasks, search, STT, and TTS.
+
+### In Progress
+
+- MCP client and Skills adapter design, including capability boundaries and worker registration.
+- Durable task recovery and notification replay after process restart.
+
+### Not Started / Later
+
+- MCP client adapters exposed through `ToolRegistry` and TaskManager workers.
+- Skills loader and skill-to-worker adapter.
+- Write-capable Codex worker with explicit confirmation and `workspace-write` sandboxing.
+- Full-page web extraction and source-aware research synthesis.
+- Speaker enrollment and local speaker embedding identification.
+- Streaming STT and streaming LLM/TTS sentence queue.
+- Persistent task recovery and notification replay after process restart.
 
 ## Done
 
@@ -31,7 +64,7 @@ Build a local multi-task orchestration layer behind TaskBrain. A single voice co
 - Qwen3-ASR-0.6B is now the default STT provider; alternatives remain selectable with `--stt-provider`.
 - Added local English and Chinese command batches for STT comparison.
 - Verified the complete wake -> VAD -> normalized audio -> Qwen3-ASR -> TTS path.
-- All 49 unit tests pass.
+- The full test suite currently has 69 passing tests.
 - Added `OpenClawBrain` with Gateway HTTP client, bearer-token support, stable session id, and CLI selection.
 - Added local `TaskBrain` with a tool registry, persistent JSON memory, and an OpenAI-compatible model adapter.
 - Configured OpenAI API as the default model backend; local endpoints remain configurable.
@@ -51,13 +84,14 @@ Build a local multi-task orchestration layer behind TaskBrain. A single voice co
 - Added parallel STT and speaker-identification workers for each completed utterance.
 - Passed speaker-resolved `user_id` into TaskBrain and scoped memory/profile tools to that user.
 - Added built-in `remember` and `recall` tools and a bounded tool execution loop.
-- Added 49 unit tests covering the TaskBrain, memory, identity context, and voice flow.
+- Added unit tests covering the TaskBrain, memory, identity context, and voice flow.
 - Added the first local multi-task slice: SQLite `TaskStore`, durable task lifecycle, dependency-aware `TaskManager`, bounded worker pool, and TaskBrain task-management tools.
-- Added 58 unit tests covering task persistence, parallel execution, dependencies, cancellation/retry, user scoping, and safe handling of unregistered worker types.
+- Added task tests covering persistence, parallel execution, dependencies, cancellation/retry, user scoping, and safe handling of unregistered worker types.
 - Added a read-only `CodexReadOnlyWorker` using `codex exec --sandbox read-only`, with bounded runtime, output limits, ephemeral sessions, and safe failure handling.
 - Added the web-search design: provider abstraction for quick searches now, with a separate multi-page research worker planned later.
 - Added `WebSearchProvider`, Brave Search integration, and the optional TaskBrain `web_search` tool with bounded results, timeout, source URLs, and freshness filters.
 - Added a bounded `WebResearchWorker` that runs multiple searches, deduplicates source URLs, reports progress, and returns a capped structured result for later LLM summarization.
+- Added runtime task completion notifications scoped by `user_id`; completed or failed tasks can now be announced by VoiceAgent at a safe TTS boundary without interrupting active speech.
 - Made macOS `say` single-flight and cancellable; VoiceAgent now captures barge-in speech during replies, asks TaskBrain whether it explicitly requests interruption, stops the active speech process only for a positive decision, and queues the utterance for STT/LLM processing.
 - Closed the unknown-speaker memory boundary: unverified turns no longer fall back to `default` and cannot access personal memory, profile, or task state; explicit microphone trust is opt-in.
 - Until a concrete speaker model is installed, CLI microphone turns explicitly trust `--taskbrain-user-id` as the temporary active user; future speaker identification will override this fallback.
@@ -136,7 +170,7 @@ KWS wake_detected
   - Added `--brain taskbrain` and local JSON memory configuration.
   - Installed the vector-memory extra and verified LanceDB migration/search with 49 tests.
   - Implemented the speaker identification framework; concrete speaker model and enrollment flow remain.
-  - Remaining: run the live LanceDB voice smoke test, then add a concrete local speaker model.
+  - Remaining: add a concrete local speaker model and enrollment flow.
 - **Next**: add MCP client and skills loader adapters that expose capabilities through `ToolRegistry`, then connect them to TaskManager workers.
 - **Conversation lifecycle**: one wake starts a session; silence timeout ends the session but never exits the process.
 - **Short-term conversation memory**: TaskBrain retains bounded user, assistant, and tool messages within the active session. The default cap is 12 turns, and the history is discarded on standby or process shutdown to control token usage and prevent cross-session leakage.
@@ -186,11 +220,11 @@ Support hands-free background listening activated only when a keyword is spoken:
 - **Streaming STT**:
   - Real-time partial transcript streaming.
 
-### Phase 5: Multi-task Agent Orchestration (Next)
+### Phase 5: Multi-task Agent Orchestration (In Progress)
 
 Build a bounded local task system rather than a fully distributed multi-agent runtime.
 
-**Implementation status:** Initial task state and orchestration slice is implemented. The current version persists plans, supports registered Python workers, includes a read-only Codex worker, and can optionally expose Brave web search plus bounded multi-query research to TaskBrain. Full page extraction, MCP, Skills, and write-capable workers are not connected yet.
+**Implementation status:** Initial planning, durable task state, bounded execution, completion/progress notification, and LLM result summarization slices are implemented. The current version persists plans, supports registered Python workers, includes a read-only Codex worker, and can optionally expose Brave web search plus bounded multi-query research to TaskBrain. Full page extraction, MCP, Skills, and write-capable workers are not connected yet.
 
 - **Task request**:
   - Convert one user command into a structured task plan.
@@ -220,6 +254,7 @@ Build a bounded local task system rather than a fully distributed multi-agent ru
   - Do not announce short tasks; announce long-running tasks after an initial threshold and then at a bounded interval.
   - Never interrupt active user speech; queue notifications for a safe TTS point.
   - Let the user ask for status, cancel a task, or request a concise final summary.
+  - Current slice: announce throttled progress and task success/failure at a safe TTS boundary, with a bounded LLM summary for completed results.
 - **Token and safety budgets**:
   - Use one planner call per user request and send each worker only its scoped context.
   - Re-plan only after a worker failure or a dependency result that requires a decision.

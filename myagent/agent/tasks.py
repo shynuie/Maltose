@@ -335,16 +335,22 @@ class TaskManager:
         store: TaskStore,
         *,
         max_workers: int = 2,
+        max_tasks_per_plan: int = 8,
         workers: dict[str, TaskWorker] | None = None,
     ) -> None:
         if max_workers < 1:
             raise ValueError("max_workers must be positive.")
+        if max_tasks_per_plan < 1:
+            raise ValueError("max_tasks_per_plan must be positive.")
         self.store = store
+        self.max_tasks_per_plan = max_tasks_per_plan
         self._workers = workers or {}
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="myagent-task"
         )
         self._futures: dict[str, Future[None]] = {}
+        self._notifications: list[dict[str, Any]] = []
+        self._progress_marks: dict[str, int] = {}
         self._lock = threading.RLock()
 
     def register_worker(self, worker_type: str, worker: TaskWorker) -> None:
@@ -361,6 +367,10 @@ class TaskManager:
     ) -> list[TaskRecord]:
         if not tasks:
             raise ValueError("Task plan cannot be empty.")
+        if len(tasks) > self.max_tasks_per_plan:
+            raise ValueError(
+                f"Task plan cannot contain more than {self.max_tasks_per_plan} tasks."
+            )
         task_ids: set[str] = set()
         for item in tasks:
             task_id = item.get("task_id")
@@ -397,27 +407,54 @@ class TaskManager:
                 self.store.update(task_id, status=TaskStatus.WAITING)
                 return
             if any(dep.status in {TaskStatus.FAILED, TaskStatus.CANCELLED} for dep in dependencies):
-                self.store.update(task_id, status=TaskStatus.FAILED, error="A dependency failed or was cancelled.")
+                failed = self.store.update(
+                    task_id,
+                    status=TaskStatus.FAILED,
+                    error="A dependency failed or was cancelled.",
+                )
+                self._queue_notification(failed)
                 return
             worker = self._workers.get(task.worker_type)
             if worker is None:
-                self.store.update(task_id, status=TaskStatus.FAILED, error=f"No worker registered for type: {task.worker_type}")
+                failed = self.store.update(
+                    task_id,
+                    status=TaskStatus.FAILED,
+                    error=f"No worker registered for type: {task.worker_type}",
+                )
+                self._queue_notification(failed)
                 return
             self.store.update(task_id, status=TaskStatus.RUNNING, progress=1)
+            self._progress_marks[task_id] = 0
             self._futures[task_id] = self._executor.submit(self._run, task_id, worker)
 
     def _run(self, task_id: str, worker: TaskWorker) -> None:
         try:
             task = self.store.get(task_id)
-            result = worker.run(task, lambda progress: self.store.update(task_id, progress=progress))
-            self.store.update(task_id, status=TaskStatus.SUCCEEDED, progress=100, result_summary=result)
+            result = worker.run(task, lambda progress: self._report_progress(task_id, progress))
+            completed = self.store.update(
+                task_id, status=TaskStatus.SUCCEEDED, progress=100, result_summary=result
+            )
+            self._queue_notification(completed)
         except Exception as exc:
             logger.exception("task_failed task_id=%s", task_id)
-            self.store.update(task_id, status=TaskStatus.FAILED, error=str(exc))
+            failed = self.store.update(task_id, status=TaskStatus.FAILED, error=str(exc))
+            self._queue_notification(failed)
         finally:
             with self._lock:
                 self._futures.pop(task_id, None)
+                self._progress_marks.pop(task_id, None)
             self._schedule_dependents(task_id)
+
+    def _report_progress(self, task_id: str, progress: int) -> None:
+        updated = self.store.update(task_id, progress=progress)
+        if progress >= 100:
+            return
+        mark = min((progress // 25) * 25, 75)
+        with self._lock:
+            last_mark = self._progress_marks.get(task_id, 0)
+            if mark >= 25 and mark > last_mark:
+                self._progress_marks[task_id] = mark
+                self._queue_notification(updated, kind="progress")
 
     def _schedule_dependents(self, completed_id: str) -> None:
         completed = self.store.get(completed_id)
@@ -426,6 +463,36 @@ class TaskManager:
                 if task.status == TaskStatus.WAITING:
                     self.store.update(task.id, status=TaskStatus.PENDING)
                 self._schedule_if_ready(task.id)
+
+    def _queue_notification(self, task: TaskRecord, *, kind: str = "completion") -> None:
+        with self._lock:
+            self._notifications.append(
+                {
+                    "task_id": task.id,
+                    "kind": kind,
+                    "user_id": task.user_id,
+                    "title": task.title,
+                    "status": task.status,
+                    "progress": task.progress,
+                    "result_summary": task.result_summary,
+                    "error": task.error,
+                }
+            )
+
+    def drain_notifications(self, user_id: str, limit: int = 3) -> list[dict[str, Any]]:
+        """Return and remove completed task notifications for one user."""
+        if limit < 1:
+            raise ValueError("Notification limit must be positive.")
+        with self._lock:
+            matching = [
+                item for item in self._notifications if item["user_id"] == user_id
+            ]
+            selected = matching[:limit]
+            selected_ids = {id(item) for item in selected}
+            self._notifications = [
+                item for item in self._notifications if id(item) not in selected_ids
+            ]
+            return selected
 
     def get_status(self, task_id: str, user_id: str | None = None) -> dict[str, Any]:
         return self.store.get(task_id, user_id=user_id).as_dict()
