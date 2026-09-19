@@ -20,17 +20,20 @@ Continue the local multi-task orchestration layer behind TaskBrain. Planner exec
 - SQLite task store, dependency-aware scheduling, bounded parallel workers, status queries, cancellation, retry, and read-only Codex worker.
 - Runtime task completion/failure notifications scoped by user and announced at a safe TTS boundary.
 - LLM-generated concise summaries for completed task results, plus throttled 25/50/75% progress notifications.
-- 70 automated tests covering voice flow, memory, identity, tasks, search, STT, and TTS.
+- Planner safety boundaries: plans are capped at 8 tasks; ambiguous requests require clarification, and side-effecting work requires confirmation.
+- Added `list_active_tasks` so the model can query pending, running, and waiting work directly.
+- Added a capability adapter boundary for explicitly registered Skills and MCP tools, plus a stdio JSON-RPC MCP client, TOML Skills manifest loader, and `--taskbrain-mcp-command` CLI integration.
+- Added unified `myagent.toml` configuration with CLI override support; local config is ignored by Git and `myagent.toml.example` documents the available sections.
+- 75 automated tests covering voice flow, memory, identity, tasks, search, STT, TTS, capability adapters, and configuration loading.
 
 ### In Progress
 
-- MCP client and Skills adapter design, including capability boundaries and worker registration.
+- Add MCP reconnect handling and expose configured Skills manifests through the CLI.
 - Durable task recovery and notification replay after process restart.
 
 ### Not Started / Later
 
-- MCP client adapters exposed through `ToolRegistry` and TaskManager workers.
-- Skills loader and skill-to-worker adapter.
+- MCP reconnect handling and skill-to-worker registration.
 - Write-capable Codex worker with explicit confirmation and `workspace-write` sandboxing.
 - Full-page web extraction and source-aware research synthesis.
 - Speaker enrollment and local speaker embedding identification.
@@ -171,7 +174,7 @@ KWS wake_detected
   - Installed the vector-memory extra and verified LanceDB migration/search with 49 tests.
   - Implemented the speaker identification framework; concrete speaker model and enrollment flow remain.
   - Remaining: add a concrete local speaker model and enrollment flow.
-- **Next**: add MCP client and skills loader adapters that expose capabilities through `ToolRegistry`, then connect them to TaskManager workers.
+- **Next**: expose configured MCP and Skills adapters through the CLI, then connect selected capabilities to TaskManager workers.
 - **Conversation lifecycle**: one wake starts a session; silence timeout ends the session but never exits the process.
 - **Short-term conversation memory**: TaskBrain retains bounded user, assistant, and tool messages within the active session. The default cap is 12 turns, and the history is discarded on standby or process shutdown to control token usage and prevent cross-session leakage.
 
@@ -230,6 +233,7 @@ Build a bounded local task system rather than a fully distributed multi-agent ru
   - Convert one user command into a structured task plan.
   - Ask for confirmation when the plan includes file changes, external side effects, or destructive actions.
   - Give an immediate concise acknowledgement describing the planned work.
+  - Current implementation caps plans at 8 tasks and prompts the model to clarify ambiguous requests or request confirmation before side effects.
 - **Task graph**:
   - Represent tasks as a DAG with `task_id`, `parent_task_id`, dependencies, worker type, status, progress, result summary, error, timestamps, and `user_id`.
   - Run independent tasks concurrently; serialize dependent tasks.
@@ -248,7 +252,7 @@ Build a bounded local task system rather than a fully distributed multi-agent ru
   - Expose `web_search` to TaskBrain for short current-information queries.
   - Preserve title, URL, snippet, and publication metadata so responses can cite sources.
   - Treat search content as untrusted data and never allow it to override agent instructions or directly trigger side effects.
-  - Add a separate `web_research` worker later for multi-query, multi-page research and progress reporting.
+  - `web_research` worker is implemented for bounded multi-query research; full-page extraction and source-aware synthesis remain future work.
 - **Progress and notification**:
   - Track progress from deterministic worker events, process output, and task state rather than polling the LLM every few seconds.
   - Do not announce short tasks; announce long-running tasks after an initial threshold and then at a bounded interval.
@@ -264,6 +268,7 @@ Build a bounded local task system rather than a fully distributed multi-agent ru
   - `create_task_plan`
   - `get_task_status`
   - `list_tasks`
+  - `list_active_tasks`
   - `cancel_task`
   - `retry_task`
   - `return_to_standby`

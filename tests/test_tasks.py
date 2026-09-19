@@ -88,6 +88,22 @@ class TaskManagerTest(unittest.TestCase):
             manager.shutdown()
             store.close()
 
+    def test_lists_only_active_tasks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
+            manager = TaskManager(store)
+            manager.register_worker("slow", FunctionTaskWorker(lambda _data: "done"))
+            active = store.create("Waiting", "slow", user_id="marvin")
+            store.update(active.id, status=TaskStatus.WAITING)
+            finished = store.create("Finished", "slow", user_id="marvin")
+            store.update(finished.id, status=TaskStatus.SUCCEEDED, progress=100)
+
+            result = manager.list_active_tasks("marvin")
+
+            self.assertEqual([item["title"] for item in result], ["Waiting"])
+            manager.shutdown()
+            store.close()
+
     @patch("myagent.agent.tasks.subprocess.run")
     def test_codex_worker_uses_read_only_sandbox(self, run) -> None:
         run.return_value.returncode = 0

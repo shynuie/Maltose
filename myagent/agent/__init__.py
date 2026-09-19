@@ -27,6 +27,14 @@ from myagent.agent.tasks import (
     TaskStatus,
     TaskStore,
 )
+from myagent.agent.capabilities import (
+    CapabilityAdapter,
+    CapabilityTool,
+    MCPToolAdapter,
+    MCPStdioClient,
+    SkillManifestLoader,
+    StaticSkillAdapter,
+)
 
 __all__ = [
     "AgentBrain",
@@ -52,6 +60,12 @@ __all__ = [
     "TaskRecord",
     "TaskStatus",
     "TaskStore",
+    "CapabilityAdapter",
+    "CapabilityTool",
+    "MCPToolAdapter",
+    "MCPStdioClient",
+    "SkillManifestLoader",
+    "StaticSkillAdapter",
     "BraveSearchProvider",
     "SearchResult",
     "WebSearchProvider",

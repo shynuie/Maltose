@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from myagent.agent.brain import TurnContext
+from myagent.agent.capabilities import CapabilityAdapter, register_capability_adapter
 from myagent.agent.search import WebSearchProvider
 from myagent.agent.tasks import TaskManager
 
@@ -471,6 +472,7 @@ class TaskBrain:
         search_provider: WebSearchProvider | None = None,
         max_tool_rounds: int = 4,
         max_session_turns: int = 12,
+        capability_adapters: list[CapabilityAdapter] | None = None,
     ) -> None:
         if max_session_turns < 1:
             raise ValueError("Maximum session turns must be positive.")
@@ -492,6 +494,8 @@ class TaskBrain:
         self._install_profile_tool()
         self._install_task_tools()
         self._install_search_tools()
+        for adapter in capability_adapters or []:
+            register_capability_adapter(self.tools, adapter)
         if hasattr(self.memory, "backfill_embeddings"):
             backfilled = self.memory.backfill_embeddings()
             if backfilled:
@@ -758,6 +762,22 @@ class TaskBrain:
                 lambda args: (
                     self.task_manager.list_tasks(
                         self._active_user_id, args.get("limit", 10)
+                    )
+                    if self._identity_is_known()
+                    else self._identity_required_error()
+                ),
+            )
+        if not self.tools.has("list_active_tasks"):
+            self.tools.register(
+                "list_active_tasks",
+                "List only the active tasks currently pending, running, or waiting for the user.",
+                {
+                    "type": "object",
+                    "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 20}},
+                },
+                lambda args: (
+                    self.task_manager.list_active_tasks(
+                        self._active_user_id, args.get("limit", 20)
                     )
                     if self._identity_is_known()
                     else self._identity_required_error()

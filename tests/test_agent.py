@@ -25,6 +25,7 @@ from myagent.agent import (
     TaskStore,
 )
 from myagent.agent.cli import build_parser
+from myagent.agent.config import load_cli_defaults
 from myagent.voice import (
     ListeningEvent,
     NullSpeakerIdentifier,
@@ -339,6 +340,7 @@ class TaskBrainTest(unittest.TestCase):
                     "create_task_plan",
                     "get_task_status",
                     "list_tasks",
+                    "list_active_tasks",
                     "cancel_task",
                     "retry_task",
                 },
@@ -885,6 +887,21 @@ class VoiceAgentTest(unittest.TestCase):
 
 
 class AgentCLITest(unittest.TestCase):
+    def test_loads_unified_toml_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "myagent.toml"
+            path.write_text(
+                """[agent]\nbrain = \"taskbrain\"\ndevice = \"3\"\n\n[voice]\nnormalize_stt_audio = false\n\n[taskbrain]\nmemory_backend = \"lancedb\"\nmcp_command = [\"python server.py\"]\n""",
+                encoding="utf-8",
+            )
+            defaults = load_cli_defaults(path)
+
+        self.assertEqual(defaults["brain"], "taskbrain")
+        self.assertEqual(defaults["device"], "3")
+        self.assertTrue(defaults["no_normalize_stt_audio"])
+        self.assertEqual(defaults["taskbrain_memory_backend"], "lancedb")
+        self.assertEqual(defaults["taskbrain_mcp_command"], ["python server.py"])
+
     def test_parses_cli_args(self) -> None:
         parser = build_parser()
         args = parser.parse_args(

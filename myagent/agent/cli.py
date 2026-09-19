@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import shlex
 from pathlib import Path
 
 from myagent.agent.agent import VoiceAgent
 from myagent.agent.brain import EchoBrain, OpenClawBrain
-from myagent.agent.config import AgentConfig
+from myagent.agent.config import AgentConfig, load_cli_defaults
 from myagent.agent.taskbrain import (
     MemoryStore,
     LanceMemoryStore,
@@ -16,6 +17,7 @@ from myagent.agent.taskbrain import (
     UserProfileStore,
 )
 from myagent.agent.tasks import CodexReadOnlyWorker, TaskManager, TaskStore
+from myagent.agent.capabilities import MCPStdioClient, MCPToolAdapter
 from myagent.agent.search import BraveSearchProvider, WebResearchWorker
 from myagent.logging import configure_logging
 from myagent.voice import (
@@ -32,6 +34,12 @@ logger = logging.getLogger(__name__)
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run the MyAgent voice assistant until Ctrl+C."
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("myagent.toml"),
+        help="Unified TOML configuration file (default: myagent.toml if present).",
     )
     parser.add_argument(
         "--timeout",
@@ -79,6 +87,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--taskbrain-model", default="gpt-5.6-luna")
     parser.add_argument("--taskbrain-reasoning-effort", default="none")
     parser.add_argument("--taskbrain-timeout", type=float, default=120.0)
+    parser.add_argument(
+        "--taskbrain-mcp-command",
+        action="append",
+        default=[],
+        help="MCP server command as one shell-like argument string; may be repeated.",
+    )
+    parser.add_argument("--taskbrain-mcp-timeout", type=float, default=15.0)
     parser.add_argument(
         "--taskbrain-search",
         choices=("none", "brave"),
@@ -221,7 +236,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     configure_logging()
-    args = build_parser().parse_args()
+    parser = build_parser()
+    config_probe = argparse.ArgumentParser(add_help=False)
+    config_probe.add_argument("--config", type=Path, default=Path("myagent.toml"))
+    config_args, _ = config_probe.parse_known_args()
+    parser.set_defaults(**load_cli_defaults(config_args.config))
+    args = parser.parse_args()
 
     vad_settings = VADSettings(
         frame_ms=args.frame_ms,
@@ -261,6 +281,8 @@ def main() -> None:
         wake_buffer_ms=args.wake_buffer_ms,
     )
 
+    mcp_clients: list[MCPStdioClient] = []
+    task_manager: TaskManager | None = None
     if args.brain == "openclaw":
         brain = OpenClawBrain(
             endpoint=args.openclaw_url,
@@ -307,6 +329,10 @@ def main() -> None:
                 "web_research",
                 WebResearchWorker(search_provider),
             )
+        for index, raw_command in enumerate(args.taskbrain_mcp_command):
+            command = shlex.split(raw_command)
+            client = MCPStdioClient(command, timeout=args.taskbrain_mcp_timeout)
+            mcp_clients.append(client)
         brain = TaskBrain(
             model=OpenAICompatibleTaskModel(
                 endpoint=args.taskbrain_url,
@@ -319,6 +345,10 @@ def main() -> None:
             profile=profile,
             task_manager=task_manager,
             search_provider=search_provider,
+            capability_adapters=[
+                MCPToolAdapter(client, prefix=f"mcp_{index}_")
+                for index, client in enumerate(mcp_clients)
+            ],
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)
@@ -329,4 +359,10 @@ def main() -> None:
             args.taskbrain_trust_user_id or args.taskbrain_user_id
         ),
     )
-    agent.run()
+    try:
+        agent.run()
+    finally:
+        for client in mcp_clients:
+            client.close()
+        if task_manager is not None:
+            task_manager.shutdown(wait=False)

@@ -500,6 +500,20 @@ class TaskManager:
     def list_tasks(self, user_id: str = "default", limit: int = 20) -> list[dict[str, Any]]:
         return [task.as_dict() for task in self.store.list(user_id, limit)]
 
+    def list_active_tasks(self, user_id: str = "default", limit: int = 20) -> list[dict[str, Any]]:
+        """List only tasks that still require execution or monitoring."""
+        if limit < 1:
+            raise ValueError("Task limit must be positive.")
+        return [
+            task.as_dict()
+            for task in self.store.list(user_id, limit=limit * 2)
+            if task.status in {
+                TaskStatus.PENDING,
+                TaskStatus.RUNNING,
+                TaskStatus.WAITING,
+            }
+        ][:limit]
+
     def cancel(self, task_id: str, user_id: str | None = None) -> dict[str, Any]:
         task = self.store.get(task_id, user_id=user_id)
         if task.status in TERMINAL_STATUSES:

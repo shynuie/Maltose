@@ -1,0 +1,57 @@
+# Copy this file to myagent.toml and adjust paths/device settings.
+
+[agent]
+brain = "taskbrain"
+timeout = 10.0
+device = "3"
+continuous = true
+output_dir = "recordings"
+
+[voice]
+stt_provider = "qwen3-asr-0.6b"
+language = "zh"
+stt_device = "cpu"
+normalize_stt_audio = true
+stt_target_peak = 12000
+stt_min_peak = 6000
+stt_max_gain = 4.0
+interruptible_tts = true
+
+[vad]
+aggressiveness = 2
+frame_ms = 20
+start_trigger_ms = 160
+end_silence_ms = 700
+pre_roll_ms = 300
+
+[wake]
+config = "wake.toml"
+ack = "我在"
+ack_delay = 0.8
+buffer_ms = 1000
+
+[taskbrain]
+url = "https://api.openai.com/v1/chat/completions"
+model = "gpt-5.6-luna"
+reasoning_effort = "none"
+timeout = 120.0
+memory_backend = "lancedb"
+memory = "data/memory.lancedb"
+memory_source = "data/memory.json"
+user_id = "default"
+embedding = "qwen3-embedding-0.6b"
+embedding_device = "cpu"
+search = "brave"
+search_timeout = 10.0
+tasks = "data/tasks.sqlite3"
+max_workers = 2
+codex_cwd = "."
+codex_timeout = 300.0
+mcp_timeout = 15.0
+# mcp_command = ["npx -y your-mcp-server"]
+
+[openclaw]
+url = "http://127.0.0.1:18789/v1/chat/completions"
+model = "openclaw/default"
+session = "myagent-voice"
+timeout = 120.0

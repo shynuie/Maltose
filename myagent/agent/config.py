@@ -2,8 +2,78 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import tomllib
+from typing import Any
 
 from myagent.voice import VADSettings, WakeWordDetector
+
+
+def load_cli_defaults(path: Path) -> dict[str, Any]:
+    """Translate the unified TOML config into argparse destination names."""
+    if not path.exists():
+        return {}
+    with path.open("rb") as config_file:
+        data = tomllib.load(config_file)
+
+    defaults: dict[str, Any] = {}
+
+    def copy(section: str, mapping: dict[str, str]) -> None:
+        values = data.get(section, {})
+        if not isinstance(values, dict):
+            raise ValueError(f"Config section [{section}] must be a table.")
+        for source, destination in mapping.items():
+            if source in values:
+                defaults[destination] = values[source]
+
+    copy("agent", {
+        "timeout": "timeout", "continuous": "continuous", "max_turns": "max_turns",
+        "reply_prefix": "reply_prefix", "brain": "brain", "device": "device",
+        "output_dir": "output_dir",
+    })
+    copy("openclaw", {
+        "url": "openclaw_url", "token": "openclaw_token", "model": "openclaw_model",
+        "session": "openclaw_session", "timeout": "openclaw_timeout",
+    })
+    copy("taskbrain", {
+        "url": "taskbrain_url", "token": "taskbrain_token", "model": "taskbrain_model",
+        "reasoning_effort": "taskbrain_reasoning_effort", "timeout": "taskbrain_timeout",
+        "mcp_command": "taskbrain_mcp_command", "mcp_timeout": "taskbrain_mcp_timeout",
+        "search": "taskbrain_search", "search_token": "taskbrain_search_token",
+        "search_timeout": "taskbrain_search_timeout", "tasks": "taskbrain_tasks",
+        "max_workers": "taskbrain_max_workers", "codex_cwd": "taskbrain_codex_cwd",
+        "codex_timeout": "taskbrain_codex_timeout", "memory": "taskbrain_memory",
+        "memory_backend": "taskbrain_memory_backend", "memory_source": "taskbrain_memory_source",
+        "user_id": "taskbrain_user_id", "trust_user_id": "taskbrain_trust_user_id",
+        "embedding": "taskbrain_embedding", "embedding_device": "taskbrain_embedding_device",
+    })
+    copy("voice", {
+        "model": "model", "stt_provider": "stt_provider", "language": "language",
+        "compute_type": "compute_type", "stt_device": "stt_device",
+        "normalize_stt_audio": "normalize_stt_audio", "stt_target_peak": "stt_target_peak",
+        "stt_min_peak": "stt_min_peak", "stt_max_gain": "stt_max_gain",
+        "tts_voice": "tts_voice", "tts_rate": "tts_rate",
+        "interruptible_tts": "interruptible_tts",
+    })
+    copy("wake", {
+        "config": "wake_config", "ack": "wake_ack", "ack_delay": "wake_ack_delay",
+        "buffer_ms": "wake_buffer_ms",
+    })
+    copy("vad", {
+        "aggressiveness": "vad_aggressiveness", "frame_ms": "frame_ms",
+        "start_trigger_ms": "start_trigger_ms", "end_silence_ms": "end_silence_ms",
+        "pre_roll_ms": "pre_roll_ms",
+    })
+    if "normalize_stt_audio" in defaults:
+        defaults["no_normalize_stt_audio"] = not defaults.pop("normalize_stt_audio")
+    if "interruptible_tts" in defaults:
+        defaults["no_interruptible_tts"] = not defaults.pop("interruptible_tts")
+    for key in (
+        "output_dir", "taskbrain_tasks", "taskbrain_codex_cwd", "taskbrain_memory",
+        "taskbrain_memory_source", "wake_config",
+    ):
+        if key in defaults and defaults[key] is not None:
+            defaults[key] = Path(defaults[key])
+    return defaults
 
 
 @dataclass(frozen=True)
