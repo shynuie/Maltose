@@ -1,6 +1,13 @@
 """Voice features for MyAgent."""
 
-from .listening import ListeningEvent, Utterance, UtteranceSegmenter, VADSettings
+from .listening import (
+    ListeningEvent,
+    Utterance,
+    UtteranceSegmenter,
+    VADSettings,
+    microphone_events,
+    write_utterance_wav,
+)
 from .stt import (
     FasterWhisperSTT,
     STTRequest,
@@ -21,5 +28,7 @@ __all__ = [
     "Utterance",
     "UtteranceSegmenter",
     "VADSettings",
+    "microphone_events",
     "normalize_mandarin_transcript",
+    "write_utterance_wav",
 ]

@@ -52,6 +52,23 @@ class UtteranceSegmenterTest(unittest.TestCase):
         self.assertIsNotNone(events[1].utterance)
         self.assertEqual(len(events[1].utterance.pcm), settings.frame_byte_count * 5)
 
+    def test_tracks_in_speech_state(self) -> None:
+        settings = VADSettings(
+            frame_ms=20,
+            start_trigger_ms=20,
+            end_silence_ms=20,
+            pre_roll_ms=0,
+        )
+        detector = FakeDetector([True, False])
+        segmenter = UtteranceSegmenter(detector, settings)
+        frame = b"\0" * settings.frame_byte_count
+
+        self.assertFalse(segmenter.in_speech)
+        segmenter.process_frame(frame)
+        self.assertTrue(segmenter.in_speech)
+        segmenter.process_frame(frame)
+        self.assertFalse(segmenter.in_speech)
+
     def test_rejects_wrong_frame_size(self) -> None:
         settings = VADSettings()
         segmenter = UtteranceSegmenter(FakeDetector([]), settings)

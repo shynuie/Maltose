@@ -80,6 +80,24 @@ uv run myagent-voice-loop --device 4 --max-turns 1
 
 The first voice loop replies by echoing the transcript through local TTS.
 
+## Main Voice Agent
+
+Run the main agent with a standby timeout ($t$ seconds):
+
+```sh
+# Standby for 10 seconds (default); auto-shutdown if no speech detected
+uv run myagent --timeout 10
+
+# Or using the alias
+uv run myagent-run -t 10
+```
+
+Continuous standby mode (resets $t$ seconds timeout after each reply):
+
+```sh
+uv run myagent --timeout 10 --continuous
+```
+
 ## Notes
 
 - Keep the README lightweight until the core design is decided.

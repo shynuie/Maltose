@@ -11,6 +11,8 @@ dependencies = [
 ]
 
 [project.scripts]
+myagent = "myagent.agent.cli:main"
+myagent-run = "myagent.agent.cli:main"
 myagent-listen = "myagent.voice.listen_cli:main"
 myagent-stt = "myagent.voice.stt_cli:main"
 myagent-tts = "myagent.voice.cli:main"

@@ -111,6 +111,10 @@ class UtteranceSegmenter:
         self._silence_frames = 0
         self._in_speech = False
 
+    @property
+    def in_speech(self) -> bool:
+        return self._in_speech
+
     def process_frame(self, pcm_frame: bytes) -> list[ListeningEvent]:
         if len(pcm_frame) != self._settings.frame_byte_count:
             raise ValueError(
@@ -172,7 +176,9 @@ class UtteranceSegmenter:
 def microphone_events(
     settings: VADSettings,
     device: str | int | None = None,
+    standby_timeout: float | None = None,
 ) -> Iterator[ListeningEvent]:
+    import time
     import sounddevice as sd
 
     audio_queue: queue.Queue[bytes] = queue.Queue()
@@ -192,9 +198,23 @@ def microphone_events(
         device=device,
         callback=callback,
     ):
+        standby_start = time.monotonic()
         while True:
-            pcm_frame = audio_queue.get()
-            yield from segmenter.process_frame(pcm_frame)
+            if not segmenter.in_speech and standby_timeout is not None:
+                if (time.monotonic() - standby_start) >= standby_timeout:
+                    yield ListeningEvent(kind="standby_timeout")
+                    break
+
+            try:
+                pcm_frame = audio_queue.get(timeout=0.05)
+            except queue.Empty:
+                continue
+
+            events = segmenter.process_frame(pcm_frame)
+            if segmenter.in_speech:
+                standby_start = time.monotonic()
+
+            yield from events
 
 
 def list_input_devices() -> str:
