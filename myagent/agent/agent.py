@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Iterator, Protocol
 
-from myagent.agent.brain import AgentBrain, EchoBrain
+from myagent.agent.brain import AgentBrain, EchoBrain, TurnContext
 from myagent.agent.config import AgentConfig
 from myagent.voice import (
     FasterWhisperSTT,
@@ -21,6 +23,9 @@ from myagent.voice import (
     WakeWordDetector,
     measure_utterance,
     normalize_utterance_peak,
+    NullSpeakerIdentifier,
+    SpeakerIdentifier,
+    SpeakerResult,
     create_stt_provider,
     write_utterance_wav,
 )
@@ -63,12 +68,14 @@ class VoiceAgent:
         brain: AgentBrain | None = None,
         transcriber: STTProvider | None = None,
         speaker: TTSProvider | None = None,
+        speaker_identifier: SpeakerIdentifier | None = None,
         listener_factory: ListenerFactory = microphone_events,
     ) -> None:
         self.config = config or AgentConfig()
         self.brain = brain or EchoBrain()
         self._transcriber = transcriber
         self._speaker = speaker
+        self._speaker_identifier = speaker_identifier or NullSpeakerIdentifier()
         self._listener_factory = listener_factory
         self.state = AgentState.INITIALIZING
         self.turn_count = 0
@@ -92,29 +99,33 @@ class VoiceAgent:
 
     def run(self) -> None:
         logger.info(
-            "agent_starting timeout=%.1fs continuous=%s",
+            "agent_starting conversation_timeout=%.1fs",
             self.config.standby_timeout,
-            self.config.continuous,
         )
 
         try:
             self._warm_up_transcriber()
+            conversation_active = self.config.wake_word_detector is None
             while self.state != AgentState.SHUTDOWN:
                 self.state = AgentState.STANDBY
-                logger.info("agent_standby timeout=%.1fs", self.config.standby_timeout)
+                logger.info(
+                    "agent_standby wake_required=%s conversation_timeout=%s",
+                    not conversation_active,
+                    self.config.standby_timeout if conversation_active else "disabled",
+                )
 
                 captured_utterance = None
                 for event in self._listener_factory(
                     self.config.vad_settings,
                     self.config.device,
-                    self.config.standby_timeout,
-                    self.config.wake_word_detector,
+                    self.config.standby_timeout if conversation_active else None,
+                    None if conversation_active else self.config.wake_word_detector,
                     self.config.wake_ack_delay,
                     self.config.wake_buffer_ms,
                 ):
                     if event.kind == "standby_timeout":
-                        logger.info("agent_standby_timeout reached, shutting down")
-                        self.state = AgentState.SHUTDOWN
+                        logger.info("conversation_silence_timeout returning_to_standby")
+                        conversation_active = self.config.wake_word_detector is None
                         break
                     elif event.kind == "speech_started":
                         self.state = AgentState.LISTENING
@@ -125,14 +136,17 @@ class VoiceAgent:
                         self._speak_wake_ack()
                     elif event.kind == "speech_ended" and event.utterance is not None:
                         captured_utterance = event.utterance
+                        conversation_active = True
                         logger.info(
                             "speech_ended duration=%.2fs",
                             captured_utterance.duration_seconds,
                         )
                         break
 
-                if self.state == AgentState.SHUTDOWN or captured_utterance is None:
+                if self.state == AgentState.SHUTDOWN:
                     break
+                if captured_utterance is None:
+                    continue
 
                 self.turn_count += 1
                 self.state = AgentState.THINKING
@@ -142,24 +156,41 @@ class VoiceAgent:
                 write_utterance_wav(path, stt_utterance)
 
                 logger.info("transcribing audio_path=%s", path)
-                result = self.transcriber.transcribe(
-                    STTRequest(
-                        audio_path=path,
-                        model_size=self.config.whisper_model,
-                        language=self.config.whisper_language,
-                        compute_type=self.config.whisper_compute_type,
-                    )
+                stt_request = STTRequest(
+                    audio_path=path,
+                    model_size=self.config.whisper_model,
+                    language=self.config.whisper_language,
+                    compute_type=self.config.whisper_compute_type,
                 )
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    stt_future = executor.submit(self.transcriber.transcribe, stt_request)
+                    speaker_future = executor.submit(self._speaker_identifier.identify, path)
+                    result = stt_future.result()
+                    speaker_result: SpeakerResult = speaker_future.result()
                 logger.info("transcript text=%s", result.text)
+                logger.info(
+                    "speaker_result user_id=%s score=%s status=%s",
+                    speaker_result.user_id,
+                    speaker_result.score,
+                    speaker_result.status,
+                )
 
                 if not result.text.strip():
                     logger.info("empty_transcript_ignored")
-                    if not self.config.continuous:
-                        self.state = AgentState.SHUTDOWN
-                        break
                     continue
 
-                reply_text = self.brain.process(result.text)
+                if _is_wake_only(result.text, self.config.wake_keywords):
+                    reply_text = self.config.wake_ack_text or "我在"
+                    logger.info("wake_only_reply text=%s", reply_text)
+                else:
+                    reply_text = self.brain.process(
+                        result.text,
+                        context=TurnContext(
+                            user_id=speaker_result.user_id,
+                            speaker_score=speaker_result.score,
+                            speaker_status=speaker_result.status,
+                        ),
+                    )
                 logger.info("brain_reply text=%s", reply_text)
 
                 self.state = AgentState.SPEAKING
@@ -173,20 +204,12 @@ class VoiceAgent:
                 )
                 logger.info("speaking_done")
 
-                if not self.config.continuous:
-                    logger.info("single_turn_complete, shutting down")
-                    self.state = AgentState.SHUTDOWN
-                    break
+                consume_standby = getattr(self.brain, "consume_return_to_standby", None)
+                if callable(consume_standby) and consume_standby():
+                    conversation_active = self.config.wake_word_detector is None
+                    logger.info("conversation_control return_to_standby")
 
-                if (
-                    self.config.max_turns is not None
-                    and self.turn_count >= self.config.max_turns
-                ):
-                    logger.info(
-                        "max_turns reached (%d), shutting down", self.turn_count
-                    )
-                    self.state = AgentState.SHUTDOWN
-                    break
+                logger.info("conversation_turn_complete turns=%d", self.turn_count)
 
         except KeyboardInterrupt:
             logger.info("agent_interrupted")
@@ -271,3 +294,11 @@ class VoiceAgent:
 def _next_output_path(output_dir: Path, turn_count: int) -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     return output_dir / f"agent-turn-{turn_count:03d}-{stamp}.wav"
+
+
+def _is_wake_only(text: str, wake_keywords: tuple[str, ...]) -> bool:
+    normalized = re.sub(r"[\s\W_]+", "", text, flags=re.UNICODE)
+    return bool(normalized) and normalized in {
+        re.sub(r"[\s\W_]+", "", keyword, flags=re.UNICODE)
+        for keyword in wake_keywords
+    }

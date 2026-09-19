@@ -58,6 +58,64 @@ Qwen3-ASR-0.6B is also available as a local provider:
 uv run --extra qwen-asr myagent-stt --provider qwen3-asr-0.6b --file input.wav --language zh
 ```
 
+## OpenClaw Brain
+
+Run the voice agent with OpenClaw as the reasoning backend:
+
+```sh
+uv run --extra qwen-asr myagent \
+  --brain openclaw \
+  --wake-config wake.toml \
+  --device 3
+```
+
+The OpenClaw Gateway must be running on `127.0.0.1:18789`, with its OpenAI-compatible Chat Completions endpoint enabled. Pass the Gateway bearer token with `--openclaw-token` or `OPENCLAW_GATEWAY_TOKEN`. The default model is `openclaw/default`, and `--openclaw-session` keeps turns in one OpenClaw session.
+
+## Local TaskBrain
+
+TaskBrain keeps orchestration, tools, and memory in MyAgent. The default model
+backend is the OpenAI API; any OpenAI-compatible local endpoint can still be
+selected with `--taskbrain-url`.
+
+```sh
+uv run --extra qwen-asr myagent \
+  --brain taskbrain \
+  --taskbrain-model gpt-5.6-luna \
+  --taskbrain-reasoning-effort none \
+  --wake-config wake.toml \
+  --device 3
+```
+
+Set `OPENAI_API_KEY` before starting the agent. The API key stays local to the
+process and is sent only to the configured model endpoint.
+
+The default memory file is `data/memory.json`. The first built-in tools are
+`remember`, `recall`, and `return_to_standby`; custom tools can be registered through `ToolRegistry`.
+MCP servers and skills are planned as adapters on top of this registry.
+
+Enable local semantic memory retrieval with Qwen3 Embedding:
+
+```sh
+uv sync --extra vector-memory --extra qwen-asr --extra wake
+uv run myagent \
+  --brain taskbrain \
+  --taskbrain-memory-backend lancedb \
+  --taskbrain-memory data/memory.lancedb \
+  --taskbrain-user-id default \
+  --taskbrain-embedding qwen3-embedding-0.6b \
+  --taskbrain-embedding-device mps \
+  --wake-config wake.toml \
+  --device 3
+```
+
+The agent stays alive until `Ctrl+C`. After a wake word, subsequent turns do
+not require the wake word again; ten seconds of silence returns to wake-word
+standby. `--max-turns` is no longer used as an automatic shutdown condition.
+After a wake word, it says `我在` if no follow-up speech starts within 0.8 seconds.
+
+Memory records are stored in LanceDB under `data/memory.lancedb`. Existing
+`data/memory.json` records are imported once with `--taskbrain-memory-source`.
+
 Mandarin transcripts normalize common ASCII punctuation to Chinese punctuation.
 
 ## Listening
@@ -98,26 +156,20 @@ The first voice loop replies by echoing the transcript through local TTS.
 
 ## Main Voice Agent
 
-Run the main agent with a standby timeout ($t$ seconds):
+Run the main agent. It remains alive until `Ctrl+C`:
 
 ```sh
-# Standby for 10 seconds (default); auto-shutdown if no speech detected
+# After 10 seconds of silence during an active conversation, require wake again
 uv run myagent --timeout 10
 
 # Or using the alias
 uv run myagent-run -t 10
 ```
 
-Continuous standby mode (resets $t$ seconds timeout after each reply):
-
-```sh
-uv run myagent --timeout 10 --continuous
-```
-
 Enable wake word gating with a sherpa-onnx KWS config:
 
 ```sh
-uv run myagent --wake-config wake.toml --continuous
+uv run myagent --wake-config wake.toml
 ```
 
 Speak a short acknowledgement after wake detection:

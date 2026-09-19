@@ -22,7 +22,8 @@ class AgentConfig:
     tts_rate: int | None = None
     output_dir: Path = field(default_factory=lambda: Path("recordings"))
     wake_word_detector: WakeWordDetector | None = None
-    wake_ack_text: str | None = None
+    wake_keywords: tuple[str, ...] = ("麥芽糖", "麦芽糖")
+    wake_ack_text: str | None = "我在"
     wake_ack_delay: float = 0.8
     wake_buffer_ms: int = 1000
     normalize_stt_audio: bool = True

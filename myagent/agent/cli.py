@@ -5,8 +5,16 @@ import logging
 from pathlib import Path
 
 from myagent.agent.agent import VoiceAgent
-from myagent.agent.brain import EchoBrain
+from myagent.agent.brain import EchoBrain, OpenClawBrain
 from myagent.agent.config import AgentConfig
+from myagent.agent.taskbrain import (
+    MemoryStore,
+    LanceMemoryStore,
+    OpenAICompatibleTaskModel,
+    QwenEmbeddingProvider,
+    TaskBrain,
+    UserProfileStore,
+)
 from myagent.logging import configure_logging
 from myagent.voice import create_wake_word_detector, load_wake_word_config
 from myagent.voice.listen_cli import _parse_device
@@ -17,29 +25,84 @@ logger = logging.getLogger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the MyAgent voice assistant with standby timeout."
+        description="Run the MyAgent voice assistant until Ctrl+C."
     )
     parser.add_argument(
         "--timeout",
         "-t",
         type=float,
         default=10.0,
-        help="Standby timeout in seconds before auto-shutdown (default: 10.0).",
+        help="Seconds of silence in an active conversation before returning to wake standby (default: 10.0).",
     )
     parser.add_argument(
         "--continuous",
         action="store_true",
-        help="Return to standby after speaking until timeout occurs (default: single turn).",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--max-turns",
         type=int,
-        help="Max turns before shutdown in continuous mode.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--reply-prefix",
         default="收到，你說：",
         help="Prefix spoken before echoing the transcript.",
+    )
+    parser.add_argument(
+        "--brain",
+        choices=("echo", "openclaw", "taskbrain"),
+        default="echo",
+        help="Reasoning backend.",
+    )
+    parser.add_argument(
+        "--openclaw-url",
+        default="http://127.0.0.1:18789/v1/chat/completions",
+        help="OpenClaw Gateway chat completions endpoint.",
+    )
+    parser.add_argument("--openclaw-token", help="OpenClaw Gateway bearer token.")
+    parser.add_argument("--openclaw-model", default="openclaw/default")
+    parser.add_argument("--openclaw-session", default="myagent-voice")
+    parser.add_argument("--openclaw-timeout", type=float, default=120.0)
+    parser.add_argument(
+        "--taskbrain-url",
+        default="https://api.openai.com/v1/chat/completions",
+        help="OpenAI-compatible task model endpoint.",
+    )
+    parser.add_argument("--taskbrain-token", help="Task model bearer token, if required.")
+    parser.add_argument("--taskbrain-model", default="gpt-5.6-luna")
+    parser.add_argument("--taskbrain-reasoning-effort", default="none")
+    parser.add_argument("--taskbrain-timeout", type=float, default=120.0)
+    parser.add_argument(
+        "--taskbrain-memory",
+        type=Path,
+        default=Path("data/memory.json"),
+        help="Persistent local memory JSON file.",
+    )
+    parser.add_argument(
+        "--taskbrain-memory-backend",
+        choices=("json", "lancedb"),
+        default="json",
+        help="Memory storage backend.",
+    )
+    parser.add_argument(
+        "--taskbrain-memory-source",
+        type=Path,
+        default=Path("data/memory.json"),
+        help="Legacy JSON memory file to import into LanceDB.",
+    )
+    parser.add_argument("--taskbrain-user-id", default="default")
+    parser.add_argument(
+        "--taskbrain-embedding",
+        choices=("none", "qwen3-embedding-0.6b"),
+        default="none",
+        help="Memory retrieval embedding provider.",
+    )
+    parser.add_argument(
+        "--taskbrain-embedding-device",
+        choices=("cpu", "mps"),
+        default="cpu",
+        help="Device for the local embedding model.",
     )
     parser.add_argument(
         "--device",
@@ -83,7 +146,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--wake-ack",
-        help="Optional short TTS acknowledgement after wake word detection.",
+        default="我在",
+        help="Short TTS acknowledgement after wake word detection (default: 我在).",
     )
     parser.add_argument(
         "--wake-ack-delay",
@@ -146,6 +210,43 @@ def main() -> None:
         wake_buffer_ms=args.wake_buffer_ms,
     )
 
-    brain = EchoBrain(prefix=args.reply_prefix)
+    if args.brain == "openclaw":
+        brain = OpenClawBrain(
+            endpoint=args.openclaw_url,
+            token=args.openclaw_token,
+            model=args.openclaw_model,
+            session_id=args.openclaw_session,
+            timeout=args.openclaw_timeout,
+        )
+    elif args.brain == "taskbrain":
+        embedder = None
+        if args.taskbrain_embedding == "qwen3-embedding-0.6b":
+            embedder = QwenEmbeddingProvider(device=args.taskbrain_embedding_device)
+        if args.taskbrain_memory_backend == "lancedb":
+            memory = LanceMemoryStore(
+                args.taskbrain_memory,
+                embedder=embedder,
+                user_id=args.taskbrain_user_id,
+            )
+            migrated = memory.migrate_json(args.taskbrain_memory_source)
+            if migrated:
+                logger.info("memory_json_migrated count=%d", migrated)
+            profile = UserProfileStore(args.taskbrain_memory, user_id=args.taskbrain_user_id)
+        else:
+            memory = MemoryStore(args.taskbrain_memory, embedder=embedder)
+            profile = None
+        brain = TaskBrain(
+            model=OpenAICompatibleTaskModel(
+                endpoint=args.taskbrain_url,
+                token=args.taskbrain_token,
+                model=args.taskbrain_model,
+                timeout=args.taskbrain_timeout,
+                reasoning_effort=args.taskbrain_reasoning_effort,
+            ),
+            memory=memory,
+            profile=profile,
+        )
+    else:
+        brain = EchoBrain(prefix=args.reply_prefix)
     agent = VoiceAgent(config=config, brain=brain)
     agent.run()

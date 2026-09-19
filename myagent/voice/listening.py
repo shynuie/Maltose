@@ -249,7 +249,7 @@ def microphone_events(
                 standby_start = time.monotonic()
                 continue
 
-            if not segmenter.in_speech and standby_timeout is not None:
+            if wake_detected and not segmenter.in_speech and standby_timeout is not None:
                 if (time.monotonic() - standby_start) >= standby_timeout:
                     yield ListeningEvent(kind="standby_timeout")
                     break

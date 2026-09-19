@@ -26,6 +26,7 @@ from .stt import (
     create_stt_provider,
 )
 from .tts import MacOSSayTTS, TTSRequest
+from .speaker import NullSpeakerIdentifier, SpeakerIdentifier, SpeakerResult
 from .wake import (
     GainWakeWordDetector,
     SherpaOnnxKWSConfig,
@@ -46,9 +47,12 @@ __all__ = [
     "GainWakeWordDetector",
     "ListeningEvent",
     "MacOSSayTTS",
+    "NullSpeakerIdentifier",
     "NormalizationResult",
     "STTRequest",
     "STTResult",
+    "SpeakerIdentifier",
+    "SpeakerResult",
     "STTSegment",
     "TTSRequest",
     "Utterance",

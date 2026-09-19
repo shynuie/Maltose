@@ -1,0 +1,602 @@
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+import hashlib
+import uuid
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Protocol
+
+from myagent.agent.brain import TurnContext
+
+
+ToolHandler = Callable[[dict[str, Any]], Any]
+logger = logging.getLogger(__name__)
+
+
+class EmbeddingProvider(Protocol):
+    def embed(self, text: str, *, is_query: bool = False) -> list[float]:
+        ...
+
+
+class QwenEmbeddingProvider:
+    """Local Qwen3 embedding provider, loaded only when explicitly enabled."""
+
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen3-Embedding-0.6B",
+        device: str = "cpu",
+    ) -> None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise RuntimeError(
+                "Qwen embeddings require the 'embeddings' extra. "
+                "Install it with: uv sync --extra embeddings"
+            ) from exc
+        self.model = SentenceTransformer(model_name, device=device)
+
+    def embed(self, text: str, *, is_query: bool = False) -> list[float]:
+        kwargs: dict[str, Any] = {"normalize_embeddings": True}
+        if is_query:
+            kwargs["prompt_name"] = "query"
+        vector = self.model.encode(text, **kwargs)
+        return [float(value) for value in vector.tolist()]
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    name: str
+    description: str
+    parameters: dict[str, Any]
+    handler: ToolHandler
+
+    def as_model_schema(self) -> dict[str, Any]:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
+            },
+        }
+
+
+class ToolRegistry:
+    def __init__(self) -> None:
+        self._tools: dict[str, ToolSpec] = {}
+
+    def register(
+        self,
+        name: str,
+        description: str,
+        parameters: dict[str, Any],
+        handler: ToolHandler,
+    ) -> None:
+        if not name or name in self._tools:
+            raise ValueError(f"Invalid or duplicate tool name: {name!r}")
+        self._tools[name] = ToolSpec(name, description, parameters, handler)
+
+    def schemas(self) -> list[dict[str, Any]]:
+        return [tool.as_model_schema() for tool in self._tools.values()]
+
+    def has(self, name: str) -> bool:
+        return name in self._tools
+
+    def execute(self, name: str, arguments: dict[str, Any]) -> Any:
+        try:
+            tool = self._tools[name]
+        except KeyError as exc:
+            raise ValueError(f"Unknown tool: {name}") from exc
+        return tool.handler(arguments)
+
+
+class MemoryStore:
+    """Small human-readable persistent memory store for the first TaskBrain slice."""
+
+    def __init__(
+        self,
+        path: str | Path = "data/memory.json",
+        embedder: EmbeddingProvider | None = None,
+    ) -> None:
+        self.path = Path(path)
+        self.embedder = embedder
+
+    def _load(self) -> list[dict[str, Any]]:
+        if not self.path.exists():
+            return []
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Could not read memory file: {self.path}") from exc
+        if not isinstance(data, list):
+            raise RuntimeError(f"Memory file must contain a JSON list: {self.path}")
+        return [item for item in data if isinstance(item, dict)]
+
+    def remember(
+        self,
+        text: str,
+        tags: list[str] | None = None,
+        user_id: str = "default",
+    ) -> dict[str, Any]:
+        text = text.strip()
+        if not text:
+            raise ValueError("Memory text cannot be empty.")
+        entries = self._load()
+        entry = {
+            "text": text,
+            "user_id": user_id,
+            "tags": tags or [],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if self.embedder is not None:
+            entry["embedding"] = self.embedder.embed(text)
+        entries.append(entry)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(
+            json.dumps(entries, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return entry
+
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        user_id: str = "default",
+    ) -> list[dict[str, Any]]:
+        terms: list[str] = []
+        for chunk in re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]+", query.lower()):
+            if re.fullmatch(r"[\u4e00-\u9fff]+", chunk):
+                terms.extend(chunk[index : index + 2] for index in range(len(chunk) - 1))
+            else:
+                terms.append(chunk)
+        entries = [
+            entry for entry in self._load()
+            if entry.get("user_id", "default") == user_id
+        ]
+        if not terms:
+            return entries[-limit:]
+        if self.embedder is not None:
+            query_vector = self.embedder.embed(query, is_query=True)
+            semantic_matches = []
+            for index, entry in enumerate(entries):
+                embedding = entry.get("embedding")
+                if not isinstance(embedding, list):
+                    continue
+                score = _cosine_similarity(query_vector, embedding)
+                semantic_matches.append((score, index, entry))
+            semantic_matches.sort(key=lambda item: (item[0], item[1]), reverse=True)
+            if semantic_matches:
+                return [entry for _, _, entry in semantic_matches[:limit]]
+
+        scored: list[tuple[int, int, dict[str, Any]]] = []
+        for index, entry in enumerate(entries):
+            haystack = f"{entry.get('text', '')} {' '.join(entry.get('tags', []))}".lower()
+            score = sum(1 for term in terms if term in haystack)
+            if score:
+                scored.append((score, index, entry))
+        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return [entry for _, _, entry in scored[:limit]]
+
+    def recent(self, limit: int = 8) -> list[dict[str, Any]]:
+        return self._load()[-limit:]
+
+    def backfill_embeddings(self) -> int:
+        if self.embedder is None:
+            return 0
+        entries = self._load()
+        changed = 0
+        for entry in entries:
+            if isinstance(entry.get("embedding"), list):
+                continue
+            text = entry.get("text")
+            if isinstance(text, str) and text.strip():
+                entry["embedding"] = self.embedder.embed(text)
+                changed += 1
+        if changed:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(
+                json.dumps(entries, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        return changed
+
+
+def _cosine_similarity(left: list[float], right: list[float]) -> float:
+    if len(left) != len(right) or not left:
+        return -1.0
+    dot = sum(a * b for a, b in zip(left, right))
+    left_norm = sum(value * value for value in left) ** 0.5
+    right_norm = sum(value * value for value in right) ** 0.5
+    if left_norm == 0 or right_norm == 0:
+        return -1.0
+    return dot / (left_norm * right_norm)
+
+
+class LanceMemoryStore:
+    """Persistent local vector memory backed by LanceDB."""
+
+    table_name = "memories"
+
+    def __init__(
+        self,
+        path: str | Path = "data/memory.lancedb",
+        embedder: EmbeddingProvider | None = None,
+        user_id: str = "default",
+    ) -> None:
+        if embedder is None:
+            raise ValueError("LanceMemoryStore requires an embedding provider.")
+        try:
+            import lancedb
+        except ImportError as exc:
+            raise RuntimeError(
+                "LanceDB memory requires the 'vector-memory' extra. "
+                "Install it with: uv sync --extra vector-memory"
+            ) from exc
+        self.path = Path(path)
+        self.embedder = embedder
+        self.user_id = user_id
+        self._db = lancedb.connect(str(self.path))
+        self._ensure_user_id_schema()
+
+    def _ensure_user_id_schema(self) -> None:
+        table = self._table()
+        if table is None:
+            return
+        rows = table.to_arrow().to_pylist()
+        if not rows or "user_id" in rows[0]:
+            return
+        migrated_rows = [
+            {**row, "user_id": self.user_id}
+            for row in rows
+        ]
+        self._db.drop_table(self.table_name)
+        self._db.create_table(self.table_name, data=migrated_rows)
+
+    def _table(self):
+        if self.table_name not in self._db.list_tables().tables:
+            return None
+        return self._db.open_table(self.table_name)
+
+    def _write_rows(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        table = self._table()
+        if table is None:
+            self._db.create_table(self.table_name, data=rows)
+        else:
+            table.add(rows)
+
+    def remember(
+        self,
+        text: str,
+        tags: list[str] | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        text = text.strip()
+        if not text:
+            raise ValueError("Memory text cannot be empty.")
+        entry = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id or self.user_id,
+            "text": text,
+            "tags": json.dumps(tags or [], ensure_ascii=False),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "embedding": self.embedder.embed(text),
+        }
+        self._write_rows([entry])
+        return {**entry, "tags": tags or []}
+
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        user_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        table = self._table()
+        if table is None:
+            return []
+        scoped_user_id = user_id or self.user_id
+        escaped_user_id = scoped_user_id.replace("'", "''")
+        rows = (
+            table.search(self.embedder.embed(query, is_query=True))
+            .distance_type("cosine")
+            .where(f"user_id = '{escaped_user_id}'")
+            .limit(limit)
+            .to_list()
+        )
+        results = []
+        for row in rows:
+            row["tags"] = json.loads(row.get("tags", "[]"))
+            results.append(row)
+        return results
+
+    def recent(self, limit: int = 8) -> list[dict[str, Any]]:
+        table = self._table()
+        if table is None:
+            return []
+        rows = [
+            row for row in table.to_arrow().to_pylist()
+            if row.get("user_id") == self.user_id
+        ][-limit:]
+        for row in rows:
+            row["tags"] = json.loads(row.get("tags", "[]"))
+        return rows
+
+    def migrate_json(self, source: str | Path = "data/memory.json") -> int:
+        source_path = Path(source)
+        if not source_path.exists():
+            return 0
+        entries = json.loads(source_path.read_text(encoding="utf-8"))
+        if not isinstance(entries, list):
+            raise RuntimeError(f"Memory file must contain a JSON list: {source_path}")
+        table = self._table()
+        existing_ids = set()
+        if table is not None:
+            existing_ids = {row["id"] for row in table.to_arrow().to_pylist()}
+        rows = []
+        for entry in entries:
+            text = entry.get("text")
+            if not isinstance(text, str) or not text.strip():
+                continue
+            stable_id = hashlib.sha256(
+                f"{text}\0{entry.get('created_at', '')}".encode("utf-8")
+            ).hexdigest()
+            if stable_id in existing_ids:
+                continue
+            rows.append(
+                {
+                    "id": stable_id,
+                    "user_id": entry.get("user_id", self.user_id),
+                    "text": text,
+                    "tags": json.dumps(entry.get("tags", []), ensure_ascii=False),
+                    "created_at": entry.get("created_at", datetime.now(timezone.utc).isoformat()),
+                    "embedding": self.embedder.embed(text),
+                }
+            )
+        self._write_rows(rows)
+        return len(rows)
+
+
+class UserProfileStore:
+    """Structured identity/profile data, separate from semantic memories."""
+
+    table_name = "user_profile"
+
+    def __init__(self, path: str | Path = "data/memory.lancedb", user_id: str = "default") -> None:
+        try:
+            import lancedb
+        except ImportError as exc:
+            raise RuntimeError(
+                "User profile storage requires the 'vector-memory' extra."
+            ) from exc
+        self._db = lancedb.connect(str(path))
+        self.user_id = user_id
+
+    def set_profile(self, **fields: str) -> dict[str, str]:
+        profile = {"id": self.user_id, **fields}
+        table = (
+            self._db.open_table(self.table_name)
+            if self.table_name in self._db.list_tables().tables
+            else None
+        )
+        if table is None:
+            self._db.create_table(self.table_name, data=[profile])
+        else:
+            escaped_id = self.user_id.replace("'", "''")
+            table.delete(f"id = '{escaped_id}'")
+            table.add([profile])
+        return profile
+
+    def get_profile(self, user_id: str | None = None) -> dict[str, Any] | None:
+        if self.table_name not in self._db.list_tables().tables:
+            return None
+        rows = self._db.open_table(self.table_name).to_arrow().to_pylist()
+        return next((row for row in rows if row.get("id") == (user_id or self.user_id)), None)
+
+
+class TaskModel(Protocol):
+    def complete(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        ...
+
+
+class OpenAICompatibleTaskModel:
+    def __init__(
+        self,
+        endpoint: str = "https://api.openai.com/v1/chat/completions",
+        token: str | None = None,
+        model: str = "gpt-5.6-luna",
+        timeout: float = 120.0,
+        reasoning_effort: str = "none",
+    ) -> None:
+        self.endpoint = endpoint
+        self.token = token or os.environ.get("OPENAI_API_KEY") or os.environ.get("TASKBRAIN_TOKEN")
+        self.model = model
+        self.timeout = timeout
+        self.reasoning_effort = reasoning_effort
+
+    def complete(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "messages": messages,
+                "tools": tools,
+                "tool_choice": "auto",
+                "stream": False,
+                "reasoning_effort": self.reasoning_effort,
+            }
+        ).encode("utf-8")
+        logger.info(
+            "task_model_request model=%s tools=%s",
+            self.model,
+            ",".join(tool["function"]["name"] for tool in tools),
+        )
+        headers = {"Content-Type": "application/json"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        request = urllib.request.Request(self.endpoint, data=payload, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Task model returned HTTP {exc.code}: {detail[:500]}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Could not connect to task model at {self.endpoint}: {exc.reason}") from exc
+
+
+class TaskBrain:
+    """Local orchestration layer for memory, tools, and an interchangeable task model."""
+
+    def __init__(
+        self,
+        model: TaskModel,
+        memory: MemoryStore | None = None,
+        tools: ToolRegistry | None = None,
+        profile: UserProfileStore | None = None,
+        max_tool_rounds: int = 4,
+    ) -> None:
+        self.model = model
+        self.memory = memory or MemoryStore()
+        self.tools = tools or ToolRegistry()
+        self.profile = profile
+        self._active_user_id = getattr(self.memory, "user_id", "default")
+        self._return_to_standby = False
+        self.max_tool_rounds = max_tool_rounds
+        self._install_memory_tools()
+        self._install_conversation_tools()
+        self._install_profile_tool()
+        if hasattr(self.memory, "backfill_embeddings"):
+            backfilled = self.memory.backfill_embeddings()
+            if backfilled:
+                logger.info("memory_embeddings_backfilled count=%d", backfilled)
+
+    def _install_profile_tool(self) -> None:
+        if self.profile is None or self.tools.has("get_user_profile"):
+            return
+        self.tools.register(
+            "get_user_profile",
+            "Read the user's structured identity and profile fields.",
+            {"type": "object", "properties": {}},
+            lambda _args: self.profile.get_profile(self._active_user_id) or {},
+        )
+
+    def _install_conversation_tools(self) -> None:
+        if self.tools.has("return_to_standby"):
+            return
+        self.tools.register(
+            "return_to_standby",
+            (
+                "End the current conversation session and return to wake-word standby. "
+                "Use when the user says the conversation is over, for example '退下吧', "
+                "'沒事了', '不用了', or '先這樣'."
+            ),
+            {"type": "object", "properties": {}},
+            self._request_standby,
+        )
+
+    def _request_standby(self, _args: dict[str, Any]) -> dict[str, str]:
+        self._return_to_standby = True
+        return {"status": "standby_requested"}
+
+    def consume_return_to_standby(self) -> bool:
+        requested = self._return_to_standby
+        self._return_to_standby = False
+        return requested
+
+    def _install_memory_tools(self) -> None:
+        if not self.tools.has("remember"):
+            self.tools.register(
+                "remember",
+                "Store a durable user fact or preference in local memory.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["text"],
+                },
+                lambda args: self.memory.remember(
+                    args["text"], args.get("tags"), user_id=self._active_user_id
+                ),
+            )
+        if not self.tools.has("recall"):
+            self.tools.register(
+                "recall",
+                "Search local memory for facts relevant to the user's question.",
+                {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+                lambda args: self.memory.search(
+                    args["query"], user_id=self._active_user_id
+                ),
+            )
+
+    def process(self, user_text: str, context: TurnContext | None = None) -> str:
+        text = user_text.strip()
+        if not text:
+            raise ValueError("TaskBrain input cannot be empty.")
+        if context is not None:
+            self._active_user_id = context.user_id or "unknown"
+        system_content = (
+            "You are a concise local personal assistant. "
+            "Only store durable user facts when the user explicitly asks you to remember them. "
+            "When the user asks about their personal facts, preferences, or something they asked you "
+            "to remember, call the recall tool before answering. Do not guess from memory. "
+            "For ordinary conversation that does not require stored context, answer directly without tools."
+            " When the user clearly ends the conversation, call return_to_standby and then give a brief acknowledgement."
+        )
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": text},
+        ]
+        for _ in range(self.max_tool_rounds + 1):
+            response = self.model.complete(messages, self.tools.schemas())
+            try:
+                message = response["choices"][0]["message"]
+            except (KeyError, IndexError, TypeError) as exc:
+                raise RuntimeError("Task model response did not contain a message.") from exc
+            tool_calls = message.get("tool_calls") or []
+            logger.info(
+                "task_model_response finish_reason=%s tool_calls=%s",
+                response.get("choices", [{}])[0].get("finish_reason"),
+                ",".join(
+                    call.get("function", {}).get("name", "unknown")
+                    for call in tool_calls
+                ) or "none",
+            )
+            if not tool_calls:
+                content = message.get("content", "")
+                if not isinstance(content, str) or not content.strip():
+                    raise RuntimeError("Task model returned an empty assistant response.")
+                return content.strip()
+            messages.append(message)
+            for call in tool_calls:
+                function = call.get("function", {})
+                name = function.get("name")
+                raw_arguments = function.get("arguments", "{}")
+                arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else raw_arguments
+                result = self.tools.execute(name, arguments)
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.get("id", name),
+                        "name": name,
+                        "content": json.dumps(result, ensure_ascii=False),
+                    }
+                )
+        raise RuntimeError("Task model exceeded the maximum tool rounds.")

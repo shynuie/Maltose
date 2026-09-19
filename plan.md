@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-Connect the completed local voice frontend directly to OpenClaw ("龍蝦") as the backend brain via its Gateway API. The next application-level concern is converting imperfect STT text into constrained intents before tool execution.
+Build a local TaskBrain behind the completed voice frontend. Use the OpenAI API as the initial model backend, while the primary runtime owns tool registration, LanceDB-backed semantic memory, and future MCP/skills adapters.
 
 ## Done
 
@@ -31,7 +31,26 @@ Connect the completed local voice frontend directly to OpenClaw ("龍蝦") as th
 - Qwen3-ASR-0.6B is now the default STT provider; alternatives remain selectable with `--stt-provider`.
 - Added local English and Chinese command batches for STT comparison.
 - Verified the complete wake -> VAD -> normalized audio -> Qwen3-ASR -> TTS path.
-- All 34 unit tests pass.
+- All 49 unit tests pass.
+- Added `OpenClawBrain` with Gateway HTTP client, bearer-token support, stable session id, and CLI selection.
+- Added local `TaskBrain` with a tool registry, persistent JSON memory, and an OpenAI-compatible model adapter.
+- Configured OpenAI API as the default model backend; local endpoints remain configurable.
+- Added optional local Qwen3-Embedding-0.6B provider with cosine-similarity memory retrieval and keyword fallback.
+- Added `--taskbrain-embedding` and `embeddings` dependency extra.
+- Added `LanceMemoryStore` with persistent local vector storage and JSON migration.
+- Added structured `user_profile` table support for stable identity data.
+- Linked semantic memories to `user_profile.id` through `memories.user_id` and scoped recall by user.
+- Added `vector-memory` dependency extra and memory backend CLI selection.
+- Changed the conversation lifecycle to keep the process alive until `Ctrl+C`.
+- Added active conversation sessions that accept follow-up speech without repeating the wake word; 10 seconds of silence returns to KWS standby.
+- Added deterministic wake-only handling: a transcript containing only `麥芽糖`/`麦芽糖` replies `我在` without calling the LLM.
+- Made the post-wake acknowledgement default to `我在` after the 0.8-second follow-up window.
+- Added `return_to_standby` conversation-control tool for phrases such as `退下吧` and `沒事了`.
+- Added pluggable `SpeakerIdentifier`, `SpeakerResult`, and `TurnContext` interfaces.
+- Added parallel STT and speaker-identification workers for each completed utterance.
+- Passed speaker-resolved `user_id` into TaskBrain and scoped memory/profile tools to that user.
+- Added built-in `remember` and `recall` tools and a bounded tool execution loop.
+- Added 49 unit tests covering the TaskBrain, memory, identity context, and voice flow.
 
 ## Architecture: Voice I/O + Agent Brain
 
@@ -41,8 +60,10 @@ Decouple the voice layer (Perception & Expression) from the reasoning layer (Bra
 User Speech -> Mic/VAD (Ear) -> STT -> [ AgentBrain Protocol ] -> TTS (Mouth) -> User
                                               │
                                               ▼
-                                 Direct Target: OpenClaw Gateway
-                                 (Local-first Agent Brain, Tools & Memory)
+                                 Local TaskBrain
+                         (Tools, Memory, MCP/Skills Adapters)
+                                      │
+                         OpenAI-compatible Task Model
 ```
 
 MyAgent serves as the local voice interface (Ears & Mouth / Voice Channel) for the personal assistant.
@@ -57,8 +78,59 @@ MyAgent serves as the local voice interface (Ears & Mouth / Voice Channel) for t
 - Added CLI entrypoints `myagent` and `myagent-run`.
 - Verified live mic input and 20 passing unit tests.
 
-### Phase 2: Direct OpenClaw ("龍蝦") Integration (Next)
-Skip building custom scratch agent workflows or intermediate tool frameworks. Connect MyAgent directly to OpenClaw:
+### Phase 2: Local TaskBrain (In Progress)
+Keep the agent orchestration in MyAgent so the voice workflow does not depend on a separate agent runtime:
+- **TaskBrain core**: local tool registry, persistent memory, model adapter, and bounded tool loop.
+- **Memory retrieval**: use Qwen3 Embedding with LanceDB cosine search; retain JSON/keyword storage as a fallback and migration source.
+- **User profile**: keep identity and stable preferences in a structured table, separate from semantic memory.
+- **Speaker identity**: resolve a speaker embedding to `user_id` before TaskBrain memory access.
+- **Database schema**:
+
+```text
+user_profile
+├── id                 # stable user_id
+├── display_name
+├── full_name
+└── chinese_name
+
+speaker_profiles
+├── id
+├── user_id             # FK-like link to user_profile.id
+├── embedding_model
+└── created_at
+
+memories
+├── id
+├── user_id             # FK-like link to user_profile.id
+├── text
+├── tags
+├── embedding
+└── created_at
+```
+
+- **Voice turn flow**:
+
+```text
+KWS wake_detected
+    -> VAD captures command utterance
+    -> STT worker          (parallel A)
+    -> Speaker worker      (parallel B)
+    -> TurnContext(user_id, speaker_score, speaker_status)
+    -> TaskBrain / user-scoped tools
+```
+
+- **Current status**:
+  - Implemented `TaskBrain`, `ToolRegistry`, `MemoryStore`, and `OpenAICompatibleTaskModel`.
+  - Added `remember` and `recall` built-in tools.
+  - Added `--brain taskbrain` and local JSON memory configuration.
+  - Installed the vector-memory extra and verified LanceDB migration/search with 49 tests.
+  - Implemented the speaker identification framework; concrete speaker model and enrollment flow remain.
+  - Remaining: run the live LanceDB voice smoke test, then add a concrete local speaker model.
+- **Next**: add MCP client and skills loader adapters that expose capabilities through `ToolRegistry`.
+- **Conversation lifecycle**: one wake starts a session; silence timeout ends the session but never exits the process.
+
+### Phase 2b: Optional OpenClaw Integration
+OpenClaw remains available when its broader runtime is useful, but is not required by MyAgent:
 - **OpenClaw Setup**: Local installation via `brew install openclaw-cli` or `npm install -g openclaw`.
 - **OpenClaw Gateway**: Runs on default port `18789` (`openclaw gateway`).
 - **Implement `OpenClawBrain`**:
@@ -69,6 +141,9 @@ Skip building custom scratch agent workflows or intermediate tool frameworks. Co
     3. OpenClaw handles reasoning, tool execution (Shell, browser, files), and long-term memory.
     4. OpenClaw response text is returned to MyAgent.
     5. MyAgent speaks the response via local TTS.
+  - **Current status**:
+  - Implemented the Python Gateway client and `--brain openclaw` CLI path.
+  - Remaining: configure a local OpenClaw Gateway and run an optional end-to-end voice smoke test.
 
 ### Phase 3: Streaming Keyword / Wake Word Mode (Done: Usable First Pass)
 Support hands-free background listening activated only when a keyword is spoken:
