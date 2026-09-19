@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-Build the Main Agent core by connecting the voice system (ears and mouth) to a lifecycle-controlled agent, with direct integration to OpenClaw ("龍蝦") as the backend brain.
+Connect the MyAgent voice frontend (ears and mouth) directly to OpenClaw ("龍蝦") as the backend brain via its Gateway API, while planning keyword wake word mode and STT hallucination filtering.
 
 ## Done
 
@@ -16,6 +16,7 @@ Build the Main Agent core by connecting the voice system (ears and mouth) to a l
 - Added a minimal listen-transcribe-speak voice loop.
 - Added `VoiceAgent` with standby timeout, state machine, and `EchoBrain`.
 - Added `myagent` and `myagent-run` CLI entrypoints with continuous and single-turn modes.
+- Verified live voice interactions and timeout auto-shutdown with physical microphone.
 
 ## Architecture: Voice I/O + Agent Brain
 
@@ -34,28 +35,44 @@ MyAgent serves as the local voice interface (Ears & Mouth / Voice Channel) for t
 ## Roadmap & Phases
 
 ### Phase 1: Minimal Standby Voice Agent (Done)
-Build a minimal, standalone `VoiceAgent` focused on lifecycle and timeout handling:
-- **Standby Timeout ($t$ seconds)**:
-  - Agent starts in standby.
-  - If no speech is detected within $t$ seconds, cleanly shuts down.
-  - If speech is detected within $t$ seconds, pauses timeout, completes utterance, transcribes, and replies.
-- **Abstract `AgentBrain`**:
-  - Implement a clean `AgentBrain` protocol.
-  - Use `EchoBrain` / minimal responder for Phase 1 to verify the audio pipeline and lifecycle.
-- **State Machine**:
-  `STANDBY` -> `LISTENING` -> `THINKING` -> `SPEAKING` -> `SHUTDOWN` (or return to `STANDBY`).
-- **CLI Entrypoint**:
-  CLI command to run the agent with configurable standby timeout (e.g. `uv run myagent-run --timeout 10`).
+- Built a standalone `VoiceAgent` with lifecycle and timeout handling.
+- Implemented `AgentBrain` protocol with `EchoBrain`.
+- Implemented standby timeout ($t$ seconds) and clean auto-shutdown.
+- Added single-turn and continuous standby modes (`--continuous`).
+- Added CLI entrypoints `myagent` and `myagent-run`.
+- Verified live mic input and 20 passing unit tests.
 
 ### Phase 2: Direct OpenClaw ("龍蝦") Integration (Next)
 Skip building custom scratch agent workflows or intermediate tool frameworks. Connect MyAgent directly to OpenClaw:
-- Implement `OpenClawBrain` connecting to the local OpenClaw Gateway (via WebSocket / HTTP API).
-- Flow:
-  1. STT produces transcript.
-  2. Send transcript as user message to OpenClaw Gateway.
-  3. OpenClaw handles reasoning, tool execution (Shell, browser, files), and long-term memory.
-  4. OpenClaw response text is streamed/returned to MyAgent.
-  5. MyAgent speaks the response via local TTS.
+- **OpenClaw Setup**: Local installation via `brew install openclaw-cli` or `npm install -g openclaw`.
+- **OpenClaw Gateway**: Runs on default port `18789` (`openclaw gateway`).
+- **Implement `OpenClawBrain`**:
+  - Connect to local OpenClaw Gateway via OpenAI-compatible HTTP API (`POST http://localhost:18789/v1/chat/completions`) or WebSocket (`ws://localhost:18789`).
+  - Flow:
+    1. STT produces transcript.
+    2. Send transcript as user message to OpenClaw Gateway.
+    3. OpenClaw handles reasoning, tool execution (Shell, browser, files), and long-term memory.
+    4. OpenClaw response text is returned to MyAgent.
+    5. MyAgent speaks the response via local TTS.
+
+### Phase 3: Keyword / Wake Word Mode
+Support hands-free background listening activated only when a keyword is spoken:
+- **Transcript-based Keyword Matching**:
+  - Zero extra acoustic dependencies; supports arbitrary Mandarin/English keywords (e.g. `--keyword "小助手"`, `--keyword "龍蝦"`).
+- **Interaction Flows**:
+  - *One-shot*: "小助手，今天天氣如何？" -> Strips keyword, processes "今天天氣如何？".
+  - *Two-stage*: "小助手" -> Speaks acknowledgement ("我在") -> Enters standby listening for follow-up command.
+  - *Background conversation*: If the keyword is absent, the utterance is silently ignored.
+
+### Phase 4: Voice Pipeline Enhancements
+- **Whisper Hallucination Mitigation**:
+  - Filter out very short utterances (< 1.2s) or configure Whisper `no_speech_threshold` to avoid subtitle artifacts (e.g. "字幕by索兰娅").
+- **Interruptible TTS**:
+  - Allow `speech_started` to immediately halt ongoing TTS speech before STT completes.
+- **Audio Cues**:
+  - Short audio tones for standby ready, wake word recognized, and auto-shutdown.
+- **Streaming STT**:
+  - Real-time partial transcript streaming.
 
 ## Current Voice Flows
 
@@ -66,6 +83,7 @@ text -> TTS provider -> speech/audio file
 audio file -> STT provider -> text output
 mic audio -> VAD -> utterance audio file
 mic audio -> VAD -> STT -> TTS echo reply
+mic audio -> VAD -> standby timeout -> auto shutdown
 ```
 
 Optional listening transcription:
@@ -112,10 +130,3 @@ pre_roll_ms = 300
 ```
 
 These values are starting points. Mandarin speech may need a slightly longer end silence threshold because short pauses are common.
-
-## Later Enhancements
-
-- Streaming STT.
-- Wake word support.
-- Interruptible TTS (stop speaking immediately when user speaks).
-- Audio cues (short sound on standby ready / timeout shutdown).
