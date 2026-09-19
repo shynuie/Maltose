@@ -19,7 +19,21 @@ class SpeakerIdentifier(Protocol):
 
 
 class NullSpeakerIdentifier:
-    """Fallback until a concrete local speaker model is configured."""
+    """Fallback until a concrete local speaker model is configured.
+
+    When ``trusted_user_id`` is provided by the CLI, the application is
+    explicitly running in single-user fallback mode, so the result is treated
+    as identified even though no acoustic verification score exists.
+    """
+
+    def __init__(self, trusted_user_id: str | None = None) -> None:
+        self.trusted_user_id = trusted_user_id
 
     def identify(self, audio_path: Path) -> SpeakerResult:
-        return SpeakerResult(user_id="default", score=None, status="unknown")
+        if self.trusted_user_id:
+            return SpeakerResult(
+                user_id=self.trusted_user_id,
+                score=None,
+                status="identified",
+            )
+        return SpeakerResult(user_id=None, score=None, status="unknown")

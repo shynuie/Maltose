@@ -26,6 +26,7 @@ class AgentConfig:
     wake_ack_text: str | None = "我在"
     wake_ack_delay: float = 0.8
     wake_buffer_ms: int = 1000
+    interruptible_tts: bool = True
     normalize_stt_audio: bool = True
     stt_target_peak: int = 12000
     stt_min_peak: int = 6000

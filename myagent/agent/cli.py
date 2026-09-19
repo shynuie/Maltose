@@ -18,7 +18,11 @@ from myagent.agent.taskbrain import (
 from myagent.agent.tasks import CodexReadOnlyWorker, TaskManager, TaskStore
 from myagent.agent.search import BraveSearchProvider, WebResearchWorker
 from myagent.logging import configure_logging
-from myagent.voice import create_wake_word_detector, load_wake_word_config
+from myagent.voice import (
+    NullSpeakerIdentifier,
+    create_wake_word_detector,
+    load_wake_word_config,
+)
 from myagent.voice.listen_cli import _parse_device
 from myagent.voice.listening import VADSettings
 
@@ -130,6 +134,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--taskbrain-user-id", default="default")
     parser.add_argument(
+        "--taskbrain-trust-user-id",
+        help="Override the fallback identity trusted for microphone turns until speaker identification is available.",
+    )
+    parser.add_argument(
         "--taskbrain-embedding",
         choices=("none", "qwen3-embedding-0.6b"),
         default="none",
@@ -176,6 +184,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stt-max-gain", type=float, default=4.0)
     parser.add_argument("--tts-voice", help="macOS voice name.")
     parser.add_argument("--tts-rate", type=int, help="macOS speech rate.")
+    parser.add_argument(
+        "--no-interruptible-tts",
+        action="store_true",
+        help="Keep speaking until the current say command finishes.",
+    )
     parser.add_argument(
         "--wake-config",
         type=Path,
@@ -240,6 +253,7 @@ def main() -> None:
         stt_max_gain=args.stt_max_gain,
         tts_voice=args.tts_voice,
         tts_rate=args.tts_rate,
+        interruptible_tts=not args.no_interruptible_tts,
         output_dir=args.output_dir,
         wake_word_detector=wake_word_detector,
         wake_ack_text=args.wake_ack,
@@ -308,5 +322,11 @@ def main() -> None:
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)
-    agent = VoiceAgent(config=config, brain=brain)
+    agent = VoiceAgent(
+        config=config,
+        brain=brain,
+        speaker_identifier=NullSpeakerIdentifier(
+            args.taskbrain_trust_user_id or args.taskbrain_user_id
+        ),
+    )
     agent.run()

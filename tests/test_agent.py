@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from typing import Iterator
@@ -26,6 +27,7 @@ from myagent.agent import (
 from myagent.agent.cli import build_parser
 from myagent.voice import (
     ListeningEvent,
+    NullSpeakerIdentifier,
     SpeakerResult,
     STTRequest,
     STTResult,
@@ -33,6 +35,15 @@ from myagent.voice import (
     Utterance,
     VADSettings,
 )
+
+
+class SpeakerFallbackTests(unittest.TestCase):
+    def test_trusted_fallback_is_identified(self) -> None:
+        result = NullSpeakerIdentifier("default").identify(Path("unused.wav"))
+
+        self.assertEqual(result.user_id, "default")
+        self.assertEqual(result.status, "identified")
+        self.assertIsNone(result.score)
 
 
 class FakeSTT:
@@ -204,6 +215,32 @@ class TaskBrainTest(unittest.TestCase):
             self.assertEqual(brain.process("請記住我喜歡綠茶"), "我記住了。")
             self.assertEqual(memory.search("綠茶")[0]["text"], "喜歡綠茶")
 
+    def test_short_term_session_context_is_reused_and_cleared(self) -> None:
+        class FakeModel:
+            def __init__(self) -> None:
+                self.user_messages: list[list[str]] = []
+
+            def complete(self, messages, tools):
+                self.user_messages.append([
+                    message["content"]
+                    for message in messages
+                    if message.get("role") == "user"
+                ])
+                return {"choices": [{"message": {"content": "收到。"}}]}
+
+        model = FakeModel()
+        brain = TaskBrain(model, max_session_turns=2)
+        brain.begin_session()
+        brain.process("我剛才說我喜歡藍色。")
+        brain.process("你記得我的偏好嗎？")
+        self.assertEqual(model.user_messages[-1], [
+            "我剛才說我喜歡藍色。",
+            "你記得我的偏好嗎？",
+        ])
+        brain.end_session()
+        brain.process("這是新對話。")
+        self.assertEqual(model.user_messages[-1], ["這是新對話。"])
+
     def test_custom_tool_can_be_registered(self) -> None:
         registry = ToolRegistry()
         registry.register(
@@ -311,6 +348,128 @@ class TaskBrainTest(unittest.TestCase):
 
 
 class VoiceAgentTest(unittest.TestCase):
+    def test_interruptible_speech_stops_and_queues_followup_utterance(self) -> None:
+        class InterruptibleTTS:
+            def __init__(self) -> None:
+                self.started = threading.Event()
+                self.stopped = threading.Event()
+
+            def synthesize(self, _request: TTSRequest) -> None:
+                self.started.set()
+                self.stopped.wait(timeout=1.0)
+
+            def stop(self) -> bool:
+                self.stopped.set()
+                return True
+
+        fake_tts = InterruptibleTTS()
+        fake_utterance = _make_fake_utterance()
+
+        class InterruptSTT:
+            def transcribe(self, _request: STTRequest) -> STTResult:
+                return STTResult("等等", "zh", 1.0, [])
+
+        class InterruptBrain:
+            def should_interrupt_speech(self, text: str) -> bool:
+                return text == "等等"
+
+        def fake_listener(
+            _settings: VADSettings,
+            _device: str | int | None,
+            _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
+        ) -> Iterator[ListeningEvent]:
+            fake_tts.started.wait(timeout=1.0)
+            yield ListeningEvent(kind="speech_started")
+            yield ListeningEvent(kind="speech_ended", utterance=fake_utterance)
+
+        agent = VoiceAgent(
+            config=AgentConfig(),
+            brain=InterruptBrain(),
+            transcriber=InterruptSTT(),
+            speaker=fake_tts,
+            listener_factory=fake_listener,
+        )
+
+        interrupted = agent._speak_reply(TTSRequest(text="長篇回答"))
+
+        self.assertIsNotNone(interrupted)
+        self.assertEqual(interrupted.transcript, "等等")
+        self.assertIs(interrupted.utterance, fake_utterance)
+        self.assertEqual(interrupted.speaker_result.status, "unknown")
+        self.assertTrue(fake_tts.stopped.is_set())
+
+    def test_explicit_stop_phrase_uses_fast_path(self) -> None:
+        agent = VoiceAgent(brain=EchoBrain())
+        self.assertTrue(agent._should_interrupt_speech("等等，先別說了。"))
+
+    def test_keeps_monitoring_after_non_interrupting_barge_in(self) -> None:
+        class InterruptibleTTS:
+            def __init__(self) -> None:
+                self.started = threading.Event()
+                self.stopped = threading.Event()
+
+            def synthesize(self, _request: TTSRequest) -> None:
+                self.started.set()
+                self.stopped.wait(timeout=1.0)
+
+            def stop(self) -> bool:
+                self.stopped.set()
+                return True
+
+        class ClassifierBrain:
+            def __init__(self) -> None:
+                self.transcripts = iter([False, True])
+
+            def should_interrupt_speech(self, _text: str) -> bool:
+                return next(self.transcripts)
+
+        class InterruptSTT:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def transcribe(self, _request: STTRequest) -> STTResult:
+                self.calls += 1
+                return STTResult(
+                    "普通插話" if self.calls == 1 else "等等",
+                    "zh",
+                    1.0,
+                    [],
+                )
+
+        fake_tts = InterruptibleTTS()
+        utterance = _make_fake_utterance()
+
+        def listener(
+            _settings: VADSettings,
+            _device: str | int | None,
+            _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
+        ) -> Iterator[ListeningEvent]:
+            fake_tts.started.wait(timeout=1.0)
+            yield ListeningEvent(kind="speech_started")
+            yield ListeningEvent(kind="speech_ended", utterance=utterance)
+            yield ListeningEvent(kind="speech_started")
+            yield ListeningEvent(kind="speech_ended", utterance=utterance)
+
+        agent = VoiceAgent(
+            config=AgentConfig(),
+            brain=ClassifierBrain(),
+            transcriber=InterruptSTT(),
+            speaker=fake_tts,
+            listener_factory=listener,
+        )
+
+        result = agent._speak_reply(TTSRequest(text="長篇回答"))
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.transcript, "等等")
+        self.assertTrue(fake_tts.stopped.is_set())
+
     def test_wake_only_transcript_replies_without_brain_call(self) -> None:
         fake_stt = FakeSTT(transcript="麦芽糖。")
         fake_tts = FakeTTS()
@@ -413,6 +572,21 @@ class VoiceAgentTest(unittest.TestCase):
         brain.process("第一個人", context=TurnContext(user_id="marvin", speaker_status="identified"))
         brain.process("未辨識的人", context=TurnContext(user_id=None, speaker_status="unknown"))
         self.assertEqual(brain._active_user_id, "unknown")
+
+    def test_unknown_speaker_cannot_access_personal_memory(self) -> None:
+        class NoopModel:
+            def complete(self, messages, tools):
+                return {"choices": [{"message": {"content": "ok"}}]}
+
+        memory = MemoryStore()
+        memory.remember("使用者是工程師", user_id="default")
+        brain = TaskBrain(NoopModel(), memory=memory)
+        brain.process("我不知道你是誰", context=TurnContext(user_id=None, speaker_status="unknown"))
+
+        result = brain.tools.execute("recall", {"query": "職業"})
+
+        self.assertTrue(result["requires_speaker_identification"])
+        self.assertNotIn("工程師", str(result))
 
     def test_standby_timeout_returns_to_standby_until_interrupted(self) -> None:
         fake_stt = FakeSTT()

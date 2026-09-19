@@ -58,6 +58,10 @@ Build a local multi-task orchestration layer behind TaskBrain. A single voice co
 - Added the web-search design: provider abstraction for quick searches now, with a separate multi-page research worker planned later.
 - Added `WebSearchProvider`, Brave Search integration, and the optional TaskBrain `web_search` tool with bounded results, timeout, source URLs, and freshness filters.
 - Added a bounded `WebResearchWorker` that runs multiple searches, deduplicates source URLs, reports progress, and returns a capped structured result for later LLM summarization.
+- Made macOS `say` single-flight and cancellable; VoiceAgent now captures barge-in speech during replies, asks TaskBrain whether it explicitly requests interruption, stops the active speech process only for a positive decision, and queues the utterance for STT/LLM processing.
+- Closed the unknown-speaker memory boundary: unverified turns no longer fall back to `default` and cannot access personal memory, profile, or task state; explicit microphone trust is opt-in.
+- Until a concrete speaker model is installed, CLI microphone turns explicitly trust `--taskbrain-user-id` as the temporary active user; future speaker identification will override this fallback.
+- Added bounded in-memory short-term conversation sessions. A session starts at wake detection, retains follow-up turns until silence or explicit standby, and is cleared without writing dialogue into long-term memory.
 
 ## Architecture: Voice I/O + Agent Brain
 
@@ -135,6 +139,7 @@ KWS wake_detected
   - Remaining: run the live LanceDB voice smoke test, then add a concrete local speaker model.
 - **Next**: add MCP client and skills loader adapters that expose capabilities through `ToolRegistry`, then connect them to TaskManager workers.
 - **Conversation lifecycle**: one wake starts a session; silence timeout ends the session but never exits the process.
+- **Short-term conversation memory**: TaskBrain retains bounded user, assistant, and tool messages within the active session. The default cap is 12 turns, and the history is discarded on standby or process shutdown to control token usage and prevent cross-session leakage.
 
 ### Phase 2b: Optional OpenClaw Integration
 OpenClaw remains available when its broader runtime is useful, but is not required by MyAgent:
@@ -175,7 +180,7 @@ Support hands-free background listening activated only when a keyword is spoken:
 - **Whisper Hallucination Mitigation**:
   - Filter out very short utterances (< 1.2s) or configure Whisper `no_speech_threshold` to avoid subtitle artifacts (e.g. "字幕by索兰娅").
 - **Interruptible TTS**:
-  - Allow `speech_started` to immediately halt ongoing TTS speech before STT completes.
+  - Capture barge-in audio, run STT and an explicit YES/NO interruption classifier, then halt ongoing TTS only for a positive decision. (Implemented first pass for macOS `say`; broader audio echo control remains.)
 - **Audio Cues**:
   - Short audio tones for standby ready, wake word recognized, and auto-shutdown.
 - **Streaming STT**:

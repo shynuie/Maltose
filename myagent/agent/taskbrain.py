@@ -470,7 +470,10 @@ class TaskBrain:
         task_manager: TaskManager | None = None,
         search_provider: WebSearchProvider | None = None,
         max_tool_rounds: int = 4,
+        max_session_turns: int = 12,
     ) -> None:
+        if max_session_turns < 1:
+            raise ValueError("Maximum session turns must be positive.")
         self.model = model
         self.memory = memory or MemoryStore()
         self.tools = tools or ToolRegistry()
@@ -480,6 +483,10 @@ class TaskBrain:
         self._active_user_id = getattr(self.memory, "user_id", "default")
         self._return_to_standby = False
         self.max_tool_rounds = max_tool_rounds
+        self.max_session_turns = max_session_turns
+        self._session_messages: list[dict[str, Any]] = []
+        self._session_turns = 0
+        self._session_user_id: str | None = None
         self._install_memory_tools()
         self._install_conversation_tools()
         self._install_profile_tool()
@@ -497,7 +504,11 @@ class TaskBrain:
             "get_user_profile",
             "Read the user's structured identity and profile fields.",
             {"type": "object", "properties": {}},
-            lambda _args: self.profile.get_profile(self._active_user_id) or {},
+            lambda _args: (
+                self.profile.get_profile(self._active_user_id) or {}
+                if self._identity_is_known()
+                else self._identity_required_error()
+            ),
         )
 
     def _install_conversation_tools(self) -> None:
@@ -523,6 +534,60 @@ class TaskBrain:
         self._return_to_standby = False
         return requested
 
+    def begin_session(self) -> None:
+        """Start a bounded in-memory conversation session."""
+        self._session_messages.clear()
+        self._session_turns = 0
+        self._session_user_id = None
+
+    def end_session(self) -> None:
+        """Discard short-term context without changing long-term memory."""
+        self._session_messages.clear()
+        self._session_turns = 0
+        self._session_user_id = None
+
+    def _identity_is_known(self) -> bool:
+        return bool(self._active_user_id and self._active_user_id != "unknown")
+
+    @staticmethod
+    def _identity_required_error() -> dict[str, Any]:
+        return {
+            "error": "User identity is not verified; personal data access is unavailable.",
+            "requires_speaker_identification": True,
+        }
+
+    def should_interrupt_speech(
+        self, user_text: str, context: TurnContext | None = None
+    ) -> bool:
+        """Ask the model only whether an utterance explicitly stops speech."""
+        text = user_text.strip()
+        if not text:
+            return False
+        if context is not None:
+            self._active_user_id = context.user_id or "unknown"
+        if self._session_user_id != self._active_user_id:
+            self.begin_session()
+            self._session_user_id = self._active_user_id
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Classify whether the user explicitly wants the assistant to stop its current "
+                    "spoken response. Reply with exactly YES or NO. Use YES for commands such as "
+                    "'等等', '停一下', '先別說了', '停止播放', or '不要繼續'. Use NO for ordinary "
+                    "questions, comments, or content that does not request stopping speech."
+                ),
+            },
+            {"role": "user", "content": text},
+        ]
+        try:
+            response = self.model.complete(messages, [])
+            content = response["choices"][0]["message"].get("content", "")
+        except (KeyError, IndexError, TypeError, RuntimeError) as exc:
+            logger.warning("speech_interrupt_classifier_failed error=%s", exc)
+            return False
+        return isinstance(content, str) and content.strip().upper().startswith("YES")
+
     def _install_memory_tools(self) -> None:
         if not self.tools.has("remember"):
             self.tools.register(
@@ -536,8 +601,12 @@ class TaskBrain:
                     },
                     "required": ["text"],
                 },
-                lambda args: self.memory.remember(
-                    args["text"], args.get("tags"), user_id=self._active_user_id
+                lambda args: (
+                    self.memory.remember(
+                        args["text"], args.get("tags"), user_id=self._active_user_id
+                    )
+                    if self._identity_is_known()
+                    else self._identity_required_error()
                 ),
             )
         if not self.tools.has("recall"):
@@ -549,8 +618,12 @@ class TaskBrain:
                     "properties": {"query": {"type": "string"}},
                     "required": ["query"],
                 },
-                lambda args: self.memory.search(
-                    args["query"], user_id=self._active_user_id
+                lambda args: (
+                    self.memory.search(
+                        args["query"], user_id=self._active_user_id
+                    )
+                    if self._identity_is_known()
+                    else self._identity_required_error()
                 ),
             )
 
@@ -591,14 +664,18 @@ class TaskBrain:
                     },
                     "required": ["tasks"],
                 },
-                lambda args: {
-                    "tasks": [
-                        task.as_dict()
-                        for task in self.task_manager.create_plan(
-                            args["tasks"], user_id=self._active_user_id
-                        )
-                    ]
-                },
+                lambda args: (
+                    {
+                        "tasks": [
+                            task.as_dict()
+                            for task in self.task_manager.create_plan(
+                                args["tasks"], user_id=self._active_user_id
+                            )
+                        ]
+                    }
+                    if self._identity_is_known()
+                    else self._identity_required_error()
+                ),
             )
         if not self.tools.has("get_task_status"):
             self.tools.register(
@@ -609,8 +686,12 @@ class TaskBrain:
                     "properties": {"task_id": {"type": "string"}},
                     "required": ["task_id"],
                 },
-                lambda args: self.task_manager.get_status(
-                    args["task_id"], user_id=self._active_user_id
+                lambda args: (
+                    self.task_manager.get_status(
+                        args["task_id"], user_id=self._active_user_id
+                    )
+                    if self._identity_is_known()
+                    else self._identity_required_error()
                 ),
             )
         if not self.tools.has("list_tasks"):
@@ -621,8 +702,12 @@ class TaskBrain:
                     "type": "object",
                     "properties": {"limit": {"type": "integer", "minimum": 1}},
                 },
-                lambda args: self.task_manager.list_tasks(
-                    self._active_user_id, args.get("limit", 10)
+                lambda args: (
+                    self.task_manager.list_tasks(
+                        self._active_user_id, args.get("limit", 10)
+                    )
+                    if self._identity_is_known()
+                    else self._identity_required_error()
                 ),
             )
         if not self.tools.has("cancel_task"):
@@ -634,8 +719,12 @@ class TaskBrain:
                     "properties": {"task_id": {"type": "string"}},
                     "required": ["task_id"],
                 },
-                lambda args: self.task_manager.cancel(
-                    args["task_id"], user_id=self._active_user_id
+                lambda args: (
+                    self.task_manager.cancel(
+                        args["task_id"], user_id=self._active_user_id
+                    )
+                    if self._identity_is_known()
+                    else self._identity_required_error()
                 ),
             )
         if not self.tools.has("retry_task"):
@@ -647,8 +736,12 @@ class TaskBrain:
                     "properties": {"task_id": {"type": "string"}},
                     "required": ["task_id"],
                 },
-                lambda args: self.task_manager.retry(
-                    args["task_id"], user_id=self._active_user_id
+                lambda args: (
+                    self.task_manager.retry(
+                        args["task_id"], user_id=self._active_user_id
+                    )
+                    if self._identity_is_known()
+                    else self._identity_required_error()
                 ),
             )
 
@@ -702,10 +795,14 @@ class TaskBrain:
             " For large or multi-step requests, create a bounded task plan instead of pretending the work is complete."
             " Do not create tasks for ordinary one-step answers."
             " For current or time-sensitive facts, use web_search and cite its URLs when available."
+            " If the user identity is not verified, do not guess identity and do not claim access "
+            "to personal memory, profile, or task data; explain that speaker verification is required."
         )
+        turn_messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_content},
-            {"role": "user", "content": text},
+            *self._session_messages,
+            *turn_messages,
         ]
         for _ in range(self.max_tool_rounds + 1):
             response = self.model.complete(messages, self.tools.schemas())
@@ -726,20 +823,37 @@ class TaskBrain:
                 content = message.get("content", "")
                 if not isinstance(content, str) or not content.strip():
                     raise RuntimeError("Task model returned an empty assistant response.")
+                assistant_message = {"role": "assistant", "content": content.strip()}
+                turn_messages.append(assistant_message)
+                self._session_messages.extend(turn_messages)
+                self._session_turns += 1
+                self._trim_session_history()
                 return content.strip()
             messages.append(message)
+            turn_messages.append(message)
             for call in tool_calls:
                 function = call.get("function", {})
                 name = function.get("name")
                 raw_arguments = function.get("arguments", "{}")
                 arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else raw_arguments
                 result = self.tools.execute(name, arguments)
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": call.get("id", name),
-                        "name": name,
-                        "content": json.dumps(result, ensure_ascii=False),
-                    }
-                )
+                tool_message = {
+                    "role": "tool",
+                    "tool_call_id": call.get("id", name),
+                    "name": name,
+                    "content": json.dumps(result, ensure_ascii=False),
+                }
+                messages.append(tool_message)
+                turn_messages.append(tool_message)
         raise RuntimeError("Task model exceeded the maximum tool rounds.")
+
+    def _trim_session_history(self) -> None:
+        user_indices = [
+            index
+            for index, message in enumerate(self._session_messages)
+            if message.get("role") == "user"
+        ]
+        if len(user_indices) > self.max_session_turns:
+            keep_from = user_indices[-self.max_session_turns]
+            self._session_messages = self._session_messages[keep_from:]
+            self._session_turns = self.max_session_turns
