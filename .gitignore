@@ -1,7 +1,26 @@
 __pycache__/
 .venv/
 recordings/
+
+# Python
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environment
+.env
+.env.*
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Local audio outputs
 *.aiff
 *.wav
 *.mp3
