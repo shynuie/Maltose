@@ -24,6 +24,8 @@ class DocumentChangeDetector:
             existing = repository.get_by_path(scanned.path)
             if existing is not None:
                 if existing["content_hash"] == scanned.content_hash:
+                    if existing["status"] == "pending_index" and existing.get("indexed_at"):
+                        repository.restore_indexed_status(existing["id"])
                     unchanged_files.append(scanned)
                 else:
                     changed_files.append(scanned)
@@ -31,7 +33,10 @@ class DocumentChangeDetector:
 
             same_content = repository.get_by_content_hash(scanned.content_hash)
             if same_content is not None and same_content["status"] != "deleted":
-                repository.update_path(same_content["id"], scanned.path)
+                status = same_content["status"]
+                if status == "pending_index" and same_content.get("indexed_at"):
+                    status = "indexed"
+                repository.update_path(same_content["id"], scanned.path, status=status)
                 moved_ids.append(same_content["id"])
                 unchanged_files.append(scanned)
             else:

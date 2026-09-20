@@ -78,11 +78,25 @@ class MetadataRepository:
             ).fetchone()
             return dict(row) if row else None
 
-    def update_path(self, document_id: str, path: str | Path) -> None:
+    def update_path(
+        self,
+        document_id: str,
+        path: str | Path,
+        *,
+        status: str | None = None,
+    ) -> None:
         with self._lock:
             self._connection.execute(
-                "UPDATE documents SET path = ?, status = 'pending_index' WHERE id = ?",
-                (str(Path(path)), document_id),
+                "UPDATE documents SET path = ?, status = COALESCE(?, status) WHERE id = ?",
+                (str(Path(path)), status, document_id),
+            )
+            self._connection.commit()
+
+    def restore_indexed_status(self, document_id: str) -> None:
+        with self._lock:
+            self._connection.execute(
+                "UPDATE documents SET status = 'indexed' WHERE id = ? AND indexed_at IS NOT NULL",
+                (document_id,),
             )
             self._connection.commit()
 

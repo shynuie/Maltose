@@ -43,6 +43,23 @@ class KnowledgeChangeDetectionTests(unittest.TestCase):
             self.assertEqual(plan.moved_document_ids, (document_id,))
             self.assertEqual(stored["path"], str(new_path.resolve()))
 
+    def test_moved_indexed_document_stays_searchable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            old_path = root / "old.txt"
+            old_path.write_text("indexed content", encoding="utf-8")
+            scanner = DocumentScanner((".txt",))
+            with MetadataRepository(root / "metadata.sqlite3") as repository:
+                scanned = scanner.scan(root).files[0]
+                document_id = repository.upsert_scanned_file(scanned)
+                repository.mark_indexed(document_id, title="Old", summary="Indexed")
+                old_path.rename(root / "new.txt")
+                plan = DocumentChangeDetector().plan(scanner.scan(root), repository)
+                stored = repository.get_by_id(document_id)
+
+            self.assertEqual(plan.moved_document_ids, (document_id,))
+            self.assertEqual(stored["status"], "indexed")
+
     def test_missing_file_is_marked_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
