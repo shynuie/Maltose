@@ -24,6 +24,12 @@ start_trigger_ms = 160
 end_silence_ms = 700
 pre_roll_ms = 300
 
+[environment]
+location = ""
+location_helper = "tools/location_helper.app/Contents/MacOS/location_helper"
+external_ip_url = "https://api.ipify.org?format=json"
+timeout = 5.0
+
 [wake]
 config = "wake.toml"
 ack = "我在"

@@ -293,7 +293,7 @@ class VoiceAgent:
             time.monotonic() - started_at,
         )
 
-        ready_text = "麥芽糖上線囉！"
+        ready_text = "你好，我是麥芽糖。"
         self.state = AgentState.SPEAKING
         logger.info("ready_prompt text=%s", ready_text)
         self.speaker.synthesize(

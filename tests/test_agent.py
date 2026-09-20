@@ -164,6 +164,9 @@ class TaskBrainTest(unittest.TestCase):
                     "remember",
                     "recall",
                     "return_to_standby",
+                    "get_current_datetime",
+                    "get_location",
+                    "get_ip_addresses",
                 }
                 self.assert_memory(messages)
                 return {"choices": [{"message": {"content": "你是工程師。"}}]}
@@ -343,6 +346,9 @@ class TaskBrainTest(unittest.TestCase):
                     "list_active_tasks",
                     "cancel_task",
                     "retry_task",
+                    "get_current_datetime",
+                    "get_location",
+                    "get_ip_addresses",
                 },
             )
             task_manager.shutdown()

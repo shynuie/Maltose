@@ -8,6 +8,7 @@ from pathlib import Path
 from myagent.agent.agent import VoiceAgent
 from myagent.agent.brain import EchoBrain, OpenClawBrain
 from myagent.agent.config import AgentConfig, load_cli_defaults
+from myagent.agent.environment import EnvironmentTools
 from myagent.agent.taskbrain import (
     MemoryStore,
     LanceMemoryStore,
@@ -94,6 +95,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="MCP server command as one shell-like argument string; may be repeated.",
     )
     parser.add_argument("--taskbrain-mcp-timeout", type=float, default=15.0)
+    parser.add_argument("--location", help="Configured user location, if known.")
+    parser.add_argument(
+        "--location-helper",
+        help="Compiled macOS Core Location helper executable.",
+    )
+    parser.add_argument(
+        "--external-ip-url",
+        default="https://api.ipify.org?format=json",
+        help="HTTPS endpoint used by get_ip_addresses.",
+    )
+    parser.add_argument("--environment-timeout", type=float, default=5.0)
     parser.add_argument(
         "--taskbrain-search",
         choices=("none", "brave"),
@@ -349,6 +361,12 @@ def main() -> None:
                 MCPToolAdapter(client, prefix=f"mcp_{index}_")
                 for index, client in enumerate(mcp_clients)
             ],
+            environment_tools=EnvironmentTools(
+                location=args.location,
+                location_helper=args.location_helper,
+                external_ip_url=args.external_ip_url,
+                timeout=args.environment_timeout,
+            ),
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)

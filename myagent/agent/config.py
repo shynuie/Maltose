@@ -63,6 +63,12 @@ def load_cli_defaults(path: Path) -> dict[str, Any]:
         "start_trigger_ms": "start_trigger_ms", "end_silence_ms": "end_silence_ms",
         "pre_roll_ms": "pre_roll_ms",
     })
+    copy("environment", {
+        "location": "location",
+        "location_helper": "location_helper",
+        "external_ip_url": "external_ip_url",
+        "timeout": "environment_timeout",
+    })
     if "normalize_stt_audio" in defaults:
         defaults["no_normalize_stt_audio"] = not defaults.pop("normalize_stt_audio")
     if "interruptible_tts" in defaults:
@@ -70,6 +76,7 @@ def load_cli_defaults(path: Path) -> dict[str, Any]:
     for key in (
         "output_dir", "taskbrain_tasks", "taskbrain_codex_cwd", "taskbrain_memory",
         "taskbrain_memory_source", "wake_config",
+        "location_helper",
     ):
         if key in defaults and defaults[key] is not None:
             defaults[key] = Path(defaults[key])

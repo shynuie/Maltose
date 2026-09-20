@@ -216,6 +216,43 @@ by the example `myagent.toml`; the standalone override is:
 uv run myagent --wake-config wake.toml
 ```
 
+### macOS Location Helper
+
+Build the optional native Core Location helper once:
+
+```sh
+./tools/build-location-helper.sh
+```
+
+The first time `get_location` is requested, macOS may ask for Location
+Services permission. The helper returns latitude, longitude, accuracy, and a
+timestamp. Configure its path in `myagent.toml`:
+
+```toml
+[environment]
+location_helper = "tools/location_helper.app/Contents/MacOS/location_helper"
+```
+
+An explicitly configured `environment.location` takes precedence over the
+helper. Location results are not written to long-term memory automatically.
+
+### Environment Tools
+
+TaskBrain exposes the following local environment tools to the model:
+
+- `get_current_datetime`: the computer's local date and time is included in
+  every turn automatically. The tool is used when a specific IANA timezone is
+  requested, such as `Asia/Taipei` or `America/New_York`.
+- `get_location`: returns the configured location or the optional macOS Core
+  Location result.
+- `get_ip_addresses`: returns `internal_ips` from local network interfaces and
+  `external_ip` from the configured HTTPS endpoint. The legacy `ip` and
+  `source` fields are also retained for compatibility.
+
+If the external IP lookup fails, the tool still returns the internal IPs and
+includes `external_error` so the model can report the failure and its reason.
+IP and location results are not written to long-term memory automatically.
+
 Speak a short acknowledgement after wake detection:
 
 ```sh

@@ -24,6 +24,7 @@ Continue the local multi-task orchestration layer behind TaskBrain. Planner exec
 - Added `list_active_tasks` so the model can query pending, running, and waiting work directly.
 - Added a capability adapter boundary for explicitly registered Skills and MCP tools, plus a stdio JSON-RPC MCP client, TOML Skills manifest loader, and `--taskbrain-mcp-command` CLI integration.
 - Added unified `myagent.toml` configuration with CLI override support; local config is ignored by Git and `myagent.toml.example` documents the available sections.
+- Added built-in `get_current_datetime`, `get_location`, and `get_ip_addresses` tools with config support and privacy boundaries.
 - 75 automated tests covering voice flow, memory, identity, tasks, search, STT, TTS, capability adapters, and configuration loading.
 
 ### In Progress
@@ -44,21 +45,21 @@ Continue the local multi-task orchestration layer behind TaskBrain. Planner exec
 
 These capabilities should be implemented as narrow, auditable tools rather than unrestricted shell access.
 
-- **Scheduled tasks**:
+- **Scheduled tasks** (remaining):
   - Support one-time and recurring schedules with timezone-aware timestamps.
   - Persist schedules in SQLite and restore them after process restart.
   - Add tools to create, list, pause, resume, and cancel schedules.
   - Require confirmation for schedules that trigger external side effects.
-- **Date and time**:
+- **Date and time** (implemented):
   - Add a deterministic local `get_current_datetime` tool.
   - Return timezone, ISO-8601 timestamp, local date, local time, and weekday.
   - Use the configured system timezone by default and allow an explicit timezone query.
-- **Location**:
+- **Location** (implemented with manual configuration and macOS helper):
   - Add a `get_location` tool with explicit source reporting.
-  - Support manually configured location first; optionally add permission-controlled Wi-Fi/GPS or IP-based lookup later.
+  - Support manually configured location first and an optional permission-controlled macOS Core Location helper.
   - Do not silently infer or persist location without user consent.
-- **External IP**:
-  - Add a bounded `get_external_ip` tool using a configured or allowlisted HTTPS endpoint.
+- **External IP** (implemented):
+  - Add a bounded `get_ip_addresses` tool using a configured or allowlisted HTTPS endpoint.
   - Clearly distinguish local/private IP from public/external IP.
   - Treat the result as sensitive network metadata and do not store it in long-term memory by default.
 

@@ -15,6 +15,7 @@ from typing import Any, Callable, Protocol
 
 from myagent.agent.brain import TurnContext
 from myagent.agent.capabilities import CapabilityAdapter, register_capability_adapter
+from myagent.agent.environment import EnvironmentTools
 from myagent.agent.search import WebSearchProvider
 from myagent.agent.tasks import TaskManager
 
@@ -473,6 +474,7 @@ class TaskBrain:
         max_tool_rounds: int = 4,
         max_session_turns: int = 12,
         capability_adapters: list[CapabilityAdapter] | None = None,
+        environment_tools: EnvironmentTools | None = None,
     ) -> None:
         if max_session_turns < 1:
             raise ValueError("Maximum session turns must be positive.")
@@ -482,6 +484,7 @@ class TaskBrain:
         self.profile = profile
         self.task_manager = task_manager
         self.search_provider = search_provider
+        self.environment_tools = environment_tools or EnvironmentTools()
         self._active_user_id = getattr(self.memory, "user_id", "default")
         self._return_to_standby = False
         self.max_tool_rounds = max_tool_rounds
@@ -494,6 +497,7 @@ class TaskBrain:
         self._install_profile_tool()
         self._install_task_tools()
         self._install_search_tools()
+        self._install_environment_tools()
         for adapter in capability_adapters or []:
             register_capability_adapter(self.tools, adapter)
         if hasattr(self.memory, "backfill_embeddings"):
@@ -852,14 +856,54 @@ class TaskBrain:
                 )
             ],
         )
+
+    def _install_environment_tools(self) -> None:
+        if not self.tools.has("get_current_datetime"):
+            self.tools.register(
+                "get_current_datetime",
+                (
+                    "Get the current date and time in a requested IANA timezone. The computer's "
+                    "local date and time is already included in the system context; call this tool "
+                    "when the user asks for a specific non-local timezone or explicitly requests a "
+                    "fresh time reading."
+                ),
+                {
+                    "type": "object",
+                    "properties": {"timezone": {"type": "string"}},
+                },
+                lambda args: self.environment_tools.current_datetime(args.get("timezone")),
+            )
+        if not self.tools.has("get_location"):
+            self.tools.register(
+                "get_location",
+                "Get the configured location. Do not infer or persist a location when it is unknown.",
+                {"type": "object", "properties": {}},
+                lambda _args: self.environment_tools.get_location(),
+            )
+        if not self.tools.has("get_ip_addresses"):
+            self.tools.register(
+                "get_ip_addresses",
+                (
+                    "Get the computer's current internal network IP addresses and public external "
+                    "IP without storing them in memory. If external lookup fails, the result includes "
+                    "external_error; report that failure and its reason instead of presenting the "
+                    "external IP as successfully retrieved."
+                ),
+                {"type": "object", "properties": {}},
+                lambda _args: self.environment_tools.get_ip_addresses(),
+            )
     def process(self, user_text: str, context: TurnContext | None = None) -> str:
         text = user_text.strip()
         if not text:
             raise ValueError("TaskBrain input cannot be empty.")
         if context is not None:
             self._active_user_id = context.user_id or "unknown"
+        local_datetime = self.environment_tools.current_datetime()
         system_content = (
             "You are a concise local personal assistant. "
+            "The following is the computer's current local date and time. Treat it as the current "
+            "system time for this turn and do not call get_current_datetime just to obtain the local "
+            f"time: {json.dumps(local_datetime, ensure_ascii=False)}. "
             "Only store durable user facts when the user explicitly asks you to remember them. "
             "When the user asks about their personal facts, preferences, or something they asked you "
             "to remember, call the recall tool before answering. Do not guess from memory. "

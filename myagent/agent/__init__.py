@@ -35,6 +35,7 @@ from myagent.agent.capabilities import (
     SkillManifestLoader,
     StaticSkillAdapter,
 )
+from myagent.agent.environment import EnvironmentTools
 
 __all__ = [
     "AgentBrain",
@@ -66,6 +67,7 @@ __all__ = [
     "MCPStdioClient",
     "SkillManifestLoader",
     "StaticSkillAdapter",
+    "EnvironmentTools",
     "BraveSearchProvider",
     "SearchResult",
     "WebSearchProvider",
