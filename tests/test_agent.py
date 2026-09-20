@@ -709,6 +709,49 @@ class VoiceAgentTest(unittest.TestCase):
         self.assertEqual(len(fake_tts.synthesize_calls), 0)
         self.assertEqual(call_count, 2)
 
+    def test_standby_timeout_does_not_end_brain_session(self) -> None:
+        class SessionBrain(EchoBrain):
+            def __init__(self) -> None:
+                super().__init__()
+                self.begin_count = 0
+                self.end_count = 0
+
+            def begin_session(self) -> None:
+                self.begin_count += 1
+
+            def end_session(self) -> None:
+                self.end_count += 1
+
+        brain = SessionBrain()
+        call_count = 0
+
+        def fake_listener(
+            _settings: VADSettings,
+            _device: str | int | None,
+            _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
+        ) -> Iterator[ListeningEvent]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                yield ListeningEvent(kind="standby_timeout")
+            else:
+                raise KeyboardInterrupt
+
+        agent = VoiceAgent(
+            config=AgentConfig(standby_timeout=5.0),
+            brain=brain,
+            transcriber=FakeSTT(),
+            speaker=FakeTTS(),
+            listener_factory=fake_listener,
+        )
+        agent.run()
+
+        self.assertEqual(brain.begin_count, 1)
+        self.assertEqual(brain.end_count, 1)
+
     def test_replies_when_speech_detected_in_single_turn(self) -> None:
         fake_stt = FakeSTT(transcript="今天天氣很好")
         fake_tts = FakeTTS()

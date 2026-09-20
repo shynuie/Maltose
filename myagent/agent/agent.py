@@ -121,8 +121,10 @@ class VoiceAgent:
         try:
             self._warm_up_transcriber()
             conversation_active = self.config.wake_word_detector is None
+            brain_session_open = False
             if conversation_active:
                 self._begin_brain_session()
+                brain_session_open = True
             pending_turn: PendingTurn | None = None
             while self.state != AgentState.SHUTDOWN:
                 self.state = AgentState.STANDBY
@@ -146,8 +148,9 @@ class VoiceAgent:
                         self.config.wake_buffer_ms,
                     ):
                         if event.kind == "standby_timeout":
-                            logger.info("conversation_silence_timeout returning_to_standby")
-                            self._end_brain_session()
+                            logger.info(
+                                "conversation_silence_timeout returning_to_listening_without_ending_session"
+                            )
                             conversation_active = self.config.wake_word_detector is None
                             break
                         elif event.kind == "speech_started":
@@ -155,7 +158,10 @@ class VoiceAgent:
                             logger.info("speech_started")
                         elif event.kind == "wake_detected":
                             logger.info("wake_detected keyword=%s", event.keyword)
-                            self._begin_brain_session()
+                            if not brain_session_open:
+                                self._begin_brain_session()
+                                brain_session_open = True
+                                logger.info("conversation_session_resumed")
                         elif event.kind == "wake_ack_requested":
                             self._speak_wake_ack()
                         elif event.kind == "speech_ended" and event.utterance is not None:
@@ -276,6 +282,7 @@ class VoiceAgent:
                 consume_standby = getattr(self.brain, "consume_return_to_standby", None)
                 if callable(consume_standby) and consume_standby():
                     self._end_brain_session()
+                    brain_session_open = False
                     conversation_active = self.config.wake_word_detector is None
                     pending_turn = None
                     logger.info("conversation_control return_to_standby")
