@@ -31,7 +31,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", choices=("cpu", "mps"), default="cpu")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("index", help="Index new and changed documents.")
+    index = subparsers.add_parser("index", help="Index new and changed documents.")
+    index.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-index every supported document, even when its content hash is unchanged.",
+    )
     subparsers.add_parser("list", help="List indexed document metadata.")
     search = subparsers.add_parser("search", help="Search indexed documents.")
     search.add_argument("query")
@@ -91,8 +96,11 @@ def main() -> None:
         if args.command == "index":
             config.documents_root.mkdir(parents=True, exist_ok=True)
             logger.info("kdb_cli_index_started root=%s", config.documents_root)
-            plan = DocumentChangeDetector().plan(scanner.scan(config.documents_root), metadata)
-            candidates = (*plan.new_files, *plan.changed_files)
+            scan = scanner.scan(config.documents_root)
+            plan = DocumentChangeDetector().plan(scan, metadata)
+            candidates = scan.files if args.force else (*plan.new_files, *plan.changed_files)
+            if args.force:
+                logger.info("kdb_cli_index_force enabled candidates=%d", len(candidates))
             logger.info("kdb_cli_index_candidates count=%d", len(candidates))
             results = []
             for index, item in enumerate(candidates, start=1):
@@ -101,7 +109,7 @@ def main() -> None:
             logger.info("kdb_cli_index_completed indexed=%d", len(results))
             print(json.dumps({
                 "indexed": len(results),
-                "unchanged": len(plan.unchanged_files),
+                "unchanged": 0 if args.force else len(plan.unchanged_files),
                 "moved": len(plan.moved_document_ids),
                 "deleted": len(plan.deleted_document_ids),
                 "documents": [result.__dict__ for result in results],

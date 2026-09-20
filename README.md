@@ -195,6 +195,7 @@ Index, list, and search documents with the dedicated CLI:
 
 ```sh
 uv run myagent-documents index
+uv run myagent-documents index --force
 uv run myagent-documents list
 uv run myagent-documents search "我的碩士論文"
 ```
