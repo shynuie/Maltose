@@ -60,6 +60,23 @@ class KnowledgeTaskBrainIntegrationTests(unittest.TestCase):
         self.assertIn("read_document", model.tool_names)
         self.assertIn("create_document", model.tool_names)
         self.assertIn("Document Knowledge Base", model.messages[0]["content"])
+        self.assertIn("Speaker verification status for this turn: unverified", model.messages[0]["content"])
+
+    def test_verified_context_is_explicitly_passed_to_model(self):
+        model = RecordingModel()
+        with tempfile.TemporaryDirectory() as directory:
+            brain = TaskBrain(
+                model,
+                memory=MemoryStore(Path(directory) / "memory.json"),
+            )
+            from myagent.agent.brain import TurnContext
+
+            brain.process(
+                "查詢文件",
+                context=TurnContext(user_id="user-001", speaker_status="identified"),
+            )
+
+        self.assertIn("Speaker verification status for this turn: verified", model.messages[0]["content"])
 
 
 if __name__ == "__main__":

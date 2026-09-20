@@ -1063,6 +1063,16 @@ class TaskBrain:
                 " To add a document, use the document ingestion tools; never write directly to the filesystem or"
                 " vector store. Do not overwrite an existing document unless the user explicitly requests a new path."
             )
+        if self._identity_is_known():
+            system_content += (
+                f" Speaker verification status for this turn: verified user_id={self._active_user_id}."
+                " You may access this verified user's personal Memory and Document Knowledge Base."
+            )
+        else:
+            system_content += (
+                " Speaker verification status for this turn: unverified. Do not access personal Memory,"
+                " profile, tasks, or private Document Knowledge Base content."
+            )
         turn_messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_content},
@@ -1153,6 +1163,16 @@ class TaskBrain:
             system_content += (
                 " To add a document, use the document ingestion tools; never write directly to the filesystem or"
                 " vector store. Do not overwrite an existing document unless the user explicitly requests a new path."
+            )
+        if self._identity_is_known():
+            system_content += (
+                f" Speaker verification status for this turn: verified user_id={self._active_user_id}."
+                " You may access this verified user's personal Memory and Document Knowledge Base."
+            )
+        else:
+            system_content += (
+                " Speaker verification status for this turn: unverified. Do not access personal Memory,"
+                " profile, tasks, or private Document Knowledge Base content."
             )
         turn_messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
         messages: list[dict[str, Any]] = [
