@@ -1,12 +1,50 @@
 # MyAgent
 
-MyAgent is an early-stage personal assistant project.
-
-The implementation and architecture are still being explored. This repository will be updated as the project direction becomes clearer.
+MyAgent is a local voice assistant with wake-word detection, speech recognition,
+TaskBrain orchestration, user-scoped memory, web search, and optional MCP tools.
 
 ## Status
 
-Initial setup. The first implemented area is the local voice system.
+The main runtime configuration lives in `myagent.toml`. CLI flags remain
+available as temporary overrides.
+
+## Quick Start
+
+Install the runtime extras used by the current voice setup:
+
+```sh
+uv sync --extra wake --extra qwen-asr --extra vector-memory
+```
+
+Create the unified configuration:
+
+```sh
+cp myagent.toml.example myagent.toml
+```
+
+Put API credentials in `.env`:
+
+```env
+OPENAI_API_KEY=...
+BRAVE_SEARCH_API_KEY=...
+```
+
+Start the assistant:
+
+```sh
+./start
+```
+
+The example configuration uses microphone device `3`, `wake.toml`, Qwen3-ASR,
+LanceDB memory, Brave search, and the `default` user. Change these values in
+`myagent.toml`; the file is ignored by Git because it may contain local paths
+or credentials.
+
+Use another configuration file when needed:
+
+```sh
+./start --config another-config.toml
+```
 
 ## TTS
 
@@ -77,35 +115,37 @@ TaskBrain keeps orchestration, tools, and memory in MyAgent. The default model
 backend is the OpenAI API; any OpenAI-compatible local endpoint can still be
 selected with `--taskbrain-url`.
 
-```sh
-uv run --extra qwen-asr myagent \
-  --brain taskbrain \
-  --taskbrain-model gpt-5.6-luna \
-  --taskbrain-reasoning-effort none \
-  --wake-config wake.toml \
-  --device 3
-```
+The recommended command is the short command in **Quick Start**. The equivalent
+long-form flags are still supported for one-off overrides.
 
 Set `OPENAI_API_KEY` before starting the agent. The API key stays local to the
 process and is sent only to the configured model endpoint.
 
 The default memory file is `data/memory.json`. The first built-in tools are
 `remember`, `recall`, and `return_to_standby`; custom tools can be registered through `ToolRegistry`.
-MCP servers and skills are planned as adapters on top of this registry.
+MCP servers and Skills are exposed through capability adapters. Add stdio MCP
+servers in `myagent.toml`:
+
+```toml
+[taskbrain]
+mcp_command = [
+  "npx -y your-slack-mcp-server",
+  "npx -y your-gmail-mcp-server",
+]
+```
+
+The server commands must speak MCP JSON-RPC over stdin/stdout. Their tools are
+exposed to the model with names such as `mcp_0_search_messages`.
 
 Enable local semantic memory retrieval with Qwen3 Embedding:
 
-```sh
-uv sync --extra vector-memory --extra qwen-asr --extra wake
-uv run myagent \
-  --brain taskbrain \
-  --taskbrain-memory-backend lancedb \
-  --taskbrain-memory data/memory.lancedb \
-  --taskbrain-user-id default \
-  --taskbrain-embedding qwen3-embedding-0.6b \
-  --taskbrain-embedding-device mps \
-  --wake-config wake.toml \
-  --device 3
+```toml
+[taskbrain]
+memory_backend = "lancedb"
+memory = "data/memory.lancedb"
+user_id = "default"
+embedding = "qwen3-embedding-0.6b"
+embedding_device = "mps"
 ```
 
 The agent stays alive until `Ctrl+C`. After a wake word, subsequent turns do
@@ -156,17 +196,21 @@ The first voice loop replies by echoing the transcript through local TTS.
 
 ## Main Voice Agent
 
-Run the main agent. It remains alive until `Ctrl+C`:
+Run the main agent with `myagent.toml`. It remains alive until `Ctrl+C`:
 
 ```sh
-# After 10 seconds of silence during an active conversation, require wake again
-uv run myagent --timeout 10
-
-# Or using the alias
-uv run myagent-run -t 10
+./start
 ```
 
-Enable wake word gating with a sherpa-onnx KWS config:
+For a one-off override, pass a CLI flag. CLI values take precedence over the
+configuration file:
+
+```sh
+./start --config myagent.toml --device 3 --wake-config wake.toml
+```
+
+Enable wake word gating with a sherpa-onnx KWS config. This is already enabled
+by the example `myagent.toml`; the standalone override is:
 
 ```sh
 uv run myagent --wake-config wake.toml

@@ -40,6 +40,28 @@ Continue the local multi-task orchestration layer behind TaskBrain. Planner exec
 - Streaming STT and streaming LLM/TTS sentence queue.
 - Persistent task recovery and notification replay after process restart.
 
+## Planned Built-in Environment Features
+
+These capabilities should be implemented as narrow, auditable tools rather than unrestricted shell access.
+
+- **Scheduled tasks**:
+  - Support one-time and recurring schedules with timezone-aware timestamps.
+  - Persist schedules in SQLite and restore them after process restart.
+  - Add tools to create, list, pause, resume, and cancel schedules.
+  - Require confirmation for schedules that trigger external side effects.
+- **Date and time**:
+  - Add a deterministic local `get_current_datetime` tool.
+  - Return timezone, ISO-8601 timestamp, local date, local time, and weekday.
+  - Use the configured system timezone by default and allow an explicit timezone query.
+- **Location**:
+  - Add a `get_location` tool with explicit source reporting.
+  - Support manually configured location first; optionally add permission-controlled Wi-Fi/GPS or IP-based lookup later.
+  - Do not silently infer or persist location without user consent.
+- **External IP**:
+  - Add a bounded `get_external_ip` tool using a configured or allowlisted HTTPS endpoint.
+  - Clearly distinguish local/private IP from public/external IP.
+  - Treat the result as sensitive network metadata and do not store it in long-term memory by default.
+
 ## Done
 
 - Added local macOS TTS using `say`.
