@@ -491,6 +491,7 @@ myagent documents remove <document-id>
 - [ ] 加入 file watcher abstraction。
 - [ ] 加入 background indexing queue。
 - [ ] 加入 indexing status、retry 與錯誤記錄。
+- [x] 加入 scanner、change detection、indexing 與 CLI progress logging。
 - [ ] 加入 embedding batch processing。
 - [ ] 加入 reindex / repair command。
 - [ ] 評估是否拆成獨立 background service。

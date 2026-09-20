@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from myagent.knowledge.models import ScannedFile
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,7 @@ class DocumentScanner:
 
     def scan(self, root: Path) -> ScanResult:
         root = root.expanduser().resolve()
+        logger.info("kdb_scan_started root=%s", root)
         if not root.exists():
             raise FileNotFoundError(root)
         if not root.is_dir():
@@ -54,7 +58,13 @@ class DocumentScanner:
                     modified_at=datetime.fromtimestamp(stat.st_mtime).astimezone(),
                 )
             )
-        return ScanResult(files=tuple(files))
+        result = ScanResult(files=tuple(files))
+        logger.info(
+            "kdb_scan_completed root=%s supported_files=%d",
+            root,
+            len(result.files),
+        )
+        return result
 
     @staticmethod
     def _hash(path: Path, block_size: int = 1024 * 1024) -> str:

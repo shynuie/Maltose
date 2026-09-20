@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
 
 from myagent.agent.taskbrain import QwenEmbeddingProvider
@@ -18,6 +19,8 @@ from myagent.knowledge.retrieval import DocumentKnowledgeService
 from myagent.knowledge.scanner import DocumentScanner
 from myagent.knowledge.source_reader import SourceReader
 from myagent.knowledge.summaries import ExtractiveDocumentSummarizer
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,6 +72,10 @@ def _build_services(args: argparse.Namespace):
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     args = build_parser().parse_args()
     if args.command == "list":
         config = KnowledgeConfig(
@@ -83,8 +90,15 @@ def main() -> None:
     try:
         if args.command == "index":
             config.documents_root.mkdir(parents=True, exist_ok=True)
+            logger.info("kdb_cli_index_started root=%s", config.documents_root)
             plan = DocumentChangeDetector().plan(scanner.scan(config.documents_root), metadata)
-            results = [indexer.index(item) for item in (*plan.new_files, *plan.changed_files)]
+            candidates = (*plan.new_files, *plan.changed_files)
+            logger.info("kdb_cli_index_candidates count=%d", len(candidates))
+            results = []
+            for index, item in enumerate(candidates, start=1):
+                logger.info("kdb_cli_index_progress current=%d total=%d path=%s", index, len(candidates), item.path)
+                results.append(indexer.index(item))
+            logger.info("kdb_cli_index_completed indexed=%d", len(results))
             print(json.dumps({
                 "indexed": len(results),
                 "unchanged": len(plan.unchanged_files),

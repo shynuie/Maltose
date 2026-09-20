@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import logging
+
 from myagent.knowledge.models import ScannedFile
 from myagent.knowledge.repositories.metadata import MetadataRepository
 from myagent.knowledge.scanner import ScanPlan, ScanResult
 
+logger = logging.getLogger(__name__)
+
 
 class DocumentChangeDetector:
     def plan(self, scan: ScanResult, repository: MetadataRepository) -> ScanPlan:
+        logger.info("kdb_change_detection_started scanned_files=%d", len(scan.files))
         new_files: list[ScannedFile] = []
         changed_files: list[ScannedFile] = []
         unchanged_files: list[ScannedFile] = []
@@ -33,10 +38,19 @@ class DocumentChangeDetector:
                 new_files.append(scanned)
 
         deleted_ids = repository.mark_missing(active_paths)
-        return ScanPlan(
+        plan = ScanPlan(
             new_files=tuple(new_files),
             changed_files=tuple(changed_files),
             unchanged_files=tuple(unchanged_files),
             moved_document_ids=tuple(moved_ids),
             deleted_document_ids=tuple(deleted_ids),
         )
+        logger.info(
+            "kdb_change_detection_completed new=%d changed=%d unchanged=%d moved=%d deleted=%d",
+            len(plan.new_files),
+            len(plan.changed_files),
+            len(plan.unchanged_files),
+            len(plan.moved_document_ids),
+            len(plan.deleted_document_ids),
+        )
+        return plan
