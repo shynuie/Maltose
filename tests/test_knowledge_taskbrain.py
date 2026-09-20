@@ -78,6 +78,23 @@ class KnowledgeTaskBrainIntegrationTests(unittest.TestCase):
 
         self.assertIn("Speaker verification status for this turn: verified", model.messages[0]["content"])
 
+    def test_kdb_prompt_requires_search_for_stored_documents(self):
+        model = RecordingModel()
+        with tempfile.TemporaryDirectory() as directory:
+            brain = TaskBrain(
+                model,
+                memory=MemoryStore(Path(directory) / "memory.json"),
+                capability_adapters=[
+                    DocumentToolAdapter(
+                        DocumentKnowledgeService.__new__(DocumentKnowledgeService),
+                        ingestion=FakeIngestion(),
+                    )
+                ],
+            )
+            brain.process("我的 paper 摘要是什么？")
+
+        self.assertIn("must call search_documents", model.messages[0]["content"])
+
 
 if __name__ == "__main__":
     unittest.main()

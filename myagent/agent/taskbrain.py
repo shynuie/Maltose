@@ -1057,6 +1057,9 @@ class TaskBrain:
                 " For document questions, first locate the document, then locate relevant sections, and read the"
                 " original source before giving a precise answer. Treat summaries, embeddings, and previews as"
                 " indexes only; do not present them as authoritative source content."
+                " Whenever the user mentions a paper, thesis, document, PDF, note, or asks to look up stored"
+                " material, you must call search_documents before saying the content is unavailable or asking the"
+                " user to paste it."
             )
         if self.tools.has("create_document") or self.tools.has("import_document"):
             system_content += (
@@ -1158,6 +1161,9 @@ class TaskBrain:
                 " For document questions, first locate the document, then locate relevant sections, and read the"
                 " original source before giving a precise answer. Treat summaries, embeddings, and previews as"
                 " indexes only; do not present them as authoritative source content."
+                " Whenever the user mentions a paper, thesis, document, PDF, note, or asks to look up stored"
+                " material, you must call search_documents before saying the content is unavailable or asking the"
+                " user to paste it."
             )
         if self.tools.has("create_document") or self.tools.has("import_document"):
             system_content += (
