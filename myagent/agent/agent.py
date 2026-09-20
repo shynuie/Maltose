@@ -126,6 +126,7 @@ class VoiceAgent:
                     not conversation_active,
                     self.config.standby_timeout if conversation_active else "disabled",
                 )
+                self._speak_task_notifications()
 
                 captured_utterance = pending_turn.utterance if pending_turn else None
                 pretranscribed_turn = pending_turn

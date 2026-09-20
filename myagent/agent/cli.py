@@ -17,7 +17,7 @@ from myagent.agent.taskbrain import (
     TaskBrain,
     UserProfileStore,
 )
-from myagent.agent.tasks import CodexReadOnlyWorker, TaskManager, TaskStore
+from myagent.agent.tasks import AssistantMessageWorker, CodexReadOnlyWorker, TaskManager, TaskStore
 from myagent.agent.capabilities import MCPStdioClient, MCPToolAdapter
 from myagent.agent.search import BraveSearchProvider, WebResearchWorker
 from myagent.logging import configure_logging
@@ -331,6 +331,7 @@ def main() -> None:
                 timeout=args.taskbrain_codex_timeout,
             ),
         )
+        task_manager.register_worker("assistant_message", AssistantMessageWorker())
         search_provider = None
         if args.taskbrain_search == "brave":
             search_provider = BraveSearchProvider(

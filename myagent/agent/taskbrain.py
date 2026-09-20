@@ -571,6 +571,9 @@ class TaskBrain:
                 continue
             if notification["status"] == "succeeded":
                 summary = notification.get("result_summary") or ""
+                if notification.get("worker_type") == "assistant_message" and summary:
+                    messages.append(summary)
+                    continue
                 messages.append(self._summarize_task_result(title, summary))
             else:
                 error = notification.get("error") or "未知错误"
@@ -821,6 +824,68 @@ class TaskBrain:
                     else self._identity_required_error()
                 ),
             )
+        if not self.tools.has("create_schedule"):
+            self.tools.register(
+                "create_schedule",
+                (
+                    "Create a one-time or recurring task schedule. run_at must be an ISO-8601 "
+                    "timestamp; recurring schedules support daily or weekly recurrence. Require "
+                    "confirmation before schedules that trigger external side effects."
+                    " For scheduled spoken reminders, use worker_type assistant_message and put "
+                    "the exact text in input.message."
+                ),
+                {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "worker_type": {"type": "string"},
+                        "run_at": {"type": "string"},
+                        "recurrence": {"type": "string", "enum": ["once", "daily", "weekly"]},
+                        "timezone": {"type": "string"},
+                        "input": {"type": "object"},
+                    },
+                    "required": ["title", "worker_type", "run_at"],
+                },
+                lambda args: (
+                    self.task_manager.create_schedule(
+                        args["title"], args["worker_type"], args["run_at"],
+                        recurrence=args.get("recurrence", "once"),
+                        timezone_name=args.get("timezone", "UTC"),
+                        input=args.get("input", {}), user_id=self._active_user_id,
+                    )
+                    if self._identity_is_known()
+                    else self._identity_required_error()
+                ),
+            )
+        if not self.tools.has("list_schedules"):
+            self.tools.register(
+                "list_schedules",
+                "List scheduled tasks belonging to the active user.",
+                {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1}}},
+                lambda args: (
+                    self.task_manager.list_schedules(self._active_user_id, args.get("limit", 20))
+                    if self._identity_is_known()
+                    else self._identity_required_error()
+                ),
+            )
+        for tool_name, method_name, description in (
+            ("pause_schedule", "pause_schedule", "Pause an active scheduled task."),
+            ("resume_schedule", "resume_schedule", "Resume a paused scheduled task."),
+            ("cancel_schedule", "cancel_schedule", "Cancel a scheduled task."),
+        ):
+            if not self.tools.has(tool_name):
+                self.tools.register(
+                    tool_name,
+                    description,
+                    {"type": "object", "properties": {"schedule_id": {"type": "string"}}, "required": ["schedule_id"]},
+                    lambda args, method_name=method_name: (
+                        getattr(self.task_manager, method_name)(
+                            args["schedule_id"], user_id=self._active_user_id
+                        )
+                        if self._identity_is_known()
+                        else self._identity_required_error()
+                    ),
+                )
 
     def _install_search_tools(self) -> None:
         if self.search_provider is None or self.tools.has("web_search"):

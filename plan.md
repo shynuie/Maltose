@@ -25,6 +25,8 @@ Continue the local multi-task orchestration layer behind TaskBrain. Planner exec
 - Added a capability adapter boundary for explicitly registered Skills and MCP tools, plus a stdio JSON-RPC MCP client, TOML Skills manifest loader, and `--taskbrain-mcp-command` CLI integration.
 - Added unified `myagent.toml` configuration with CLI override support; local config is ignored by Git and `myagent.toml.example` documents the available sections.
 - Added built-in `get_current_datetime`, `get_location`, and `get_ip_addresses` tools with config support and privacy boundaries.
+- Added persisted one-time and daily/weekly scheduled tasks with timezone-aware timestamps, pause/resume/cancel controls, and TaskBrain scheduling tools.
+- Added the `assistant_message` worker so scheduled spoken reminders are delivered through the existing VoiceAgent notification path.
 - 75 automated tests covering voice flow, memory, identity, tasks, search, STT, TTS, capability adapters, and configuration loading.
 
 ### In Progress
@@ -45,7 +47,7 @@ Continue the local multi-task orchestration layer behind TaskBrain. Planner exec
 
 These capabilities should be implemented as narrow, auditable tools rather than unrestricted shell access.
 
-- **Scheduled tasks** (remaining):
+- **Scheduled tasks** (initial slice implemented; confirmation policy remains):
   - Support one-time and recurring schedules with timezone-aware timestamps.
   - Persist schedules in SQLite and restore them after process restart.
   - Add tools to create, list, pause, resume, and cancel schedules.

@@ -11,9 +11,10 @@ import tempfile
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Protocol
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,13 @@ class TaskStatus:
     WAITING = "waiting"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ScheduleStatus:
+    ACTIVE = "active"
+    PAUSED = "paused"
+    COMPLETED = "completed"
     CANCELLED = "cancelled"
 
 
@@ -83,6 +91,44 @@ class TaskRecord:
         }
 
 
+@dataclass(frozen=True)
+class ScheduleRecord:
+    id: str
+    user_id: str
+    title: str
+    worker_type: str
+    input: dict[str, Any]
+    run_at: str
+    recurrence: str
+    timezone: str
+    status: str
+    next_run_at: str | None
+    last_run_at: str | None
+    created_at: str
+    updated_at: str
+    error: str | None
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "ScheduleRecord":
+        return cls(
+            id=row["id"], user_id=row["user_id"], title=row["title"],
+            worker_type=row["worker_type"], input=json.loads(row["input_json"]),
+            run_at=row["run_at"], recurrence=row["recurrence"], timezone=row["timezone"],
+            status=row["status"], next_run_at=row["next_run_at"],
+            last_run_at=row["last_run_at"], created_at=row["created_at"],
+            updated_at=row["updated_at"], error=row["error"],
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "schedule_id": self.id, "user_id": self.user_id, "title": self.title,
+            "worker_type": self.worker_type, "input": self.input, "run_at": self.run_at,
+            "recurrence": self.recurrence, "timezone": self.timezone, "status": self.status,
+            "next_run_at": self.next_run_at, "last_run_at": self.last_run_at,
+            "created_at": self.created_at, "updated_at": self.updated_at, "error": self.error,
+        }
+
+
 class TaskStore:
     """SQLite-backed task state store safe for worker threads."""
 
@@ -121,6 +167,30 @@ class TaskStore:
             self._connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_tasks_user_updated "
                 "ON tasks(user_id, updated_at DESC)"
+            )
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schedules (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    worker_type TEXT NOT NULL,
+                    input_json TEXT NOT NULL,
+                    run_at TEXT NOT NULL,
+                    recurrence TEXT NOT NULL,
+                    timezone TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    next_run_at TEXT,
+                    last_run_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    error TEXT
+                )
+                """
+            )
+            self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_schedules_due "
+                "ON schedules(status, next_run_at)"
             )
 
     def close(self) -> None:
@@ -227,6 +297,89 @@ class TaskStore:
         task = self.get(task_id)
         return [self.get(dep_id) for dep_id in task.dependencies]
 
+    def create_schedule(
+        self,
+        title: str,
+        worker_type: str,
+        run_at: str,
+        *,
+        recurrence: str = "once",
+        timezone_name: str = "UTC",
+        input: dict[str, Any] | None = None,
+        user_id: str = "default",
+        schedule_id: str | None = None,
+    ) -> ScheduleRecord:
+        title = title.strip()
+        if not title:
+            raise ValueError("Schedule title cannot be empty.")
+        if recurrence not in {"once", "daily", "weekly"}:
+            raise ValueError("Schedule recurrence must be once, daily, or weekly.")
+        normalized_run_at = _parse_schedule_time(run_at, timezone_name).isoformat()
+        schedule_id = schedule_id or str(uuid.uuid4())
+        now = _now()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """INSERT INTO schedules (
+                    id, user_id, title, worker_type, input_json, run_at, recurrence,
+                    timezone, status, next_run_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    schedule_id, user_id, title, worker_type,
+                    json.dumps(input or {}, ensure_ascii=False), normalized_run_at, recurrence,
+                    timezone_name, ScheduleStatus.ACTIVE, normalized_run_at, now, now,
+                ),
+            )
+        return self.get_schedule(schedule_id)
+
+    def get_schedule(self, schedule_id: str, user_id: str | None = None) -> ScheduleRecord:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM schedules WHERE id = ?"
+                + (" AND user_id = ?" if user_id is not None else ""),
+                (schedule_id, user_id) if user_id is not None else (schedule_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"Unknown schedule: {schedule_id}")
+        return ScheduleRecord.from_row(row)
+
+    def list_schedules(self, user_id: str = "default", limit: int = 20) -> list[ScheduleRecord]:
+        if limit < 1:
+            raise ValueError("Schedule limit must be positive.")
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM schedules WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+        return [ScheduleRecord.from_row(row) for row in rows]
+
+    def due_schedules(self, now: str | None = None) -> list[ScheduleRecord]:
+        now = now or _now()
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM schedules WHERE status = ? AND next_run_at <= ? ORDER BY next_run_at",
+                (ScheduleStatus.ACTIVE, now),
+            ).fetchall()
+        return [ScheduleRecord.from_row(row) for row in rows]
+
+    def update_schedule(self, schedule_id: str, **fields: Any) -> ScheduleRecord:
+        allowed = {"status", "next_run_at", "last_run_at", "error"}
+        unknown = set(fields) - allowed
+        if unknown:
+            raise ValueError(f"Unsupported schedule fields: {sorted(unknown)}")
+        updates = [(key, value) for key, value in fields.items()]
+        if not updates:
+            return self.get_schedule(schedule_id)
+        updates.append(("updated_at", _now()))
+        values = [value for _, value in updates] + [schedule_id]
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                f"UPDATE schedules SET {', '.join(f'{key} = ?' for key, _ in updates)} WHERE id = ?",
+                values,
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(f"Unknown schedule: {schedule_id}")
+        return self.get_schedule(schedule_id)
+
 
 class TaskWorker(Protocol):
     def run(
@@ -248,6 +401,19 @@ class FunctionTaskWorker:
         result = self.function(task.input)
         report_progress(100)
         return str(result)
+
+
+class AssistantMessageWorker:
+    """Turn a scheduled message into a normal task notification."""
+
+    def run(
+        self, task: TaskRecord, report_progress: Callable[[int], None]
+    ) -> str:
+        message = task.input.get("message") or task.input.get("text") or task.title
+        if not isinstance(message, str) or not message.strip():
+            raise ValueError("assistant_message requires input.message or input.text.")
+        report_progress(100)
+        return message.strip()
 
 
 class CodexReadOnlyWorker:
@@ -352,11 +518,73 @@ class TaskManager:
         self._notifications: list[dict[str, Any]] = []
         self._progress_marks: dict[str, int] = {}
         self._lock = threading.RLock()
+        self._stop_scheduler = threading.Event()
+        self._scheduler = threading.Thread(
+            target=self._schedule_loop, name="myagent-scheduler", daemon=True
+        )
+        self._scheduler.start()
 
     def register_worker(self, worker_type: str, worker: TaskWorker) -> None:
         if not worker_type or worker_type in self._workers:
             raise ValueError(f"Invalid or duplicate worker type: {worker_type!r}")
         self._workers[worker_type] = worker
+
+    def create_schedule(
+        self, title: str, worker_type: str, run_at: str, *,
+        recurrence: str = "once", timezone_name: str = "UTC",
+        input: dict[str, Any] | None = None, user_id: str = "default",
+    ) -> dict[str, Any]:
+        return self.store.create_schedule(
+            title, worker_type, run_at, recurrence=recurrence,
+            timezone_name=timezone_name, input=input, user_id=user_id,
+        ).as_dict()
+
+    def list_schedules(self, user_id: str = "default", limit: int = 20) -> list[dict[str, Any]]:
+        return [item.as_dict() for item in self.store.list_schedules(user_id, limit)]
+
+    def pause_schedule(self, schedule_id: str, user_id: str | None = None) -> dict[str, Any]:
+        schedule = self.store.get_schedule(schedule_id, user_id=user_id)
+        if schedule.status == ScheduleStatus.ACTIVE:
+            schedule = self.store.update_schedule(schedule_id, status=ScheduleStatus.PAUSED)
+        return schedule.as_dict()
+
+    def resume_schedule(self, schedule_id: str, user_id: str | None = None) -> dict[str, Any]:
+        schedule = self.store.get_schedule(schedule_id, user_id=user_id)
+        if schedule.status == ScheduleStatus.PAUSED:
+            schedule = self.store.update_schedule(schedule_id, status=ScheduleStatus.ACTIVE)
+        return schedule.as_dict()
+
+    def cancel_schedule(self, schedule_id: str, user_id: str | None = None) -> dict[str, Any]:
+        schedule = self.store.get_schedule(schedule_id, user_id=user_id)
+        if schedule.status not in {ScheduleStatus.COMPLETED, ScheduleStatus.CANCELLED}:
+            schedule = self.store.update_schedule(schedule_id, status=ScheduleStatus.CANCELLED)
+        return schedule.as_dict()
+
+    def _schedule_loop(self) -> None:
+        while not self._stop_scheduler.wait(0.5):
+            try:
+                for schedule in self.store.due_schedules():
+                    self._run_schedule(schedule)
+            except Exception:
+                logger.exception("schedule_poll_failed")
+
+    def _run_schedule(self, schedule: ScheduleRecord) -> None:
+        now = schedule.next_run_at or _now()
+        try:
+            self.create_plan(
+                [{"title": schedule.title, "worker_type": schedule.worker_type, "input": schedule.input}],
+                user_id=schedule.user_id,
+            )
+            if schedule.recurrence == "once":
+                self.store.update_schedule(
+                    schedule.id, status=ScheduleStatus.COMPLETED, last_run_at=now, next_run_at=None
+                )
+            else:
+                next_run = _next_schedule_time(now, schedule.recurrence, schedule.timezone)
+                self.store.update_schedule(schedule.id, last_run_at=now, next_run_at=next_run)
+        except Exception as exc:
+            self.store.update_schedule(schedule.id, error=str(exc), last_run_at=now)
+            logger.exception("schedule_run_failed schedule_id=%s", schedule.id)
 
     @property
     def worker_types(self) -> tuple[str, ...]:
@@ -472,6 +700,7 @@ class TaskManager:
                     "kind": kind,
                     "user_id": task.user_id,
                     "title": task.title,
+                    "worker_type": task.worker_type,
                     "status": task.status,
                     "progress": task.progress,
                     "result_summary": task.result_summary,
@@ -532,8 +761,29 @@ class TaskManager:
         return self.store.get(task_id).as_dict()
 
     def shutdown(self, wait: bool = True) -> None:
+        self._stop_scheduler.set()
+        self._scheduler.join(timeout=2)
         self._executor.shutdown(wait=wait, cancel_futures=True)
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_schedule_time(value: str, timezone_name: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        zone = ZoneInfo(timezone_name)
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        raise ValueError("Schedule run_at must be ISO-8601 and timezone must be valid.") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=zone)
+    return parsed.astimezone(timezone.utc)
+
+
+def _next_schedule_time(previous: str, recurrence: str, timezone_name: str) -> str:
+    current_utc = _parse_schedule_time(previous, timezone_name)
+    zone = ZoneInfo(timezone_name)
+    local = current_utc.astimezone(zone)
+    delta = timedelta(days=1 if recurrence == "daily" else 7)
+    return (local + delta).astimezone(timezone.utc).isoformat()

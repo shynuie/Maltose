@@ -21,9 +21,12 @@ from myagent.agent.search import (
 )
 from myagent.agent.tasks import (
     CodexReadOnlyWorker,
+    AssistantMessageWorker,
     FunctionTaskWorker,
     TaskManager,
     TaskRecord,
+    ScheduleRecord,
+    ScheduleStatus,
     TaskStatus,
     TaskStore,
 )
@@ -57,8 +60,11 @@ __all__ = [
     "VoiceAgent",
     "FunctionTaskWorker",
     "CodexReadOnlyWorker",
+    "AssistantMessageWorker",
     "TaskManager",
     "TaskRecord",
+    "ScheduleRecord",
+    "ScheduleStatus",
     "TaskStatus",
     "TaskStore",
     "CapabilityAdapter",

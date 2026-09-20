@@ -1,10 +1,12 @@
 import tempfile
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 from myagent.agent import (
+    AssistantMessageWorker,
     CodexReadOnlyWorker,
     FunctionTaskWorker,
     TaskManager,
@@ -14,6 +16,10 @@ from myagent.agent import (
 
 
 class TaskManagerTest(unittest.TestCase):
+    def test_assistant_message_worker_returns_exact_message(self) -> None:
+        record = type("Record", (), {"title": "fallback", "input": {"message": "你好！"}})()
+        self.assertEqual(AssistantMessageWorker().run(record, lambda _progress: None), "你好！")
+
     def test_runs_independent_tasks_and_persists_results(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
@@ -194,6 +200,46 @@ class TaskManagerTest(unittest.TestCase):
                     break
                 time.sleep(0.01)
             self.assertEqual(manager.get_status(record.id)["result_summary"], "recovered")
+            manager.shutdown()
+            store.close()
+
+    def test_one_time_schedule_creates_and_runs_task(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
+            manager = TaskManager(store)
+            manager.register_worker("local", FunctionTaskWorker(lambda data: data["result"]))
+            run_at = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+            schedule = manager.create_schedule(
+                "Scheduled task", "local", run_at,
+                input={"result": "scheduled ok"}, user_id="marvin",
+            )
+
+            deadline = time.time() + 2
+            while time.time() < deadline:
+                if store.get_schedule(schedule["schedule_id"]).status == "completed":
+                    break
+                time.sleep(0.02)
+
+            self.assertEqual(store.get_schedule(schedule["schedule_id"]).status, "completed")
+            self.assertEqual(manager.list_tasks("marvin")[0]["result_summary"], "scheduled ok")
+            manager.shutdown()
+            store.close()
+
+    def test_recurring_schedule_can_be_paused_and_resumed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
+            manager = TaskManager(store)
+            run_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+            schedule = manager.create_schedule(
+                "Daily reminder", "local", run_at, recurrence="daily", user_id="marvin"
+            )
+
+            paused = manager.pause_schedule(schedule["schedule_id"], user_id="marvin")
+            self.assertEqual(paused["status"], "paused")
+            resumed = manager.resume_schedule(schedule["schedule_id"], user_id="marvin")
+            self.assertEqual(resumed["status"], "active")
+            cancelled = manager.cancel_schedule(schedule["schedule_id"], user_id="marvin")
+            self.assertEqual(cancelled["status"], "cancelled")
             manager.shutdown()
             store.close()
 

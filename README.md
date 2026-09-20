@@ -253,6 +253,18 @@ If the external IP lookup fails, the tool still returns the internal IPs and
 includes `external_error` so the model can report the failure and its reason.
 IP and location results are not written to long-term memory automatically.
 
+### Scheduled Tasks
+
+TaskBrain can persist one-time and recurring task schedules in the configured
+SQLite task database. The scheduling tools are `create_schedule`,
+`list_schedules`, `pause_schedule`, `resume_schedule`, and `cancel_schedule`.
+Use ISO-8601 `run_at` timestamps and optionally set `recurrence` to `daily` or
+`weekly` with an IANA `timezone`. Due schedules create ordinary bounded tasks,
+so they use the same registered worker types, task status, and notifications.
+For spoken reminders, use the built-in `assistant_message` worker with the exact
+spoken text in `input.message`; VoiceAgent delivers that notification at a safe
+standby/TTS boundary.
+
 Speak a short acknowledgement after wake detection:
 
 ```sh
