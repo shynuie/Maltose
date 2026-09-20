@@ -91,6 +91,30 @@ def main() -> None:
         with MetadataRepository(config.metadata_path) as metadata:
             print(json.dumps(metadata.list_documents(), ensure_ascii=False, indent=2))
         return
+
+    # Avoid loading the embedding model when an incremental index has no work.
+    # This is especially important for moved or unchanged files.
+    if args.command == "index" and not args.force:
+        config = KnowledgeConfig(
+            documents_root=args.documents_root,
+            metadata_path=args.metadata,
+            vectors_path=args.vectors,
+        ).resolved()
+        config.documents_root.mkdir(parents=True, exist_ok=True)
+        scanner = DocumentScanner(config.supported_extensions)
+        with MetadataRepository(config.metadata_path) as metadata:
+            plan = DocumentChangeDetector().plan(scanner.scan(config.documents_root), metadata)
+        if not plan.new_files and not plan.changed_files:
+            logger.info("kdb_cli_index_no_work embedding_model=not_loaded")
+            print(json.dumps({
+                "indexed": 0,
+                "unchanged": len(plan.unchanged_files),
+                "moved": len(plan.moved_document_ids),
+                "deleted": len(plan.deleted_document_ids),
+                "documents": [],
+            }, ensure_ascii=False, indent=2))
+            return
+
     config, scanner, metadata, indexer, service = _build_services(args)
     try:
         if args.command == "index":

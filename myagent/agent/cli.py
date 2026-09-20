@@ -22,6 +22,7 @@ from myagent.agent.capabilities import MCPStdioClient, MCPToolAdapter
 from myagent.agent.search import BraveSearchProvider, WebResearchWorker
 from myagent.knowledge.config import KnowledgeConfig
 from myagent.knowledge.chunker import DocumentChunker
+from myagent.knowledge.embeddings import LazyEmbeddingProvider
 from myagent.knowledge.indexer import DocumentIndexer
 from myagent.knowledge.ingestion import DocumentIngestionService
 from myagent.knowledge.parsers import MarkdownParser, PDFParser, ParserRegistry, TextParser
@@ -393,7 +394,9 @@ def main() -> None:
         if args.knowledge_enabled:
             knowledge_embedder = embedder
             if args.knowledge_embedding == "qwen3-embedding-0.6b" and knowledge_embedder is None:
-                knowledge_embedder = QwenEmbeddingProvider(device=args.knowledge_embedding_device)
+                knowledge_embedder = LazyEmbeddingProvider(
+                    lambda: QwenEmbeddingProvider(device=args.knowledge_embedding_device)
+                )
             if knowledge_embedder is None:
                 raise RuntimeError(
                     "KDB requires an embedding provider. Set --knowledge-embedding "
