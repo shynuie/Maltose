@@ -523,12 +523,14 @@ class TaskBrain:
         self.search_provider = search_provider
         self.environment_tools = environment_tools or EnvironmentTools()
         self._active_user_id = getattr(self.memory, "user_id", "default")
+        self._active_speaker_status = "unknown"
         self._return_to_standby = False
         self.max_tool_rounds = max_tool_rounds
         self.max_session_turns = max_session_turns
         self._session_messages: list[dict[str, Any]] = []
         self._session_turns = 0
         self._session_user_id: str | None = None
+        self._user_name_cache: dict[str, str | None] = {}
         self._install_memory_tools()
         self._install_conversation_tools()
         self._install_profile_tool()
@@ -541,6 +543,28 @@ class TaskBrain:
             backfilled = self.memory.backfill_embeddings()
             if backfilled:
                 logger.info("memory_embeddings_backfilled count=%d", backfilled)
+
+    def resolve_user_name(self, user_id: str) -> str | None:
+        """Resolve a display name once per user for low-latency voice logging."""
+        if user_id in self._user_name_cache:
+            return self._user_name_cache[user_id]
+        if self.profile is None:
+            self._user_name_cache[user_id] = None
+            return None
+        try:
+            profile = self.profile.get_profile(user_id)
+        except Exception:
+            logger.exception("user_name_resolution_failed user_id=%s", user_id)
+            profile = None
+        name = None
+        if profile:
+            for field in ("display_name", "full_name", "chinese_name"):
+                value = profile.get(field)
+                if isinstance(value, str) and value.strip():
+                    name = value.strip()
+                    break
+        self._user_name_cache[user_id] = name
+        return name
 
     def _install_profile_tool(self) -> None:
         if self.profile is None or self.tools.has("get_user_profile"):
@@ -645,7 +669,11 @@ class TaskBrain:
         return f"任务「{title}」已完成。结果已保存，可以继续询问任务详情。"
 
     def _identity_is_known(self) -> bool:
-        return bool(self._active_user_id and self._active_user_id != "unknown")
+        return bool(
+            self._active_speaker_status == "identified"
+            and self._active_user_id
+            and self._active_user_id != "unknown"
+        )
 
     @staticmethod
     def _identity_required_error() -> dict[str, Any]:
@@ -663,6 +691,7 @@ class TaskBrain:
             return False
         if context is not None:
             self._active_user_id = context.user_id or "unknown"
+            self._active_speaker_status = context.speaker_status
         if self._session_user_id != self._active_user_id:
             self.begin_session()
             self._session_user_id = self._active_user_id
@@ -1000,6 +1029,7 @@ class TaskBrain:
             raise ValueError("TaskBrain input cannot be empty.")
         if context is not None:
             self._active_user_id = context.user_id or "unknown"
+            self._active_speaker_status = context.speaker_status
         local_datetime = self.environment_tools.current_datetime()
         system_content = (
             "You are a concise local personal assistant. This is a voice interface: do not use Markdown headings, "
@@ -1079,6 +1109,7 @@ class TaskBrain:
             raise ValueError("TaskBrain input cannot be empty.")
         if context is not None:
             self._active_user_id = context.user_id or "unknown"
+            self._active_speaker_status = context.speaker_status
         local_datetime = self.environment_tools.current_datetime()
         system_content = (
             "You are a concise local personal assistant. This is a voice interface: do not use Markdown headings, "

@@ -29,6 +29,7 @@ from myagent.voice import (
     normalize_utterance_peak,
     NullSpeakerIdentifier,
     SpeakerIdentifier,
+    SpeakerIdentityManager,
     SpeakerResult,
     create_stt_provider,
     write_utterance_wav,
@@ -81,6 +82,7 @@ class VoiceAgent:
         transcriber: STTProvider | None = None,
         speaker: TTSProvider | None = None,
         speaker_identifier: SpeakerIdentifier | None = None,
+        speaker_identity_manager: SpeakerIdentityManager | None = None,
         listener_factory: ListenerFactory = microphone_events,
     ) -> None:
         self.config = config or AgentConfig()
@@ -88,6 +90,7 @@ class VoiceAgent:
         self._transcriber = transcriber
         self._speaker = speaker
         self._speaker_identifier = speaker_identifier or NullSpeakerIdentifier()
+        self._speaker_identity_manager = speaker_identity_manager
         self._listener_factory = listener_factory
         self.state = AgentState.INITIALIZING
         self.turn_count = 0
@@ -195,15 +198,28 @@ class VoiceAgent:
                     )
                     with ThreadPoolExecutor(max_workers=2) as executor:
                         stt_future = executor.submit(self.transcriber.transcribe, stt_request)
-                        speaker_future = executor.submit(self._speaker_identifier.identify, path)
+                        if self._speaker_identity_manager is not None:
+                            self._speaker_identity_manager.submit(path)
+                        else:
+                            speaker_future = executor.submit(self._speaker_identifier.identify, path)
                         result = stt_future.result()
-                        speaker_result = speaker_future.result()
+                        speaker_result = (
+                            self._speaker_identity_manager.snapshot()
+                            if self._speaker_identity_manager is not None
+                            else speaker_future.result()
+                        )
                 logger.info("transcript text=%s", result.text)
                 logger.info(
                     "speaker_result user_id=%s score=%s status=%s",
                     speaker_result.user_id,
                     speaker_result.score,
                     speaker_result.status,
+                )
+                speaker_label = self._resolve_speaker_label(speaker_result)
+                logger.info(
+                    "user_utterance text=(%s)%s",
+                    speaker_label,
+                    result.text.strip(),
                 )
 
                 if not result.text.strip():
@@ -262,6 +278,8 @@ class VoiceAgent:
             logger.info("agent_interrupted")
             self.state = AgentState.SHUTDOWN
         finally:
+            if self._speaker_identity_manager is not None:
+                self._speaker_identity_manager.close()
             self._end_brain_session()
             self.state = AgentState.SHUTDOWN
             logger.info("agent_stopped")
@@ -597,6 +615,22 @@ class VoiceAgent:
         except Exception as exc:
             logger.warning("speech_barge_in_stt_failed error=%s", exc)
             return "", SpeakerResult(None, None, "unknown")
+
+    def _resolve_speaker_label(self, speaker_result: SpeakerResult) -> str:
+        if not speaker_result.user_id:
+            return "Unknown"
+        resolver = getattr(self.brain, "resolve_user_name", None)
+        if callable(resolver):
+            try:
+                display_name = resolver(speaker_result.user_id)
+                if display_name:
+                    return display_name
+            except Exception:
+                logger.exception(
+                    "speaker_display_name_resolution_failed user_id=%s",
+                    speaker_result.user_id,
+                )
+        return speaker_result.user_id
 
     def _should_interrupt_speech(self, transcript: str) -> bool:
         normalized = re.sub(r"[\s\W_]+", "", transcript, flags=re.UNICODE).lower()

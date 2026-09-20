@@ -39,6 +39,11 @@ vector-memory = [
     "torch>=2.6.0",
     "transformers>=4.51.0",
 ]
+speaker = [
+    "speechbrain>=1.0.0",
+    "torch>=2.6.0",
+    "torchaudio>=2.6.0",
+]
 
 [project.scripts]
 myagent = "myagent.agent.cli:main"
@@ -49,6 +54,8 @@ myagent-tts = "myagent.voice.cli:main"
 myagent-voice-loop = "myagent.voice.loop_cli:main"
 myagent-wake-test = "myagent.voice.wake_cli:main"
 myagent-wake-monitor = "myagent.voice.wake_monitor_cli:main"
+myagent-speaker-enroll = "myagent.voice.speaker_enroll_interactive:main"
+myagent-speaker-enroll-files = "myagent.voice.speaker_enroll_cli:main"
 
 [build-system]
 requires = ["hatchling"]

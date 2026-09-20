@@ -25,7 +25,7 @@ available as temporary overrides.
 Install the runtime extras used by the current voice setup:
 
 ```sh
-uv sync --extra wake --extra qwen-asr --extra vector-memory
+uv sync --extra wake --extra qwen-asr --extra vector-memory --extra speaker
 ```
 
 Create the unified configuration:
@@ -133,7 +133,7 @@ long-form flags are still supported for one-off overrides.
 Set `OPENAI_API_KEY` before starting the agent. The API key stays local to the
 process and is sent only to the configured model endpoint.
 
-The default memory file is `data/memory.json`. The first built-in tools are
+The default memory backend is LanceDB. The first built-in tools are
 `remember`, `recall`, and `return_to_standby`; custom tools can be registered through `ToolRegistry`.
 MCP servers and Skills are exposed through capability adapters. Add stdio MCP
 servers in `myagent.toml`:
@@ -155,7 +155,7 @@ Enable local semantic memory retrieval with Qwen3 Embedding:
 [taskbrain]
 memory_backend = "lancedb"
 memory = "data/memory.lancedb"
-user_id = "default"
+user_id = "user-001"
 embedding = "qwen3-embedding-0.6b"
 embedding_device = "mps"
 ```
@@ -165,10 +165,58 @@ not require the wake word again; ten seconds of silence returns to wake-word
 standby. `--max-turns` is no longer used as an automatic shutdown condition.
 After a wake word, it says `我在` if no follow-up speech starts within 0.8 seconds.
 
-Memory records are stored in LanceDB under `data/memory.lancedb`. Existing
-`data/memory.json` records are imported once with `--taskbrain-memory-source`.
+Memory records are stored in LanceDB under `data/memory.lancedb`. The legacy
+`data/memory.json` store is not used at runtime; current identity-scoped data
+uses the sequential system user ID from `user_profile`.
 
 Mandarin transcripts normalize common ASCII punctuation to Chinese punctuation.
+
+### Local Speaker Recognition
+
+The first speaker-recognition backend uses SpeechBrain ECAPA-TDNN. It supports
+multiple enrolled users and returns `unknown` when no enrolled profile reaches
+the configured cosine-similarity threshold. Install it separately because the
+model and PyTorch stack are optional:
+
+```sh
+uv sync --extra speaker
+```
+
+Enroll one user with several short, clean WAV recordings:
+
+```sh
+uv run --extra speaker myagent-speaker-enroll --user-id marvin
+```
+
+The interactive enrollment flow presents eight fixed Mandarin prompts one at a
+time. It waits for VAD to detect speech, stops after trailing silence, checks
+duration and volume, and retries invalid samples. Accepted recordings are held
+in a temporary directory and removed after enrollment unless
+`--keep-recordings` is specified. The final voiceprint is written only after
+explicit confirmation. New users receive stable sequential IDs such as
+`user-001`; display names remain profile data rather than system IDs. If a
+voice cannot be matched, the runtime marks the turn as `unknown` and does not
+read personal memory, profiles, tasks, or schedules. The fixed-file batch utility remains available as
+`myagent-speaker-enroll-files`.
+
+Enable recognition in the main agent:
+
+```sh
+uv run --extra speaker myagent --brain taskbrain \
+  --speaker-recognition speechbrain \
+  --speaker-profiles data/speaker_profiles.sqlite3
+```
+
+The current starting threshold is `0.40`; calibrate it using recordings from the real
+microphone and room. Recognition compares against each enrolled sample and
+uses the highest similarity score. Speaker recognition is an identity hint, not a secure
+authentication mechanism, and raw enrollment audio is not stored by MyAgent. Recognition
+runs in a single background worker so it does not block STT or the LLM. The runtime keeps
+a `current_user` snapshot with hysteresis: scores below `0.20` become `unknown`, scores
+from `0.20` up to `0.40` keep the previous user but are marked `ambiguous`, and scores
+at or above `0.40` can identify or switch users. `ambiguous` and `unknown` turns cannot
+read personal memory, profiles, tasks, or schedules. These are cosine similarity scores,
+not calibrated statistical probabilities.
 
 ## Listening
 

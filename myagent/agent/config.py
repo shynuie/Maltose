@@ -45,6 +45,8 @@ def load_cli_defaults(path: Path) -> dict[str, Any]:
         "memory_backend": "taskbrain_memory_backend", "memory_source": "taskbrain_memory_source",
         "user_id": "taskbrain_user_id", "trust_user_id": "taskbrain_trust_user_id",
         "embedding": "taskbrain_embedding", "embedding_device": "taskbrain_embedding_device",
+        "speaker_recognition": "speaker_recognition", "speaker_profiles": "speaker_profiles",
+        "speaker_model_dir": "speaker_model_dir", "speaker_threshold": "speaker_threshold",
     })
     copy("voice", {
         "model": "model", "stt_provider": "stt_provider", "language": "language",
@@ -76,7 +78,7 @@ def load_cli_defaults(path: Path) -> dict[str, Any]:
     for key in (
         "output_dir", "taskbrain_tasks", "taskbrain_codex_cwd", "taskbrain_memory",
         "taskbrain_memory_source", "wake_config",
-        "location_helper",
+        "location_helper", "speaker_profiles", "speaker_model_dir",
     ):
         if key in defaults and defaults[key] is not None:
             defaults[key] = Path(defaults[key])

@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-Continue the local multi-task orchestration layer behind TaskBrain while completing the streaming voice path. Planner execution, durable task state, short-term session memory, completion summaries, and throttled progress notifications are working. The next focus is streaming barge-in coordination, then MCP/Skills integration and durable task recovery.
+Continue the local multi-task orchestration layer behind TaskBrain while completing the streaming voice path. Planner execution, durable task state, short-term session memory, completion summaries, and throttled progress notifications are working. The next focus is the local multi-user speaker enrollment/identification flow, followed by MCP/Skills integration and durable task recovery.
 
 ## Status At A Glance
 
@@ -12,9 +12,9 @@ Continue the local multi-task orchestration layer behind TaskBrain while complet
 - Wake-only acknowledgement, 10-second conversation timeout, explicit return-to-standby control, and cancellable barge-in TTS.
 - Bounded in-memory conversation sessions. Context is retained between wake and standby, then cleared without entering long-term memory.
 - TaskBrain with OpenAI-compatible model access, bounded tool loop, and tools for memory, profile, tasks, standby control, and web search.
-- LanceDB vector memory with local Qwen3-Embedding-0.6B, JSON migration/fallback, and user-scoped memories.
+- LanceDB vector memory with local Qwen3-Embedding-0.6B and user-scoped memories.
 - Structured `user_profile` storage linked to memories through `user_id`.
-- Temporary trusted-user fallback until speaker recognition is implemented.
+- Explicit microphone trust remains available only through `--taskbrain-trust-user-id`.
 - Brave web search and bounded multi-query `web_research` worker.
 - Initial Planner behavior through `create_task_plan`: the model can turn a request into a bounded task DAG.
 - SQLite task store, dependency-aware scheduling, bounded parallel workers, status queries, cancellation, retry, and read-only Codex worker.
@@ -29,6 +29,13 @@ Continue the local multi-task orchestration layer behind TaskBrain while complet
 - Added the `assistant_message` worker so scheduled spoken reminders are delivered through the existing VoiceAgent notification path at a safe TTS boundary.
 - Added the first streaming LLM-to-TTS slice: OpenAI-compatible SSE output is split at sentence punctuation while preserving terminal punctuation.
 - Added background LLM stream buffering so model generation can continue while completed speech segments are played.
+- Added the first local speaker identity slice: SpeechBrain ECAPA-TDNN adapter, multi-user SQLite voiceprint enrollment, cosine matching, and explicit `unknown` rejection.
+- Added an interactive speaker-enrollment CLI with fixed prompts, VAD start/end detection, duration/volume validation, retries, confirmation, and temporary raw-audio cleanup.
+- Assigned new system identities with stable sequential `user-NNN` IDs; names remain separate profile data.
+- Enabled speaker recognition by default; unmatched or failed recognition stays `unknown` and cannot access personal data.
+- Speaker profiles now retain individual enrollment embeddings and identify using the highest sample similarity.
+- Added an asynchronous `SpeakerIdentityManager` with a current-user snapshot and hysteresis (`<0.20` unknown, `0.20–<0.40` ambiguous/hold, `>=0.40` identified) so speaker recognition does not block STT or LLM processing.
+- Enforced the privacy boundary for both `unknown` and `ambiguous` states; only an `identified` turn may access personal memory, profile, task, or schedule data.
 - 84 automated tests covering voice flow, streaming sentence delivery, memory, identity, tasks, schedules, search, STT, TTS, capability adapters, and configuration loading.
 
 ### In Progress
@@ -37,13 +44,13 @@ Continue the local multi-task orchestration layer behind TaskBrain while complet
 - Durable task recovery and notification replay after process restart.
 - Require explicit confirmation for schedules that trigger external side effects.
 - Reconnect streaming LLM, TTS, and listener execution with explicit events/queues so streaming replies support barge-in without blocking or generator races.
+- Calibrate speaker thresholds with real microphone recordings and complete live VoiceAgent speaker-recognition validation; the current starting threshold is 0.40. The asynchronous identity manager is implemented, but first-turn warm-up and live multi-speaker switching still need validation.
 
 ### Not Started / Later
 
 - MCP reconnect handling and skill-to-worker registration.
 - Write-capable Codex worker with explicit confirmation and `workspace-write` sandboxing.
 - Full-page web extraction and source-aware research synthesis.
-- Speaker enrollment and local speaker embedding identification.
 - Streaming STT and production hardening for the streaming LLM/TTS sentence queue.
 - Persistent task recovery and notification replay after process restart.
 
@@ -69,6 +76,13 @@ These capabilities should be implemented as narrow, auditable tools rather than 
   - Add a bounded `get_ip_addresses` tool using a configured or allowlisted HTTPS endpoint.
   - Clearly distinguish local/private IP from public/external IP.
   - Treat the result as sensitive network metadata and do not store it in long-term memory by default.
+- **Speaker identity** (framework implemented; concrete model planned):
+  - Start with SpeechBrain ECAPA-TDNN for local speaker embeddings and keep it behind a `SpeakerEmbeddingAdapter` so the backend can later be replaced by 3D-Speaker or an ONNX model.
+  - Support enrollment of multiple known users, with several short recordings per user and an averaged/normalized voiceprint.
+  - Compare each completed utterance against all enrolled profiles and return the best match only when it passes a locally calibrated similarity threshold.
+  - Return `unknown` when no profile passes the threshold; never silently map an unrecognized speaker to `default`.
+  - Store embeddings and model metadata in `speaker_profiles`; avoid storing raw enrollment audio by default.
+  - Keep speaker verification separate from diarization and treat it as an identity hint, not high-security authentication.
 
 ## Done
 
@@ -192,7 +206,8 @@ memories
 KWS wake_detected
     -> VAD captures command utterance
     -> STT worker          (parallel A)
-    -> Speaker worker      (parallel B)
+    -> Speaker identity worker (parallel B, single background queue)
+    -> current_user snapshot / hysteresis state
     -> TurnContext(user_id, speaker_score, speaker_status)
     -> TaskBrain / user-scoped tools
 ```
@@ -203,7 +218,7 @@ KWS wake_detected
   - Added `--brain taskbrain` and local JSON memory configuration.
   - Installed the vector-memory extra and verified LanceDB migration/search with 49 tests.
   - Implemented the speaker identification framework; concrete speaker model and enrollment flow remain.
-  - Remaining: add a concrete local speaker model and enrollment flow.
+  - Remaining: calibrate thresholds with local recordings, validate model performance on the microphone path, and add user-profile enrollment UX if needed.
 - **Next**: expose configured MCP and Skills adapters through the CLI, then connect selected capabilities to TaskManager workers.
 - **Conversation lifecycle**: one wake starts a session; silence timeout ends the session but never exits the process.
 - **Short-term conversation memory**: TaskBrain retains bounded user, assistant, and tool messages within the active session. The default cap is 12 turns, and the history is discarded on standby or process shutdown to control token usage and prevent cross-session leakage.

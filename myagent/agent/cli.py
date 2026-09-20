@@ -23,6 +23,10 @@ from myagent.agent.search import BraveSearchProvider, WebResearchWorker
 from myagent.logging import configure_logging
 from myagent.voice import (
     NullSpeakerIdentifier,
+    ProfileSpeakerIdentifier,
+    SpeakerProfileStore,
+    SpeakerIdentityManager,
+    SpeechBrainECAPAEncoder,
     create_wake_word_detector,
     load_wake_word_config,
 )
@@ -109,7 +113,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--taskbrain-search",
         choices=("none", "brave"),
-        default="none",
+        default="speechbrain",
         help="Web search provider for TaskBrain.",
     )
     parser.add_argument(
@@ -159,7 +163,31 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("data/memory.json"),
         help="Legacy JSON memory file to import into LanceDB.",
     )
-    parser.add_argument("--taskbrain-user-id", default="default")
+    parser.add_argument("--taskbrain-user-id", default="user-001")
+    parser.add_argument(
+        "--speaker-recognition",
+        choices=("none", "speechbrain"),
+        default="speechbrain",
+        help="Local speaker recognition backend.",
+    )
+    parser.add_argument(
+        "--speaker-profiles",
+        type=Path,
+        default=Path("data/speaker_profiles.sqlite3"),
+        help="SQLite database containing enrolled speaker profiles.",
+    )
+    parser.add_argument(
+        "--speaker-model-dir",
+        type=Path,
+        default=Path("data/models/speechbrain-ecapa"),
+        help="Local cache directory for the SpeechBrain speaker model.",
+    )
+    parser.add_argument(
+        "--speaker-threshold",
+        type=float,
+        default=0.65,
+        help="Cosine similarity threshold for identifying an enrolled speaker.",
+    )
     parser.add_argument(
         "--taskbrain-trust-user-id",
         help="Override the fallback identity trusted for microphone turns until speaker identification is available.",
@@ -371,12 +399,30 @@ def main() -> None:
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)
+    speaker_identifier = NullSpeakerIdentifier(
+        args.taskbrain_trust_user_id
+    )
+    speaker_store = None
+    if args.speaker_recognition == "speechbrain":
+        speaker_store = SpeakerProfileStore(args.speaker_profiles)
+        speaker_identifier = ProfileSpeakerIdentifier(
+            speaker_store,
+            SpeechBrainECAPAEncoder(savedir=args.speaker_model_dir),
+            threshold=-1.0,
+        )
+        speaker_identity_manager = SpeakerIdentityManager(
+            speaker_identifier,
+            low_threshold=0.2,
+            high_threshold=args.speaker_threshold,
+        )
+        logger.info("speaker_recognition_enabled backend=speechbrain threshold=%s", args.speaker_threshold)
+    else:
+        speaker_identity_manager = None
     agent = VoiceAgent(
         config=config,
         brain=brain,
-        speaker_identifier=NullSpeakerIdentifier(
-            args.taskbrain_trust_user_id or args.taskbrain_user_id
-        ),
+        speaker_identifier=speaker_identifier,
+        speaker_identity_manager=speaker_identity_manager,
     )
     try:
         agent.run()
@@ -385,3 +431,5 @@ def main() -> None:
             client.close()
         if task_manager is not None:
             task_manager.shutdown(wait=False)
+        if speaker_store is not None:
+            speaker_store.close()

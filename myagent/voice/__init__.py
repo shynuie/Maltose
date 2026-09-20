@@ -26,7 +26,17 @@ from .stt import (
     create_stt_provider,
 )
 from .tts import MacOSSayTTS, TTSRequest
-from .speaker import NullSpeakerIdentifier, SpeakerIdentifier, SpeakerResult
+from .speaker import (
+    NullSpeakerIdentifier,
+    ProfileSpeakerIdentifier,
+    SpeakerEmbeddingEncoder,
+    SpeakerIdentityManager,
+    SpeakerIdentifier,
+    SpeakerProfileStore,
+    SpeakerResult,
+    SpeechBrainECAPAEncoder,
+)
+from .enrollment import ENROLLMENT_PROMPTS, EnrollmentQuality, evaluate_enrollment_utterance
 from .wake import (
     GainWakeWordDetector,
     SherpaOnnxKWSConfig,
@@ -48,11 +58,19 @@ __all__ = [
     "ListeningEvent",
     "MacOSSayTTS",
     "NullSpeakerIdentifier",
+    "ProfileSpeakerIdentifier",
     "NormalizationResult",
     "STTRequest",
     "STTResult",
     "SpeakerIdentifier",
+    "SpeakerEmbeddingEncoder",
+    "SpeakerIdentityManager",
+    "SpeakerProfileStore",
     "SpeakerResult",
+    "SpeechBrainECAPAEncoder",
+    "ENROLLMENT_PROMPTS",
+    "EnrollmentQuality",
+    "evaluate_enrollment_utterance",
     "STTSegment",
     "TTSRequest",
     "Utterance",
