@@ -407,30 +407,32 @@ myagent documents remove <document-id>
 
 ### Phase 1 - Domain Models & Parser Foundation
 
-狀態：`planned`
+狀態：`done`
 
-- [ ] 建立 `myagent/knowledge/` package。
-- [ ] 建立 document/chunk/location/parsed document models。
-- [ ] 建立 parser abstraction 與 registry。
-- [ ] 實作 TXT parser。
-- [ ] 實作 Markdown parser。
-- [ ] 建立 parser 與 location 單元測試。
+- [x] 建立 `myagent/knowledge/` package。
+- [x] 建立 document/chunk/location/parsed document models。
+- [x] 建立 parser abstraction 與 registry。
+- [x] 實作 TXT parser。
+- [x] 實作 Markdown parser。
+- [x] 實作 format-neutral chunker。
+- [x] 建立 parser 與 location 單元測試。
 
 完成條件：TXT/Markdown 可轉成統一 representation，chunker 不需要知道格式。
 
 ### Phase 2 - Metadata Storage & Scanner
 
-狀態：`planned`
+狀態：`in_progress`
 
+- [x] 建立 SQLite metadata repository。
+- [x] 實作 recursive scanner 與 SHA-256。
+- [x] 實作基本 supported-extension filtering。
 - [ ] 建立 metadata repository interface。
-- [ ] 建立 SQLite metadata repository。
-- [ ] 實作 configurable document root。
-- [ ] 實作 recursive scanner 與 SHA-256。
-- [ ] 實作新增、未變更、修改判斷。
-- [ ] 實作刪除 cleanup / soft-delete。
-- [ ] 定義 `documents/inbox/`、`personal/`、`work/`、`projects/`、`papers/`、`notes/`、`archive/` 的初始分類。
-- [ ] 實作 path 移動但 content hash 不變時只更新 metadata/path。
-- [ ] 加入 storage 初始化流程。
+- [x] 實作 configurable document root。
+- [x] 實作新增、未變更、修改判斷。
+- [x] 實作刪除 cleanup / soft-delete。
+- [x] 定義 `documents/inbox/`、`personal/`、`work/`、`projects/`、`papers/`、`notes/`、`archive/` 的初始分類。
+- [x] 實作 path 移動但 content hash 不變時只更新 metadata/path。
+- [x] 加入 storage 初始化流程。
 
 完成條件：未變更文件正確 skip，刪除文件不會留下可檢索 orphan。
 
@@ -438,12 +440,12 @@ myagent documents remove <document-id>
 
 狀態：`planned`
 
-- [ ] 實作 chunking service。
-- [ ] 抽出共用 embedding provider interface。
+- [x] 實作 chunking service。
+- [x] 抽出共用 embedding provider interface。
 - [ ] adapter 化既有 Qwen embedding provider。
-- [ ] 建立 document summary embedding index。
-- [ ] 建立 chunk embedding index。
-- [ ] 實作 DocumentIndexer 與 atomic update。
+- [x] 建立 document summary embedding index repository。
+- [x] 建立 chunk embedding index repository。
+- [x] 實作 DocumentIndexer orchestration 與 vector replacement contract。
 - [ ] 加入 PDF parser。
 - [ ] 建立 document/chunk retrieval tests。
 
@@ -451,33 +453,34 @@ myagent documents remove <document-id>
 
 ### Phase 4 - Source Reader & Retrieval Service
 
-狀態：`planned`
+狀態：`in_progress`
 
-- [ ] 實作 SourceReader。
-- [ ] 實作 TXT/Markdown offset read。
-- [ ] 實作 PDF page read。
-- [ ] 實作 path traversal 防護。
-- [ ] 實作 hierarchical retrieval。
-- [ ] 處理 source 不存在與 location 失效。
-- [ ] 加入 source-of-truth integration tests。
+- [x] 實作 SourceReader。
+- [x] 實作 TXT/Markdown offset read。
+- [x] 實作 PDF parser 與 page read（需要 optional `pypdf` dependency）。
+- [x] 實作 path traversal 防護。
+- [x] 實作 hierarchical retrieval。
+- [x] 處理 source 不存在與 location 失效。
+- [x] 加入 source-of-truth integration tests。
 
 完成條件：retrieval 結果可以回到原始檔案，且 document root 外的 path 無法讀取。
 
 ### Phase 5 - TaskBrain Integration
 
-狀態：`planned`
+狀態：`in_progress`
 
-- [ ] 建立 DocumentKnowledgeService。
-- [ ] 實作 DocumentIngestionService。
-- [ ] 加入 `import_document` tool。
-- [ ] 加入 `create_document` tool。
-- [ ] 加入 document root、overwrite 與 indexing status 驗證。
-- [ ] 建立 KDB tool adapter。
-- [ ] 註冊三個 KDB tools。
-- [ ] 更新 TaskBrain system instruction。
-- [ ] 接入 TOML config 與 CLI。
-- [ ] 驗證 Memory tools 未受影響。
-- [ ] 建立 fake model tool-call integration tests。
+- [x] 實作 DocumentIngestionService。
+- [x] 加入 `import_document` tool。
+- [x] 加入 `create_document` tool。
+- [x] 加入 document root、overwrite 與 indexing status 驗證。
+- [x] 建立 DocumentKnowledgeService。
+- [x] 建立 KDB tool adapter。
+- [x] 定義三個 KDB tools。
+- [x] 更新 TaskBrain system instruction。
+- [x] 接入主程式的 KDB config 與 TaskBrain bootstrap。
+- [x] 接入 TOML config 與 `myagent-documents` CLI。
+- [x] 驗證 Memory tools 與 KDB tools 可同時註冊。
+- [x] 建立 fake model tool-call integration tests。
 
 完成條件：TaskBrain 可完成 search → read，且不直接知道 KDB storage implementation。
 
@@ -582,15 +585,14 @@ summary、embedding 與 chunk cache 只用於定位；精確回答前必須能�
 
 ### 目前進行中
 
-- 確認 Phase 0 的 storage 與 summary provider 細節。
+- Phase 5：將 KDB tool adapter 接入 TaskBrain、config 與 CLI。
 
 ### 下一步
 
-1. 建立 `myagent/knowledge/` package skeleton。
-2. 定義 `models.py` 的 document/chunk/location models。
-3. 定義 parser、repository、embedding protocol。
-4. 定義 `DocumentIngestionService` 與文件目錄分類規則。
-5. 先用 TXT/Markdown 完成 parser 與 chunker 測試。
+1. 加入 `import_document`、`create_document` Agent tools。
+2. 補完 metadata repository protocol。
+3. 驗證 Memory tools 與 KDB tools 同時運作。
+4. 補充 pypdf PDF integration tests 與完整 runtime smoke test。
 
 ## 17. 進度更新格式
 

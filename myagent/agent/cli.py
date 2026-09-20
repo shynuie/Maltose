@@ -20,6 +20,17 @@ from myagent.agent.taskbrain import (
 from myagent.agent.tasks import AssistantMessageWorker, CodexReadOnlyWorker, TaskManager, TaskStore
 from myagent.agent.capabilities import MCPStdioClient, MCPToolAdapter
 from myagent.agent.search import BraveSearchProvider, WebResearchWorker
+from myagent.knowledge.config import KnowledgeConfig
+from myagent.knowledge.chunker import DocumentChunker
+from myagent.knowledge.indexer import DocumentIndexer
+from myagent.knowledge.ingestion import DocumentIngestionService
+from myagent.knowledge.parsers import MarkdownParser, PDFParser, ParserRegistry, TextParser
+from myagent.knowledge.repositories import LanceVectorRepository, MetadataRepository
+from myagent.knowledge.retrieval import DocumentKnowledgeService
+from myagent.knowledge.source_reader import SourceReader
+from myagent.knowledge.scanner import DocumentScanner
+from myagent.knowledge.summaries import ExtractiveDocumentSummarizer
+from myagent.knowledge.tools import DocumentToolAdapter
 from myagent.logging import configure_logging
 from myagent.voice import (
     NullSpeakerIdentifier,
@@ -205,6 +216,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Device for the local embedding model.",
     )
     parser.add_argument(
+        "--knowledge-enabled",
+        action="store_true",
+        help="Enable Document Knowledge Base tools for TaskBrain.",
+    )
+    parser.add_argument("--knowledge-documents-root", type=Path, default=Path("documents"))
+    parser.add_argument(
+        "--knowledge-metadata",
+        type=Path,
+        default=Path("data/knowledge/metadata.sqlite3"),
+    )
+    parser.add_argument(
+        "--knowledge-vectors",
+        type=Path,
+        default=Path("data/knowledge/vectors.lancedb"),
+    )
+    parser.add_argument(
+        "--knowledge-embedding",
+        choices=("none", "qwen3-embedding-0.6b"),
+        default="none",
+        help="Embedding provider used by KDB retrieval.",
+    )
+    parser.add_argument(
+        "--knowledge-embedding-device",
+        choices=("cpu", "mps"),
+        default="cpu",
+    )
+    parser.add_argument(
         "--device",
         help="sounddevice input device id or name.",
     )
@@ -348,6 +386,59 @@ def main() -> None:
         else:
             memory = MemoryStore(args.taskbrain_memory, embedder=embedder)
             profile = None
+        capability_adapters = [
+            MCPToolAdapter(client, prefix=f"mcp_{index}_")
+            for index, client in enumerate(mcp_clients)
+        ]
+        if args.knowledge_enabled:
+            knowledge_embedder = embedder
+            if args.knowledge_embedding == "qwen3-embedding-0.6b" and knowledge_embedder is None:
+                knowledge_embedder = QwenEmbeddingProvider(device=args.knowledge_embedding_device)
+            if knowledge_embedder is None:
+                raise RuntimeError(
+                    "KDB requires an embedding provider. Set --knowledge-embedding "
+                    "qwen3-embedding-0.6b or enable --taskbrain-embedding."
+                )
+            knowledge_config = KnowledgeConfig(
+                documents_root=args.knowledge_documents_root,
+                metadata_path=args.knowledge_metadata,
+                vectors_path=args.knowledge_vectors,
+            ).resolved()
+            knowledge_metadata = MetadataRepository(knowledge_config.metadata_path)
+            knowledge_parsers = ParserRegistry([TextParser(), MarkdownParser(), PDFParser()])
+            knowledge_vectors = LanceVectorRepository(knowledge_config.vectors_path)
+            knowledge_indexer = DocumentIndexer(
+                parsers=knowledge_parsers,
+                chunker=DocumentChunker(
+                    chunk_size=knowledge_config.chunk_size,
+                    chunk_overlap=knowledge_config.chunk_overlap,
+                ),
+                summarizer=ExtractiveDocumentSummarizer(),
+                embedder=knowledge_embedder,
+                metadata=knowledge_metadata,
+                vectors=knowledge_vectors,
+            )
+            knowledge_service = DocumentKnowledgeService(
+                metadata=knowledge_metadata,
+                vectors=knowledge_vectors,
+                embedder=knowledge_embedder,
+                source_reader=SourceReader(
+                    metadata=knowledge_metadata,
+                    documents_root=knowledge_config.documents_root,
+                    parsers=knowledge_parsers,
+                ),
+            )
+            capability_adapters.append(
+                DocumentToolAdapter(
+                    knowledge_service,
+                    ingestion=DocumentIngestionService(
+                        documents_root=knowledge_config.documents_root,
+                        scanner=DocumentScanner(knowledge_config.supported_extensions),
+                        indexer=knowledge_indexer,
+                    ),
+                )
+            )
+            logger.info("document_knowledge_enabled root=%s", knowledge_config.documents_root)
         task_manager = TaskManager(
             TaskStore(args.taskbrain_tasks),
             max_workers=args.taskbrain_max_workers,
@@ -386,10 +477,7 @@ def main() -> None:
             profile=profile,
             task_manager=task_manager,
             search_provider=search_provider,
-            capability_adapters=[
-                MCPToolAdapter(client, prefix=f"mcp_{index}_")
-                for index, client in enumerate(mcp_clients)
-            ],
+            capability_adapters=capability_adapters,
             environment_tools=EnvironmentTools(
                 location=args.location,
                 location_helper=args.location_helper,

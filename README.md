@@ -169,6 +169,54 @@ Memory records are stored in LanceDB under `data/memory.lancedb`. The legacy
 `data/memory.json` store is not used at runtime; current identity-scoped data
 uses the sequential system user ID from `user_profile`.
 
+## Document Knowledge Base
+
+The Document Knowledge Base stores original documents under the configurable
+`documents_root` and keeps its metadata and vectors separate from Memory:
+
+```text
+documents/
+├── inbox/
+├── personal/
+├── work/
+├── projects/
+├── papers/
+├── notes/
+└── archive/
+```
+
+Install the vector and PDF dependencies before indexing:
+
+```sh
+uv sync --extra vector-memory
+```
+
+Index, list, and search documents with the dedicated CLI:
+
+```sh
+uv run myagent-documents index
+uv run myagent-documents list
+uv run myagent-documents search "我的碩士論文"
+```
+
+The CLI uses the local Qwen embedding provider by default. KDB indexing uses
+document summaries and chunk vectors only as indexes; precise answers read
+content back from the original file. To enable KDB tools in TaskBrain, add:
+
+```toml
+[knowledge]
+enabled = true
+documents_root = "documents"
+metadata = "data/knowledge/metadata.sqlite3"
+vectors = "data/knowledge/vectors.lancedb"
+embedding = "qwen3-embedding-0.6b"
+embedding_device = "cpu"
+```
+
+When enabled, TaskBrain exposes `search_documents`, `search_in_document`,
+`read_document`, `import_document`, and `create_document`. Agent-created or
+imported files are written into the managed document root before indexing.
+
 Mandarin transcripts normalize common ASCII punctuation to Chinese punctuation.
 
 ### Local Speaker Recognition

@@ -1,0 +1,104 @@
+"""Command-line operations for the local Document Knowledge Base."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from myagent.agent.taskbrain import QwenEmbeddingProvider
+from myagent.knowledge.chunker import DocumentChunker
+from myagent.knowledge.change_detection import DocumentChangeDetector
+from myagent.knowledge.config import KnowledgeConfig
+from myagent.knowledge.embeddings import EmbeddingProvider
+from myagent.knowledge.indexer import DocumentIndexer
+from myagent.knowledge.parsers import MarkdownParser, PDFParser, ParserRegistry, TextParser
+from myagent.knowledge.repositories import LanceVectorRepository, MetadataRepository
+from myagent.knowledge.retrieval import DocumentKnowledgeService
+from myagent.knowledge.scanner import DocumentScanner
+from myagent.knowledge.source_reader import SourceReader
+from myagent.knowledge.summaries import ExtractiveDocumentSummarizer
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage the MyAgent Document Knowledge Base.")
+    parser.add_argument("--documents-root", type=Path, default=Path("documents"))
+    parser.add_argument("--metadata", type=Path, default=Path("data/knowledge/metadata.sqlite3"))
+    parser.add_argument("--vectors", type=Path, default=Path("data/knowledge/vectors.lancedb"))
+    parser.add_argument("--device", choices=("cpu", "mps"), default="cpu")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    subparsers.add_parser("index", help="Index new and changed documents.")
+    subparsers.add_parser("list", help="List indexed document metadata.")
+    search = subparsers.add_parser("search", help="Search indexed documents.")
+    search.add_argument("query")
+    search.add_argument("--top-k", type=int, default=5)
+    return parser
+
+
+def _build_services(args: argparse.Namespace):
+    config = KnowledgeConfig(
+        documents_root=args.documents_root,
+        metadata_path=args.metadata,
+        vectors_path=args.vectors,
+    ).resolved()
+    parsers = ParserRegistry([TextParser(), MarkdownParser(), PDFParser()])
+    scanner = DocumentScanner(config.supported_extensions)
+    metadata = MetadataRepository(config.metadata_path)
+    vectors = LanceVectorRepository(config.vectors_path)
+    embedder: EmbeddingProvider = QwenEmbeddingProvider(device=args.device)
+    indexer = DocumentIndexer(
+        parsers=parsers,
+        chunker=DocumentChunker(chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap),
+        summarizer=ExtractiveDocumentSummarizer(),
+        embedder=embedder,
+        metadata=metadata,
+        vectors=vectors,
+    )
+    service = DocumentKnowledgeService(
+        metadata=metadata,
+        vectors=vectors,
+        embedder=embedder,
+        source_reader=SourceReader(
+            metadata=metadata,
+            documents_root=config.documents_root,
+            parsers=parsers,
+        ),
+    )
+    return config, scanner, metadata, indexer, service
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    if args.command == "list":
+        config = KnowledgeConfig(
+            documents_root=args.documents_root,
+            metadata_path=args.metadata,
+            vectors_path=args.vectors,
+        ).resolved()
+        with MetadataRepository(config.metadata_path) as metadata:
+            print(json.dumps(metadata.list_documents(), ensure_ascii=False, indent=2))
+        return
+    config, scanner, metadata, indexer, service = _build_services(args)
+    try:
+        if args.command == "index":
+            config.documents_root.mkdir(parents=True, exist_ok=True)
+            plan = DocumentChangeDetector().plan(scanner.scan(config.documents_root), metadata)
+            results = [indexer.index(item) for item in (*plan.new_files, *plan.changed_files)]
+            print(json.dumps({
+                "indexed": len(results),
+                "unchanged": len(plan.unchanged_files),
+                "moved": len(plan.moved_document_ids),
+                "deleted": len(plan.deleted_document_ids),
+                "documents": [result.__dict__ for result in results],
+            }, ensure_ascii=False, indent=2))
+        elif args.command == "search":
+            print(json.dumps([
+                result.__dict__ for result in service.search_documents(args.query, args.top_k)
+            ], ensure_ascii=False, indent=2))
+    finally:
+        metadata.close()
+
+
+if __name__ == "__main__":
+    main()

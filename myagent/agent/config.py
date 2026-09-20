@@ -48,6 +48,14 @@ def load_cli_defaults(path: Path) -> dict[str, Any]:
         "speaker_recognition": "speaker_recognition", "speaker_profiles": "speaker_profiles",
         "speaker_model_dir": "speaker_model_dir", "speaker_threshold": "speaker_threshold",
     })
+    copy("knowledge", {
+        "enabled": "knowledge_enabled",
+        "documents_root": "knowledge_documents_root",
+        "metadata": "knowledge_metadata",
+        "vectors": "knowledge_vectors",
+        "embedding": "knowledge_embedding",
+        "embedding_device": "knowledge_embedding_device",
+    })
     copy("voice", {
         "model": "model", "stt_provider": "stt_provider", "language": "language",
         "compute_type": "compute_type", "stt_device": "stt_device",
@@ -79,6 +87,7 @@ def load_cli_defaults(path: Path) -> dict[str, Any]:
         "output_dir", "taskbrain_tasks", "taskbrain_codex_cwd", "taskbrain_memory",
         "taskbrain_memory_source", "wake_config",
         "location_helper", "speaker_profiles", "speaker_model_dir",
+        "knowledge_documents_root", "knowledge_metadata", "knowledge_vectors",
     ):
         if key in defaults and defaults[key] is not None:
             defaults[key] = Path(defaults[key])

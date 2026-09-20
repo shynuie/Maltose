@@ -1051,6 +1051,18 @@ class TaskBrain:
             " If the user identity is not verified, do not guess identity and do not claim access "
             "to personal memory, profile, or task data; explain that speaker verification is required."
         )
+        if self.tools.has("search_documents"):
+            system_content += (
+                " Document Knowledge Base is available through search_documents, search_in_document, and read_document."
+                " For document questions, first locate the document, then locate relevant sections, and read the"
+                " original source before giving a precise answer. Treat summaries, embeddings, and previews as"
+                " indexes only; do not present them as authoritative source content."
+            )
+        if self.tools.has("create_document") or self.tools.has("import_document"):
+            system_content += (
+                " To add a document, use the document ingestion tools; never write directly to the filesystem or"
+                " vector store. Do not overwrite an existing document unless the user explicitly requests a new path."
+            )
         turn_messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_content},
@@ -1130,6 +1142,18 @@ class TaskBrain:
             "and cite its URLs when available. If the user identity is not verified, do not guess identity "
             "and do not claim access to personal memory, profile, or task data; explain that speaker verification is required."
         )
+        if self.tools.has("search_documents"):
+            system_content += (
+                " Document Knowledge Base is available through search_documents, search_in_document, and read_document."
+                " For document questions, first locate the document, then locate relevant sections, and read the"
+                " original source before giving a precise answer. Treat summaries, embeddings, and previews as"
+                " indexes only; do not present them as authoritative source content."
+            )
+        if self.tools.has("create_document") or self.tools.has("import_document"):
+            system_content += (
+                " To add a document, use the document ingestion tools; never write directly to the filesystem or"
+                " vector store. Do not overwrite an existing document unless the user explicitly requests a new path."
+            )
         turn_messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_content},

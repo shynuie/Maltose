@@ -59,6 +59,14 @@ codex_timeout = 300.0
 mcp_timeout = 15.0
 # mcp_command = ["npx -y your-mcp-server"]
 
+[knowledge]
+enabled = false
+documents_root = "documents"
+metadata = "data/knowledge/metadata.sqlite3"
+vectors = "data/knowledge/vectors.lancedb"
+embedding = "none"
+embedding_device = "cpu"
+
 [openclaw]
 url = "http://127.0.0.1:18789/v1/chat/completions"
 model = "openclaw/default"
