@@ -291,60 +291,157 @@ class VoiceAgent:
             )
 
     def _speak_stream(self, chunks: Iterator[str]) -> tuple[str, PendingTurn | None]:
-        """Speak streamed text sentence-by-sentence, retaining terminal punctuation."""
+        """Coordinate LLM streaming, sentence TTS, and optional barge-in listening."""
         self.state = AgentState.SPEAKING
         buffer = ""
         spoken_parts: list[str] = []
         punctuation = re.compile(r"[。！？!?；;\n]")
         deferred: PendingTurn | None = None
-
         stream_queue: queue.Queue[object] = queue.Queue()
         stream_done = object()
+        stream_stop = threading.Event()
 
         def receive_stream() -> None:
             try:
                 for chunk in chunks:
+                    if stream_stop.is_set():
+                        break
                     stream_queue.put(chunk)
             except BaseException as exc:
                 stream_queue.put(exc)
             finally:
+                close_stream = getattr(chunks, "close", None)
+                if callable(close_stream):
+                    close_stream()
                 stream_queue.put(stream_done)
 
         receiver = threading.Thread(target=receive_stream, name="myagent-llm-stream")
         receiver.start()
-        while True:
-            item = stream_queue.get()
-            if item is stream_done:
-                break
-            if isinstance(item, BaseException):
-                raise item
-            chunk = item
-            if not isinstance(chunk, str) or not chunk:
-                continue
-            buffer += chunk
-            while True:
-                match = punctuation.search(buffer)
-                if match is None:
-                    break
-                sentence = self._clean_spoken_sentence(buffer[: match.end()])
-                buffer = buffer[match.end():]
-                if not sentence:
-                    continue
-                spoken_parts.append(sentence)
-                logger.info("stream_sentence text=%s", sentence)
+        pending_sentences: queue.Queue[str] = queue.Queue()
+        tts_thread: threading.Thread | None = None
+        tts_error: list[BaseException] = []
+        listener_events: queue.Queue[object] = queue.Queue()
+        listener_stop = threading.Event()
+        listener_thread: threading.Thread | None = None
+
+        can_listen = self.config.interruptible_tts and callable(getattr(self.speaker, "stop", None))
+        if can_listen:
+            listener = self._create_stream_listener(listener_stop)
+
+            def receive_listener_events() -> None:
+                try:
+                    for event in listener:
+                        listener_events.put(event)
+                finally:
+                    listener_events.put(None)
+
+            listener_thread = threading.Thread(
+                target=receive_listener_events,
+                name="myagent-stream-listener",
+                daemon=True,
+            )
+            listener_thread.start()
+
+        def speak_next() -> None:
+            sentence = pending_sentences.get()
+            try:
                 self.speaker.synthesize(
                     TTSRequest(text=sentence, voice=self.config.tts_voice, rate=self.config.tts_rate)
                 )
+            except BaseException as exc:
+                tts_error.append(exc)
 
-        if buffer.strip():
-            sentence = self._clean_spoken_sentence(buffer)
-            spoken_parts.append(sentence)
-            logger.info("stream_sentence text=%s", sentence)
-            self.speaker.synthesize(
-                TTSRequest(text=sentence, voice=self.config.tts_voice, rate=self.config.tts_rate)
-            )
-        receiver.join(timeout=1.0)
+        stream_finished = False
+        interrupted = False
+        try:
+            while not stream_finished or not pending_sentences.empty() or tts_thread is not None:
+                if tts_thread is not None and not tts_thread.is_alive():
+                    tts_thread.join()
+                    tts_thread = None
+                    if tts_error:
+                        raise tts_error[0]
+
+                if tts_thread is None and not pending_sentences.empty():
+                    tts_thread = threading.Thread(target=speak_next, name="myagent-stream-tts")
+                    tts_thread.start()
+
+                if can_listen:
+                    try:
+                        event = listener_events.get_nowait()
+                    except queue.Empty:
+                        event = None
+                    if event is not None and getattr(event, "kind", None) == "speech_started":
+                        logger.info("speech_barge_in_started awaiting_interrupt_decision")
+                    elif event is not None and getattr(event, "kind", None) == "speech_ended":
+                        utterance = getattr(event, "utterance", None)
+                        if utterance is not None:
+                            transcript, speaker_result = self._transcribe_barge_in(utterance)
+                            should_interrupt = self._should_interrupt_speech(transcript)
+                            logger.info(
+                                "speech_barge_in_decision interrupt=%s transcript=%s",
+                                should_interrupt,
+                                transcript,
+                            )
+                            if transcript and should_interrupt:
+                                interrupted = True
+                                self.speaker.stop()
+                                deferred = PendingTurn(
+                                    utterance, transcript, speaker_result, interrupt_requested=True
+                                )
+                                break
+                            if transcript:
+                                deferred = PendingTurn(
+                                    utterance, transcript, speaker_result, interrupt_requested=False
+                                )
+
+                try:
+                    item = stream_queue.get(timeout=0.03)
+                except queue.Empty:
+                    continue
+                if item is stream_done:
+                    stream_finished = True
+                    if buffer.strip():
+                        pending_sentences.put(self._clean_spoken_sentence(buffer))
+                        buffer = ""
+                    continue
+                if isinstance(item, BaseException):
+                    raise item
+                if not isinstance(item, str) or not item:
+                    continue
+                buffer += item
+                while True:
+                    match = punctuation.search(buffer)
+                    if match is None:
+                        break
+                    sentence = self._clean_spoken_sentence(buffer[: match.end()])
+                    buffer = buffer[match.end():]
+                    if sentence:
+                        spoken_parts.append(sentence)
+                        logger.info("stream_sentence text=%s", sentence)
+                        pending_sentences.put(sentence)
+        finally:
+            stream_stop.set()
+            listener_stop.set()
+            if tts_thread is not None:
+                tts_thread.join()
+            receiver.join(timeout=1.0)
+            if listener_thread is not None:
+                listener_thread.join(timeout=1.0)
+
+        if interrupted:
+            return "".join(spoken_parts), deferred
         return "".join(spoken_parts), deferred
+
+    def _create_stream_listener(self, stop_event: threading.Event) -> Iterator[ListeningEvent]:
+        try:
+            return iter(self._listener_factory(
+                self.config.vad_settings, self.config.device, None, None, 0.0, 0,
+                stop_event=stop_event,
+            ))
+        except TypeError:
+            return iter(self._listener_factory(
+                self.config.vad_settings, self.config.device, None, None, 0.0, 0,
+            ))
 
     @staticmethod
     def _clean_spoken_sentence(text: str) -> str:

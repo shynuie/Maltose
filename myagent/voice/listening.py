@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import queue
 import logging
+import threading
 import wave
 from collections import deque
 from dataclasses import dataclass
@@ -213,6 +214,7 @@ def microphone_events(
     wake_word_detector: WakeWordDetector | None = None,
     wake_ack_delay: float = 0.8,
     wake_buffer_ms: int = 1000,
+    stop_event: threading.Event | None = None,
 ) -> Iterator[ListeningEvent]:
     import time
     import sounddevice as sd
@@ -241,6 +243,8 @@ def microphone_events(
     ):
         standby_start = time.monotonic()
         while True:
+            if stop_event is not None and stop_event.is_set():
+                break
             if wake_ack_deadline is not None and time.monotonic() >= wake_ack_deadline:
                 wake_ack_deadline = None
                 pending_wake_frames = []
