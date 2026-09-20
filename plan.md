@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-Continue the local multi-task orchestration layer behind TaskBrain. Planner execution, durable task state, short-term session memory, completion summaries, and throttled progress notifications are working. The next focus is MCP/Skills integration and durable task recovery.
+Continue the local multi-task orchestration layer behind TaskBrain while completing the streaming voice path. Planner execution, durable task state, short-term session memory, completion summaries, and throttled progress notifications are working. The next focus is streaming barge-in coordination, then MCP/Skills integration and durable task recovery.
 
 ## Status At A Glance
 
@@ -26,13 +26,17 @@ Continue the local multi-task orchestration layer behind TaskBrain. Planner exec
 - Added unified `myagent.toml` configuration with CLI override support; local config is ignored by Git and `myagent.toml.example` documents the available sections.
 - Added built-in `get_current_datetime`, `get_location`, and `get_ip_addresses` tools with config support and privacy boundaries.
 - Added persisted one-time and daily/weekly scheduled tasks with timezone-aware timestamps, pause/resume/cancel controls, and TaskBrain scheduling tools.
-- Added the `assistant_message` worker so scheduled spoken reminders are delivered through the existing VoiceAgent notification path.
-- 75 automated tests covering voice flow, memory, identity, tasks, search, STT, TTS, capability adapters, and configuration loading.
+- Added the `assistant_message` worker so scheduled spoken reminders are delivered through the existing VoiceAgent notification path at a safe TTS boundary.
+- Added the first streaming LLM-to-TTS slice: OpenAI-compatible SSE output is split at sentence punctuation while preserving terminal punctuation.
+- Added background LLM stream buffering so model generation can continue while completed speech segments are played.
+- 84 automated tests covering voice flow, streaming sentence delivery, memory, identity, tasks, schedules, search, STT, TTS, capability adapters, and configuration loading.
 
 ### In Progress
 
 - Add MCP reconnect handling and expose configured Skills manifests through the CLI.
 - Durable task recovery and notification replay after process restart.
+- Require explicit confirmation for schedules that trigger external side effects.
+- Reconnect streaming LLM, TTS, and listener execution with explicit events/queues so streaming replies support barge-in without blocking or generator races.
 
 ### Not Started / Later
 
@@ -40,7 +44,7 @@ Continue the local multi-task orchestration layer behind TaskBrain. Planner exec
 - Write-capable Codex worker with explicit confirmation and `workspace-write` sandboxing.
 - Full-page web extraction and source-aware research synthesis.
 - Speaker enrollment and local speaker embedding identification.
-- Streaming STT and streaming LLM/TTS sentence queue.
+- Streaming STT and production hardening for the streaming LLM/TTS sentence queue.
 - Persistent task recovery and notification replay after process restart.
 
 ## Planned Built-in Environment Features
@@ -52,6 +56,7 @@ These capabilities should be implemented as narrow, auditable tools rather than 
   - Persist schedules in SQLite and restore them after process restart.
   - Add tools to create, list, pause, resume, and cancel schedules.
   - Require confirmation for schedules that trigger external side effects.
+  - Spoken reminders use the `assistant_message` worker and preserve the exact `input.message` text.
 - **Date and time** (implemented):
   - Add a deterministic local `get_current_datetime` tool.
   - Return timezone, ISO-8601 timestamp, local date, local time, and weekday.

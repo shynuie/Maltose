@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import queue
 import re
 import tempfile
 import threading
@@ -61,6 +62,7 @@ class PendingTurn:
     utterance: Utterance
     transcript: str
     speaker_result: SpeakerResult
+    interrupt_requested: bool = True
 
 
 ListenerFactory = Callable[
@@ -211,26 +213,34 @@ class VoiceAgent:
                 if _is_wake_only(result.text, self.config.wake_keywords):
                     reply_text = self.config.wake_ack_text or "我在"
                     logger.info("wake_only_reply text=%s", reply_text)
+                    interrupted_utterance = self._speak_reply(
+                        TTSRequest(
+                            text=reply_text,
+                            voice=self.config.tts_voice,
+                            rate=self.config.tts_rate,
+                        )
+                    )
                 else:
-                    reply_text = self.brain.process(
-                        result.text,
-                        context=TurnContext(
-                            user_id=speaker_result.user_id,
-                            speaker_score=speaker_result.score,
-                            speaker_status=speaker_result.status,
-                        ),
+                    turn_context = TurnContext(
+                        user_id=speaker_result.user_id,
+                        speaker_score=speaker_result.score,
+                        speaker_status=speaker_result.status,
                     )
+                    stream_process = getattr(self.brain, "process_stream", None)
+                    if callable(stream_process):
+                        reply_text, interrupted_utterance = self._speak_stream(
+                            stream_process(result.text, context=turn_context)
+                        )
+                    else:
+                        reply_text = self.brain.process(result.text, context=turn_context)
+                        interrupted_utterance = self._speak_reply(
+                            TTSRequest(
+                                text=reply_text,
+                                voice=self.config.tts_voice,
+                                rate=self.config.tts_rate,
+                            )
+                        )
                 logger.info("brain_reply text=%s", reply_text)
-
-                self.state = AgentState.SPEAKING
-                logger.info("speaking text=%s", reply_text)
-                interrupted_utterance = self._speak_reply(
-                    TTSRequest(
-                        text=reply_text,
-                        voice=self.config.tts_voice,
-                        rate=self.config.tts_rate,
-                    )
-                )
                 logger.info("speaking_done")
                 if interrupted_utterance is not None:
                     pending_turn = interrupted_utterance
@@ -279,6 +289,70 @@ class VoiceAgent:
                     rate=self.config.tts_rate,
                 )
             )
+
+    def _speak_stream(self, chunks: Iterator[str]) -> tuple[str, PendingTurn | None]:
+        """Speak streamed text sentence-by-sentence, retaining terminal punctuation."""
+        self.state = AgentState.SPEAKING
+        buffer = ""
+        spoken_parts: list[str] = []
+        punctuation = re.compile(r"[。！？!?；;\n]")
+        deferred: PendingTurn | None = None
+
+        stream_queue: queue.Queue[object] = queue.Queue()
+        stream_done = object()
+
+        def receive_stream() -> None:
+            try:
+                for chunk in chunks:
+                    stream_queue.put(chunk)
+            except BaseException as exc:
+                stream_queue.put(exc)
+            finally:
+                stream_queue.put(stream_done)
+
+        receiver = threading.Thread(target=receive_stream, name="myagent-llm-stream")
+        receiver.start()
+        while True:
+            item = stream_queue.get()
+            if item is stream_done:
+                break
+            if isinstance(item, BaseException):
+                raise item
+            chunk = item
+            if not isinstance(chunk, str) or not chunk:
+                continue
+            buffer += chunk
+            while True:
+                match = punctuation.search(buffer)
+                if match is None:
+                    break
+                sentence = self._clean_spoken_sentence(buffer[: match.end()])
+                buffer = buffer[match.end():]
+                if not sentence:
+                    continue
+                spoken_parts.append(sentence)
+                logger.info("stream_sentence text=%s", sentence)
+                self.speaker.synthesize(
+                    TTSRequest(text=sentence, voice=self.config.tts_voice, rate=self.config.tts_rate)
+                )
+
+        if buffer.strip():
+            sentence = self._clean_spoken_sentence(buffer)
+            spoken_parts.append(sentence)
+            logger.info("stream_sentence text=%s", sentence)
+            self.speaker.synthesize(
+                TTSRequest(text=sentence, voice=self.config.tts_voice, rate=self.config.tts_rate)
+            )
+        receiver.join(timeout=1.0)
+        return "".join(spoken_parts), deferred
+
+    @staticmethod
+    def _clean_spoken_sentence(text: str) -> str:
+        text = text.strip()
+        text = re.sub(r"^#{1,6}\s*", "", text)
+        text = re.sub(r"^[-*+]\s+", "", text)
+        text = text.replace("```", "")
+        return text.strip()
 
     def _warm_up_transcriber(self) -> None:
         warmup = getattr(self.transcriber, "warmup", None)
@@ -345,6 +419,7 @@ class VoiceAgent:
         speaking_thread.start()
         pending_utterance: Utterance | None = None
         pending_transcript = ""
+        interrupt_requested = False
         speech_in_progress = False
         listener = iter(
             self._listener_factory(
@@ -373,6 +448,7 @@ class VoiceAgent:
                     )
                     pending_transcript = transcript
                     should_interrupt = self._should_interrupt_speech(transcript)
+                    interrupt_requested = should_interrupt
                     logger.info(
                         "speech_barge_in_decision interrupt=%s transcript=%s",
                         should_interrupt,
@@ -396,7 +472,12 @@ class VoiceAgent:
             return None
         if not pending_transcript:
             return None
-        return PendingTurn(pending_utterance, pending_transcript, speaker_result)
+        return PendingTurn(
+            pending_utterance,
+            pending_transcript,
+            speaker_result,
+            interrupt_requested=interrupt_requested,
+        )
 
     def _transcribe_barge_in(self, utterance: Utterance) -> tuple[str, SpeakerResult]:
         try:

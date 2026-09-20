@@ -105,6 +105,15 @@ class OpenClawBrainTest(unittest.TestCase):
 
 
 class TaskBrainTest(unittest.TestCase):
+    def test_taskbrain_streams_text_chunks_and_commits_session(self) -> None:
+        class FakeModel:
+            def stream(self, messages, tools):
+                yield {"choices": [{"delta": {"content": "第一句。"}}]}
+                yield {"choices": [{"delta": {"content": "第二句！"}}]}
+
+        brain = TaskBrain(FakeModel())
+        self.assertEqual(list(brain.process_stream("說兩句話")), ["第一句。", "第二句！"])
+
     @patch("myagent.agent.taskbrain.urllib.request.urlopen")
     def test_openai_model_disables_reasoning_for_chat_tools(self, urlopen) -> None:
         response = urlopen.return_value.__enter__.return_value
@@ -417,6 +426,25 @@ class VoiceAgentTest(unittest.TestCase):
     def test_explicit_stop_phrase_uses_fast_path(self) -> None:
         agent = VoiceAgent(brain=EchoBrain())
         self.assertTrue(agent._should_interrupt_speech("等等，先別說了。"))
+
+    def test_stream_sentence_keeps_terminal_punctuation(self) -> None:
+        class FakeTTS:
+            def __init__(self) -> None:
+                self.texts = []
+
+            def synthesize(self, request: TTSRequest) -> None:
+                self.texts.append(request.text)
+
+        speaker = FakeTTS()
+        agent = VoiceAgent(
+            config=AgentConfig(interruptible_tts=False), speaker=speaker
+        )
+
+        spoken, interrupted = agent._speak_stream(iter(["第一句，第二句。", "第三句", "！"]))
+
+        self.assertEqual(spoken, "第一句，第二句。第三句！")
+        self.assertIsNone(interrupted)
+        self.assertEqual(speaker.texts, ["第一句，第二句。", "第三句！"])
 
     def test_keeps_monitoring_after_non_interrupting_barge_in(self) -> None:
         class InterruptibleTTS:

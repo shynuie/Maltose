@@ -1,5 +1,17 @@
 # MyAgent
 
+Architecture overview: open [ARCHITECTURE.html](ARCHITECTURE.html) for a
+standalone visual flow diagram, or read [ARCHITECTURE.md](ARCHITECTURE.md) for
+the Markdown/Mermaid version.
+
+TaskBrain can stream compatible LLM responses to VoiceAgent. Responses are
+buffered until sentence punctuation (including `。`, `！`, `？`, `；`, and their
+ASCII forms), then spoken one segment at a time with the ending punctuation
+preserved. Commas remain buffered to avoid overly short or unnatural speech
+segments. The model stream is read in the background while TTS speaks the
+already completed segment. Endpoints must support OpenAI-compatible `stream:
+true` SSE output.
+
 MyAgent is a local voice assistant with wake-word detection, speech recognition,
 TaskBrain orchestration, user-scoped memory, web search, and optional MCP tools.
 
@@ -264,6 +276,24 @@ so they use the same registered worker types, task status, and notifications.
 For spoken reminders, use the built-in `assistant_message` worker with the exact
 spoken text in `input.message`; VoiceAgent delivers that notification at a safe
 standby/TTS boundary.
+
+For example, a one-time spoken reminder is represented as:
+
+```json
+{
+  "title": "Say hello",
+  "worker_type": "assistant_message",
+  "run_at": "2026-09-20T15:30:00+08:00",
+  "timezone": "Asia/Taipei",
+  "input": {"message": "你好！"}
+}
+```
+
+To test quickly, create a reminder for one or two minutes from now and wait
+until the agent reaches standby. The schedule becomes `completed` when it has
+triggered the underlying task; the task itself reports its own success or
+failure. Existing schedules can be inspected with `list_schedules` and stopped
+with `cancel_schedule`.
 
 Speak a short acknowledgement after wake detection:
 

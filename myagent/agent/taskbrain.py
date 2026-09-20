@@ -11,6 +11,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Iterator
 from typing import Any, Callable, Protocol
 
 from myagent.agent.brain import TurnContext
@@ -458,6 +459,42 @@ class OpenAICompatibleTaskModel:
             raise RuntimeError(f"Task model returned HTTP {exc.code}: {detail[:500]}") from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"Could not connect to task model at {self.endpoint}: {exc.reason}") from exc
+
+    def stream(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> Iterator[dict[str, Any]]:
+        """Yield OpenAI-compatible chat-completion SSE chunks."""
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "messages": messages,
+                "tools": tools,
+                "tool_choice": "auto",
+                "stream": True,
+                "reasoning_effort": self.reasoning_effort,
+            }
+        ).encode("utf-8")
+        headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        request = urllib.request.Request(self.endpoint, data=payload, headers=headers, method="POST")
+        try:
+            response = urllib.request.urlopen(request, timeout=self.timeout)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Task model returned HTTP {exc.code}: {detail[:500]}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Could not connect to task model at {self.endpoint}: {exc.reason}") from exc
+
+        with response:
+            for raw_line in response:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                yield json.loads(data)
 
 
 class TaskBrain:
@@ -965,7 +1002,8 @@ class TaskBrain:
             self._active_user_id = context.user_id or "unknown"
         local_datetime = self.environment_tools.current_datetime()
         system_content = (
-            "You are a concise local personal assistant. "
+            "You are a concise local personal assistant. This is a voice interface: do not use Markdown headings, "
+            "bullet markers, tables, or code fences in spoken replies. "
             "The following is the computer's current local date and time. Treat it as the current "
             "system time for this turn and do not call get_current_datetime just to obtain the local "
             f"time: {json.dumps(local_datetime, ensure_ascii=False)}. "
@@ -1031,6 +1069,98 @@ class TaskBrain:
                 messages.append(tool_message)
                 turn_messages.append(tool_message)
         raise RuntimeError("Task model exceeded the maximum tool rounds.")
+
+    def process_stream(
+        self, user_text: str, context: TurnContext | None = None
+    ) -> Iterator[str]:
+        """Stream text deltas while retaining the existing tool-call loop."""
+        text = user_text.strip()
+        if not text:
+            raise ValueError("TaskBrain input cannot be empty.")
+        if context is not None:
+            self._active_user_id = context.user_id or "unknown"
+        local_datetime = self.environment_tools.current_datetime()
+        system_content = (
+            "You are a concise local personal assistant. This is a voice interface: do not use Markdown headings, "
+            "bullet markers, tables, or code fences in spoken replies. "
+            "The following is the computer's current local date and time. Treat it as the current "
+            "system time for this turn and do not call get_current_datetime just to obtain the local "
+            f"time: {json.dumps(local_datetime, ensure_ascii=False)}. "
+            "Only store durable user facts when the user explicitly asks you to remember them. "
+            "When the user asks about their personal facts, preferences, or something they asked you "
+            "to remember, call the recall tool before answering. Do not guess from memory. "
+            "For ordinary conversation that does not require stored context, answer directly without tools. "
+            "When the user clearly ends the conversation, call return_to_standby and then give a brief acknowledgement. "
+            "For large or multi-step requests, create a bounded task plan instead of pretending the work is complete. "
+            "Do not create tasks for ordinary one-step answers. Never create more than 8 tasks in one plan. "
+            "Ask for confirmation before any task that changes files, calls external side-effecting services, "
+            "or performs destructive actions. Ask a clarification question when the user's goal, location, "
+            "time range, or constraints are ambiguous. For current or time-sensitive facts, use web_search "
+            "and cite its URLs when available. If the user identity is not verified, do not guess identity "
+            "and do not claim access to personal memory, profile, or task data; explain that speaker verification is required."
+        )
+        turn_messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_content},
+            *self._session_messages,
+            *turn_messages,
+        ]
+        stream_method = getattr(self.model, "stream", None)
+        if not callable(stream_method):
+            yield self.process(text, context)
+            return
+
+        for _ in range(self.max_tool_rounds + 1):
+            content_parts: list[str] = []
+            tool_calls: dict[int, dict[str, Any]] = {}
+            for chunk in stream_method(messages, self.tools.schemas()):
+                choice = (chunk.get("choices") or [{}])[0]
+                delta = choice.get("delta") or {}
+                content = delta.get("content")
+                if isinstance(content, str) and content:
+                    content_parts.append(content)
+                    yield content
+                for call in delta.get("tool_calls") or []:
+                    index = int(call.get("index", 0))
+                    target = tool_calls.setdefault(
+                        index,
+                        {"id": call.get("id", ""), "type": "function", "function": {"name": "", "arguments": ""}},
+                    )
+                    if call.get("id"):
+                        target["id"] = call["id"]
+                    function = call.get("function") or {}
+                    target["function"]["name"] += function.get("name", "")
+                    target["function"]["arguments"] += function.get("arguments", "")
+
+            content = "".join(content_parts)
+            if not tool_calls:
+                if not content.strip():
+                    raise RuntimeError("Task model returned an empty streamed response.")
+                assistant_message = {"role": "assistant", "content": content}
+                turn_messages.append(assistant_message)
+                self._session_messages.extend(turn_messages)
+                self._session_turns += 1
+                self._trim_session_history()
+                return
+
+            assistant_message = {
+                "role": "assistant", "content": content or None,
+                "tool_calls": [tool_calls[index] for index in sorted(tool_calls)],
+            }
+            messages.append(assistant_message)
+            turn_messages.append(assistant_message)
+            for call in assistant_message["tool_calls"]:
+                function = call["function"]
+                arguments = json.loads(function.get("arguments") or "{}")
+                result = self.tools.execute(function["name"], arguments)
+                tool_message = {
+                    "role": "tool", "tool_call_id": call.get("id", function["name"]),
+                    "name": function["name"],
+                    "content": json.dumps(result, ensure_ascii=False),
+                }
+                messages.append(tool_message)
+                turn_messages.append(tool_message)
+        raise RuntimeError("Task model exceeded the maximum streamed tool rounds.")
 
     def _trim_session_history(self) -> None:
         user_indices = [
