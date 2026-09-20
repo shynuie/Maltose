@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from myagent.knowledge.repositories import MetadataRepository
@@ -39,6 +40,20 @@ class KnowledgeScannerTests(unittest.TestCase):
             self.assertEqual(first_id, second_id)
             self.assertEqual(stored["status"], "pending_index")
             self.assertEqual(stored["collection"], "notes")
+
+    def test_metadata_repository_can_be_read_from_worker_thread(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            document = root / "note.txt"
+            document.write_text("thread safe", encoding="utf-8")
+            scanned = DocumentScanner((".txt",)).scan(root).files[0]
+
+            with MetadataRepository(root / "metadata.sqlite3") as repository:
+                document_id = repository.upsert_scanned_file(scanned)
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    stored = executor.submit(repository.get_by_id, document_id).result()
+
+            self.assertEqual(stored["id"], document_id)
 
 
 if __name__ == "__main__":
