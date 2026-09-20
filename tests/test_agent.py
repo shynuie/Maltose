@@ -24,6 +24,7 @@ from myagent.agent import (
     TaskManager,
     TaskStore,
 )
+from myagent.agent.agent import PendingTurn
 from myagent.agent.cli import build_parser
 from myagent.agent.config import load_cli_defaults
 from myagent.voice import (
@@ -453,6 +454,23 @@ class VoiceAgentTest(unittest.TestCase):
     def test_explicit_stop_phrase_uses_fast_path(self) -> None:
         agent = VoiceAgent(brain=EchoBrain())
         self.assertTrue(agent._should_interrupt_speech("等等，先別說了。"))
+
+    def test_interrupt_command_is_not_a_followup_turn(self) -> None:
+        interrupted = PendingTurn(
+            utterance=_make_fake_utterance(),
+            transcript="等等",
+            speaker_result=SpeakerResult(None, None, "unknown"),
+            interrupt_requested=True,
+        )
+        followup = PendingTurn(
+            utterance=_make_fake_utterance(),
+            transcript="請繼續說明",
+            speaker_result=SpeakerResult(None, None, "unknown"),
+            interrupt_requested=False,
+        )
+
+        self.assertTrue(interrupted.interrupt_requested)
+        self.assertFalse(followup.interrupt_requested)
 
     def test_stream_sentence_keeps_terminal_punctuation(self) -> None:
         class FakeTTS:

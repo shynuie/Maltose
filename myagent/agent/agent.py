@@ -259,9 +259,17 @@ class VoiceAgent:
                 logger.info("brain_reply text=%s", reply_text)
                 logger.info("speaking_done")
                 if interrupted_utterance is not None:
-                    pending_turn = interrupted_utterance
                     conversation_active = True
-                    logger.info("speaking_barge_in followup_queued")
+                    if interrupted_utterance.interrupt_requested:
+                        # Explicit stop commands such as "等等" control TTS;
+                        # they are not a new conversational turn. Preserve the
+                        # current brain session and return to the listener.
+                        pending_turn = None
+                        self.state = AgentState.LISTENING
+                        logger.info("speaking_barge_in interrupted_return_to_listening")
+                    else:
+                        pending_turn = interrupted_utterance
+                        logger.info("speaking_barge_in followup_queued")
                 else:
                     self._speak_task_notifications()
 
