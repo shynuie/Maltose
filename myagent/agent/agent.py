@@ -217,7 +217,7 @@ class VoiceAgent:
                 )
                 speaker_label = self._resolve_speaker_label(speaker_result)
                 logger.info(
-                    "user_utterance text=(%s)%s",
+                    "user_utterance user=%s text=%s",
                     speaker_label,
                     result.text.strip(),
                 )

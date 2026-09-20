@@ -114,6 +114,33 @@ class TaskBrainTest(unittest.TestCase):
         brain = TaskBrain(FakeModel())
         self.assertEqual(list(brain.process_stream("說兩句話")), ["第一句。", "第二句！"])
 
+    def test_streaming_tool_round_limit_falls_back_to_text_only_response(self) -> None:
+        class RepeatingToolModel:
+            def stream(self, messages, tools):
+                if not tools:
+                    yield {"choices": [{"delta": {"content": "根据目前结果，暂时没有更多资料。"}}]}
+                    return
+                yield {
+                    "choices": [{
+                        "delta": {
+                            "tool_calls": [{
+                                "index": 0,
+                                "id": "repeat-call",
+                                "function": {
+                                    "name": "return_to_standby",
+                                    "arguments": "{}",
+                                },
+                            }]
+                        }
+                    }]
+                }
+
+        brain = TaskBrain(RepeatingToolModel(), max_tool_rounds=1)
+        self.assertEqual(
+            list(brain.process_stream("查一下网络")),
+            ["根据目前结果，暂时没有更多资料。"],
+        )
+
     @patch("myagent.agent.taskbrain.urllib.request.urlopen")
     def test_openai_model_disables_reasoning_for_chat_tools(self, urlopen) -> None:
         response = urlopen.return_value.__enter__.return_value

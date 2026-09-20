@@ -56,6 +56,7 @@ myagent-wake-test = "myagent.voice.wake_cli:main"
 myagent-wake-monitor = "myagent.voice.wake_monitor_cli:main"
 myagent-speaker-enroll = "myagent.voice.speaker_enroll_interactive:main"
 myagent-speaker-enroll-files = "myagent.voice.speaker_enroll_cli:main"
+myagent-speaker-test = "myagent.voice.speaker_test_cli:main"
 
 [build-system]
 requires = ["hatchling"]

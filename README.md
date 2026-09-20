@@ -207,14 +207,24 @@ uv run --extra speaker myagent --brain taskbrain \
   --speaker-profiles data/speaker_profiles.sqlite3
 ```
 
-The current starting threshold is `0.40`; calibrate it using recordings from the real
+To test the current profiles interactively without starting the full agent:
+
+```sh
+uv run --extra speaker myagent-speaker-test
+```
+
+Speak one utterance at a time. The CLI automatically detects speech boundaries
+and prints the best candidate, similarity score, current user, and identity
+status. Use `Ctrl-C` to stop.
+
+The current starting threshold is `0.35`; calibrate it using recordings from the real
 microphone and room. Recognition compares against each enrolled sample and
 uses the highest similarity score. Speaker recognition is an identity hint, not a secure
 authentication mechanism, and raw enrollment audio is not stored by MyAgent. Recognition
 runs in a single background worker so it does not block STT or the LLM. The runtime keeps
 a `current_user` snapshot with hysteresis: scores below `0.20` become `unknown`, scores
-from `0.20` up to `0.40` keep the previous user but are marked `ambiguous`, and scores
-at or above `0.40` can identify or switch users. `ambiguous` and `unknown` turns cannot
+from `0.20` up to `0.35` keep the previous user but are marked `ambiguous`, and scores
+at or above `0.35` can identify or switch users. `ambiguous` and `unknown` turns cannot
 read personal memory, profiles, tasks, or schedules. These are cosine similarity scores,
 not calibrated statistical probabilities.
 

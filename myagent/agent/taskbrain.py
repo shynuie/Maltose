@@ -1141,7 +1141,7 @@ class TaskBrain:
             yield self.process(text, context)
             return
 
-        for _ in range(self.max_tool_rounds + 1):
+        for tool_round in range(self.max_tool_rounds + 1):
             content_parts: list[str] = []
             tool_calls: dict[int, dict[str, Any]] = {}
             for chunk in stream_method(messages, self.tools.schemas()):
@@ -1178,6 +1178,14 @@ class TaskBrain:
                 "role": "assistant", "content": content or None,
                 "tool_calls": [tool_calls[index] for index in sorted(tool_calls)],
             }
+            logger.info(
+                "task_model_stream_tool_round round=%d tools=%s",
+                tool_round + 1,
+                ",".join(
+                    call["function"].get("name", "unknown")
+                    for call in assistant_message["tool_calls"]
+                ),
+            )
             messages.append(assistant_message)
             turn_messages.append(assistant_message)
             for call in assistant_message["tool_calls"]:
@@ -1191,7 +1199,39 @@ class TaskBrain:
                 }
                 messages.append(tool_message)
                 turn_messages.append(tool_message)
-        raise RuntimeError("Task model exceeded the maximum streamed tool rounds.")
+        # Some providers repeatedly request a search when the result is empty,
+        # unavailable, or difficult to synthesize. Preserve the collected tool
+        # results and force one final text-only response instead of crashing the
+        # whole voice loop.
+        logger.warning(
+            "task_model_stream_tool_round_limit rounds=%d; requesting text-only final",
+            self.max_tool_rounds + 1,
+        )
+        final_messages = [
+            *messages,
+            {
+                "role": "user",
+                "content": (
+                    "請根據目前已取得的工具結果直接整理最終回答。"
+                    "不要再呼叫任何工具；如果資料不足，請明確說明限制。"
+                ),
+            },
+        ]
+        final_parts: list[str] = []
+        for chunk in stream_method(final_messages, []):
+            choice = (chunk.get("choices") or [{}])[0]
+            delta = choice.get("delta") or {}
+            final_content = delta.get("content")
+            if isinstance(final_content, str) and final_content:
+                final_parts.append(final_content)
+                yield final_content
+        final_text = "".join(final_parts).strip()
+        if not final_text:
+            raise RuntimeError("Task model exceeded the maximum streamed tool rounds.")
+        turn_messages.append({"role": "assistant", "content": final_text})
+        self._session_messages.extend(turn_messages)
+        self._session_turns += 1
+        self._trim_session_history()
 
     def _trim_session_history(self) -> None:
         user_indices = [

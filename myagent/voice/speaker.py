@@ -37,7 +37,7 @@ class SpeakerIdentityManager:
         identifier: SpeakerIdentifier,
         *,
         low_threshold: float = 0.2,
-        high_threshold: float = 0.4,
+        high_threshold: float = 0.35,
     ) -> None:
         if not 0.0 <= low_threshold < high_threshold <= 1.0:
             raise ValueError("Speaker identity thresholds must satisfy 0 <= low < high <= 1.")
@@ -307,7 +307,7 @@ class ProfileSpeakerIdentifier:
         store: SpeakerProfileStore,
         encoder: SpeakerEmbeddingEncoder,
         *,
-        threshold: float = 0.65,
+        threshold: float = 0.35,
     ) -> None:
         if not -1.0 <= threshold <= 1.0:
             raise ValueError("Speaker threshold must be between -1 and 1.")

@@ -185,7 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--speaker-threshold",
         type=float,
-        default=0.65,
+        default=0.35,
         help="Cosine similarity threshold for identifying an enrolled speaker.",
     )
     parser.add_argument(
