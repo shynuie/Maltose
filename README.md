@@ -188,7 +188,7 @@ documents/
 Install the vector and PDF dependencies before indexing:
 
 ```sh
-uv sync --extra vector-memory
+uv sync --extra wake --extra qwen-asr --extra vector-memory --extra speaker
 ```
 
 Index, list, and search documents with the dedicated CLI:

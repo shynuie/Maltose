@@ -17,6 +17,7 @@ htmlcov/
 .env.*
 myagent.toml
 data/
+documents/
 
 # Logs
 *.log
