@@ -289,6 +289,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="TOML config file for wake word detection.",
     )
     parser.add_argument(
+        "--kws-frame-ms",
+        type=int,
+        choices=(10, 20, 30),
+        help="KWS frame size, independent from VAD frame size.",
+    )
+    parser.add_argument(
         "--wake-ack",
         default="我在",
         help="Short TTS acknowledgement after wake word detection (default: 我在).",
@@ -310,6 +316,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-trigger-ms", type=int, default=160)
     parser.add_argument("--end-silence-ms", type=int, default=700)
     parser.add_argument("--pre-roll-ms", type=int, default=300)
+    parser.add_argument(
+        "--min-speech-ms",
+        type=int,
+        default=0,
+        help="Discard VAD utterances shorter than this duration.",
+    )
     return parser
 
 
@@ -324,15 +336,35 @@ def main() -> None:
 
     vad_settings = VADSettings(
         frame_ms=args.frame_ms,
+        kws_frame_ms=args.kws_frame_ms,
         aggressiveness=args.vad_aggressiveness,
         start_trigger_ms=args.start_trigger_ms,
         end_silence_ms=args.end_silence_ms,
         pre_roll_ms=args.pre_roll_ms,
+        min_speech_ms=args.min_speech_ms,
     )
     wake_word_detector = None
     if args.wake_config is not None:
+        wake_config = load_wake_word_config(args.wake_config)
+        sherpa_config = wake_config.sherpa_onnx
+        logger.info(
+            "voice_config_loaded config=%s device=%s frame_ms=%d min_speech_ms=%d stt_provider=%s "
+            "kws_frame_ms=%s wake_config=%s wake_threshold=%s wake_score=%s wake_trailing_blanks=%s "
+            "wake_normalization=%s",
+            args.config,
+            args.device,
+            args.frame_ms,
+            args.min_speech_ms,
+            args.stt_provider,
+            args.kws_frame_ms or args.frame_ms,
+            args.wake_config,
+            sherpa_config.keywords_threshold if sherpa_config else "n/a",
+            sherpa_config.keywords_score if sherpa_config else "n/a",
+            sherpa_config.num_trailing_blanks if sherpa_config else "n/a",
+            wake_config.normalization_mode,
+        )
         wake_word_detector = create_wake_word_detector(
-            load_wake_word_config(args.wake_config)
+            wake_config
         )
 
     config = AgentConfig(

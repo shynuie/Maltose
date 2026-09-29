@@ -68,13 +68,13 @@ def load_cli_defaults(path: Path) -> dict[str, Any]:
         "interruptible_tts": "interruptible_tts",
     })
     copy("wake", {
-        "config": "wake_config", "ack": "wake_ack", "ack_delay": "wake_ack_delay",
+        "config": "wake_config", "frame_ms": "kws_frame_ms", "ack": "wake_ack", "ack_delay": "wake_ack_delay",
         "buffer_ms": "wake_buffer_ms",
     })
     copy("vad", {
         "aggressiveness": "vad_aggressiveness", "frame_ms": "frame_ms",
         "start_trigger_ms": "start_trigger_ms", "end_silence_ms": "end_silence_ms",
-        "pre_roll_ms": "pre_roll_ms",
+        "pre_roll_ms": "pre_roll_ms", "min_speech_ms": "min_speech_ms",
     })
     copy("environment", {
         "location": "location",

@@ -24,6 +24,8 @@ class VADSettings:
     start_trigger_ms: int = 160
     end_silence_ms: int = 700
     pre_roll_ms: int = 300
+    kws_frame_ms: int | None = None
+    min_speech_ms: int = 0
 
     def __post_init__(self) -> None:
         if self.sample_rate not in {8000, 16000, 32000, 48000}:
@@ -34,6 +36,10 @@ class VADSettings:
             raise ValueError("sample_width must be 2 bytes for 16-bit PCM audio.")
         if self.channels != 1:
             raise ValueError("channels must be 1 for mono audio.")
+        if self.kws_frame_ms is not None and self.kws_frame_ms not in {10, 20, 30}:
+            raise ValueError("kws_frame_ms must be 10, 20, or 30.")
+        if self.min_speech_ms < 0:
+            raise ValueError("min_speech_ms must be non-negative.")
 
     @property
     def frame_samples(self) -> int:
@@ -62,6 +68,15 @@ class VADSettings:
     def frames_for_ms(self, duration_ms: int) -> int:
         return max(0, _ceil_div(duration_ms, self.frame_ms))
 
+    @property
+    def kws_frame_byte_count(self) -> int:
+        frame_ms = self.kws_frame_ms or self.frame_ms
+        return self.sample_rate * frame_ms // 1000 * self.sample_width * self.channels
+
+    @property
+    def min_speech_frames(self) -> int:
+        return max(0, _ceil_div(self.min_speech_ms, self.frame_ms))
+
 
 def _ceil_div(value: int, divisor: int) -> int:
     return -(-value // divisor)
@@ -86,6 +101,24 @@ class ListeningEvent:
     kind: str
     utterance: Utterance | None = None
     keyword: str | None = None
+
+
+class KWSFrameAccumulator:
+    """Convert VAD-sized input frames into independently sized KWS frames."""
+
+    def __init__(self, frame_byte_count: int) -> None:
+        if frame_byte_count <= 0:
+            raise ValueError("frame_byte_count must be positive")
+        self._frame_byte_count = frame_byte_count
+        self._buffer = bytearray()
+
+    def push(self, pcm_frame: bytes) -> list[bytes]:
+        self._buffer.extend(pcm_frame)
+        frames = []
+        while len(self._buffer) >= self._frame_byte_count:
+            frames.append(bytes(self._buffer[: self._frame_byte_count]))
+            del self._buffer[: self._frame_byte_count]
+        return frames
 
 
 class VoiceActivityDetector(Protocol):
@@ -115,6 +148,7 @@ class UtteranceSegmenter:
         self._utterance_frames: list[bytes] = []
         self._voiced_frames = 0
         self._silence_frames = 0
+        self._active_frames = 0
         self._in_speech = False
 
     @property
@@ -181,6 +215,7 @@ class UtteranceSegmenter:
 
     def _process_active_frame(self, pcm_frame: bytes, is_speech: bool) -> list[ListeningEvent]:
         self._utterance_frames.append(pcm_frame)
+        self._active_frames += 1
 
         if is_speech:
             self._silence_frames = 0
@@ -196,7 +231,13 @@ class UtteranceSegmenter:
             sample_width=self._settings.sample_width,
             channels=self._settings.channels,
         )
+        is_long_enough = (
+            self._settings.min_speech_frames == 0
+            or self._active_frames >= self._settings.min_speech_frames
+        )
         self._reset()
+        if not is_long_enough:
+            return []
         return [ListeningEvent(kind="speech_ended", utterance=utterance)]
 
     def _reset(self) -> None:
@@ -204,6 +245,7 @@ class UtteranceSegmenter:
         self._utterance_frames = []
         self._voiced_frames = 0
         self._silence_frames = 0
+        self._active_frames = 0
         self._in_speech = False
 
 
@@ -227,6 +269,7 @@ def microphone_events(
     wake_ack_deadline: float | None = None
     wake_buffer: deque[bytes] = deque(maxlen=settings.frames_for_ms(wake_buffer_ms))
     pending_wake_frames: list[bytes] = []
+    kws_accumulator = KWSFrameAccumulator(settings.kws_frame_byte_count)
 
     def callback(indata, _frames, _time, status) -> None:
         if status:
@@ -265,7 +308,11 @@ def microphone_events(
 
             if not wake_detected and wake_gate is not None:
                 wake_buffer.append(pcm_frame)
-                hit = wake_gate.process_frame(pcm_frame, settings.sample_rate)
+                hit = None
+                for kws_frame in kws_accumulator.push(pcm_frame):
+                    hit = wake_gate.process_frame(kws_frame, settings.sample_rate)
+                    if hit is not None:
+                        break
                 if hit is None:
                     continue
 

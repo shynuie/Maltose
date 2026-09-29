@@ -47,6 +47,9 @@ from .speaker import (
 from .enrollment import ENROLLMENT_PROMPTS, EnrollmentQuality, evaluate_enrollment_utterance
 from .wake import (
     GainWakeWordDetector,
+    HighPassWakeWordDetector,
+    SpectralGateWakeWordDetector,
+    SmoothRMSGainWakeWordDetector,
     SherpaOnnxKWSConfig,
     SherpaOnnxKeywordSpotter,
     WakeWordConfig,
@@ -63,6 +66,9 @@ __all__ = [
     "Qwen3ASRSTT",
     "AudioStats",
     "GainWakeWordDetector",
+    "HighPassWakeWordDetector",
+    "SpectralGateWakeWordDetector",
+    "SmoothRMSGainWakeWordDetector",
     "ListeningEvent",
     "MacOSSayTTS",
     "MacOSAudioPlayer",

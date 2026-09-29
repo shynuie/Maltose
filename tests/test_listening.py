@@ -4,13 +4,14 @@ from pathlib import Path
 
 from myagent.voice import (
     GainWakeWordDetector,
+    SmoothRMSGainWakeWordDetector,
     UtteranceSegmenter,
     VADSettings,
     measure_utterance,
     normalize_pcm_peak,
     normalize_utterance_peak,
 )
-from myagent.voice.listening import Utterance, write_utterance_wav
+from myagent.voice.listening import KWSFrameAccumulator, Utterance, write_utterance_wav
 from myagent.voice.wake import WakeWordGate, WakeWordHit, load_wake_word_config
 
 
@@ -48,6 +49,13 @@ class CapturingWakeDetector:
 
 
 class UtteranceSegmenterTest(unittest.TestCase):
+    def test_kws_frame_accumulator_rechunks_vad_frames(self) -> None:
+        accumulator = KWSFrameAccumulator(frame_byte_count=6)
+
+        self.assertEqual(accumulator.push(b"1234"), [])
+        self.assertEqual(accumulator.push(b"5678"), [b"123456"])
+        self.assertEqual(accumulator.push(b"90ab"), [b"7890ab"])
+
     def test_rejects_unsupported_frame_ms(self) -> None:
         with self.assertRaisesRegex(ValueError, "frame_ms"):
             VADSettings(frame_ms=25)
@@ -290,6 +298,27 @@ class WakeWordGateTest(unittest.TestCase):
         self.assertEqual(len(detector.frames), 1)
         normalized_utterance = Utterance(detector.frames[0], 16000, 2, 1)
         self.assertEqual(measure_utterance(normalized_utterance).peak, 4000)
+
+    def test_smooth_rms_gain_changes_gradually_and_resets(self) -> None:
+        detector = CapturingWakeDetector()
+        gain_detector = SmoothRMSGainWakeWordDetector(
+            detector,
+            target_rms=3000,
+            noise_floor=80,
+            max_gain=4.0,
+            attack=0.5,
+            release=0.5,
+        )
+        quiet_frame = (500).to_bytes(2, "little", signed=True) * 320
+
+        gain_detector.process_frame(quiet_frame, 16000)
+
+        self.assertGreater(gain_detector.gain, 1.0)
+        self.assertLess(gain_detector.gain, 4.0)
+        self.assertNotEqual(detector.frames[0], quiet_frame)
+
+        gain_detector.reset()
+        self.assertEqual(gain_detector.gain, 1.0)
 
 
 if __name__ == "__main__":

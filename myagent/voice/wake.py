@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from myagent.voice.audio import normalize_pcm_peak
+from myagent.voice.enhancement import SpectralGateConfig, SpectralNoiseSuppressor
 
 
 @dataclass(frozen=True)
@@ -42,9 +43,15 @@ class WakeWordConfig:
     provider: str = "sherpa-onnx"
     sherpa_onnx: SherpaOnnxKWSConfig | None = None
     normalize_audio: bool = True
+    normalization_mode: str = "peak"
     target_peak: int = 12000
     min_peak: int = 6000
     max_gain: float = 4.0
+    rms_target: int = 3000
+    rms_noise_floor: int = 80
+    rms_attack: float = 0.45
+    rms_release: float = 0.12
+    highpass_cutoff_hz: float = 80.0
 
 
 class WakeWordGate:
@@ -81,6 +88,113 @@ class GainWakeWordDetector:
         return self._detector.process_frame(normalized_frame, sample_rate)
 
     def reset(self) -> None:
+        self._detector.reset()
+
+
+class SmoothRMSGainWakeWordDetector:
+    """Apply stateful digital gain based on short-term RMS level."""
+
+    def __init__(
+        self,
+        detector: WakeWordDetector,
+        target_rms: int = 3000,
+        noise_floor: int = 80,
+        max_gain: float = 4.0,
+        attack: float = 0.45,
+        release: float = 0.12,
+    ) -> None:
+        if target_rms <= 0 or noise_floor < 0:
+            raise ValueError("target_rms must be positive and noise_floor non-negative")
+        if max_gain < 1.0:
+            raise ValueError("max_gain must be at least 1.0")
+        if not 0.0 < attack <= 1.0 or not 0.0 < release <= 1.0:
+            raise ValueError("attack and release must be between 0 and 1")
+        self._detector = detector
+        self._target_rms = target_rms
+        self._noise_floor = noise_floor
+        self._max_gain = max_gain
+        self._attack = attack
+        self._release = release
+        self._gain = 1.0
+
+    @property
+    def gain(self) -> float:
+        return self._gain
+
+    def process_frame(self, pcm_frame: bytes, sample_rate: int) -> WakeWordHit | None:
+        import audioop
+
+        rms = audioop.rms(pcm_frame, 2) if pcm_frame else 0
+        desired_gain = 1.0
+        if rms > self._noise_floor:
+            desired_gain = min(self._max_gain, max(1.0, self._target_rms / rms))
+        smoothing = self._attack if desired_gain > self._gain else self._release
+        self._gain += (desired_gain - self._gain) * smoothing
+        processed = (
+            audioop.mul(pcm_frame, 2, self._gain)
+            if self._gain != 1.0
+            else pcm_frame
+        )
+        return self._detector.process_frame(processed, sample_rate)
+
+    def reset(self) -> None:
+        self._gain = 1.0
+        self._detector.reset()
+
+
+class HighPassWakeWordDetector:
+    """Remove DC and low-frequency energy before passing audio downstream."""
+
+    def __init__(
+        self,
+        detector: WakeWordDetector,
+        sample_rate: int = 16000,
+        cutoff_hz: float = 80.0,
+    ) -> None:
+        if sample_rate <= 0 or cutoff_hz <= 0 or cutoff_hz >= sample_rate / 2:
+            raise ValueError("cutoff_hz must be between 0 and Nyquist frequency")
+        self._detector = detector
+        rc = 1.0 / (2.0 * 3.141592653589793 * cutoff_hz)
+        self._alpha = rc / (rc + 1.0 / sample_rate)
+        self._previous_input = 0.0
+        self._previous_output = 0.0
+
+    def process_frame(self, pcm_frame: bytes, sample_rate: int) -> WakeWordHit | None:
+        import array
+
+        samples = array.array("h")
+        samples.frombytes(pcm_frame)
+        for index, sample in enumerate(samples):
+            output = self._alpha * (
+                self._previous_output + float(sample) - self._previous_input
+            )
+            self._previous_input = float(sample)
+            self._previous_output = output
+            samples[index] = max(-32768, min(32767, int(round(output))))
+        return self._detector.process_frame(samples.tobytes(), sample_rate)
+
+    def reset(self) -> None:
+        self._previous_input = 0.0
+        self._previous_output = 0.0
+        self._detector.reset()
+
+
+class SpectralGateWakeWordDetector:
+    def __init__(
+        self,
+        detector: WakeWordDetector,
+        sample_rate: int = 16000,
+        config: SpectralGateConfig | None = None,
+    ) -> None:
+        self._detector = detector
+        self._suppressor = SpectralNoiseSuppressor(sample_rate=sample_rate, config=config)
+
+    def process_frame(self, pcm_frame: bytes, sample_rate: int) -> WakeWordHit | None:
+        enhanced = self._suppressor.process(pcm_frame)
+        return self._detector.process_frame(enhanced, sample_rate)
+
+    def reset(self) -> None:
+        self._suppressor.reset()
         self._detector.reset()
 
 
@@ -132,8 +246,28 @@ def create_wake_word_detector(config: WakeWordConfig) -> WakeWordDetector | None
     if config.sherpa_onnx is None:
         raise ValueError("sherpa-onnx wake config is required.")
     detector: WakeWordDetector = SherpaOnnxKeywordSpotter(config.sherpa_onnx)
-    if not config.normalize_audio:
+    if not config.normalize_audio or config.normalization_mode == "none":
         return detector
+
+    if config.normalization_mode == "spectral-gate":
+        return SpectralGateWakeWordDetector(detector)
+    if config.normalization_mode in ("smooth-rms", "highpass-smooth-rms"):
+        smoothed: WakeWordDetector = SmoothRMSGainWakeWordDetector(
+            detector,
+            target_rms=config.rms_target,
+            noise_floor=config.rms_noise_floor,
+            max_gain=config.max_gain,
+            attack=config.rms_attack,
+            release=config.rms_release,
+        )
+        if config.normalization_mode == "highpass-smooth-rms":
+            return HighPassWakeWordDetector(
+                smoothed,
+                cutoff_hz=config.highpass_cutoff_hz,
+            )
+        return smoothed
+    if config.normalization_mode != "peak":
+        raise ValueError(f"Unsupported wake normalization mode: {config.normalization_mode}")
 
     return GainWakeWordDetector(
         detector,
@@ -172,9 +306,15 @@ def load_wake_word_config(path: Path) -> WakeWordConfig:
         provider=provider,
         sherpa_onnx=sherpa_config,
         normalize_audio=bool(wake_data.get("normalize_audio", True)),
+        normalization_mode=str(wake_data.get("normalization_mode", "peak")),
         target_peak=int(wake_data.get("target_peak", 12000)),
         min_peak=int(wake_data.get("min_peak", 6000)),
         max_gain=float(wake_data.get("max_gain", 4.0)),
+        rms_target=int(wake_data.get("rms_target", 3000)),
+        rms_noise_floor=int(wake_data.get("rms_noise_floor", 80)),
+        rms_attack=float(wake_data.get("rms_attack", 0.45)),
+        rms_release=float(wake_data.get("rms_release", 0.12)),
+        highpass_cutoff_hz=float(wake_data.get("highpass_cutoff_hz", 80.0)),
     )
 
 
