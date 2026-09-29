@@ -112,6 +112,20 @@ class MetadataRepository:
                 self._connection.commit()
             return missing
 
+    def mark_deleted_path(self, path: str | Path) -> str | None:
+        """Soft-delete one document by its source path."""
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT id FROM documents WHERE path = ?", (str(Path(path)),)
+            ).fetchone()
+            if row is None:
+                return None
+            self._connection.execute(
+                "UPDATE documents SET status = 'deleted' WHERE id = ?", (row["id"],)
+            )
+            self._connection.commit()
+            return row["id"]
+
     def mark_indexed(self, document_id: str, *, title: str | None, summary: str) -> None:
         with self._lock:
             self._connection.execute(

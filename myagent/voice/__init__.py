@@ -25,7 +25,15 @@ from .stt import (
     normalize_mandarin_transcript,
     create_stt_provider,
 )
-from .tts import MacOSSayTTS, TTSRequest
+from .tts import (
+    AudioPlayer,
+    MacOSAudioPlayer,
+    MacOSSayAudioRenderer,
+    MacOSSayTTS,
+    RenderedAudio,
+    TTSAudioRenderer,
+    TTSRequest,
+)
 from .speaker import (
     NullSpeakerIdentifier,
     ProfileSpeakerIdentifier,
@@ -57,6 +65,8 @@ __all__ = [
     "GainWakeWordDetector",
     "ListeningEvent",
     "MacOSSayTTS",
+    "MacOSAudioPlayer",
+    "MacOSSayAudioRenderer",
     "NullSpeakerIdentifier",
     "ProfileSpeakerIdentifier",
     "NormalizationResult",
@@ -73,6 +83,9 @@ __all__ = [
     "evaluate_enrollment_utterance",
     "STTSegment",
     "TTSRequest",
+    "RenderedAudio",
+    "TTSAudioRenderer",
+    "AudioPlayer",
     "Utterance",
     "UtteranceSegmenter",
     "VADSettings",

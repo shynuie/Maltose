@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--right-prefix", default="user-002", help="Filename prefix for the second group.")
     parser.add_argument("--left-label", default="user-001")
     parser.add_argument("--right-label", default="user-002")
-    parser.add_argument("--model-dir", type=Path, default=Path("data/models/speechbrain-ecapa"))
+    parser.add_argument("--model-dir", type=Path, default=Path("models/speechbrain-ecapa"))
     parser.add_argument("--device", default="cpu")
     return parser
 

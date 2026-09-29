@@ -20,6 +20,11 @@ TaskBrain orchestration, user-scoped memory, web search, and optional MCP tools.
 The main runtime configuration lives in `myagent.toml`. CLI flags remain
 available as temporary overrides.
 
+Development planning and architecture progress are centralized under
+[dev/](dev/README.md), with the project roadmap in
+[dev/major_plan.md](dev/major_plan.md) and feature-level plans in
+`dev/features/`.
+
 ## Quick Start
 
 Install the runtime extras used by the current voice setup:
@@ -46,6 +51,9 @@ Start the assistant:
 ```sh
 ./start
 ```
+
+`./start` 會同時啟動 Agent 與文件 watcher；Agent 結束時會一併停止 watcher。
+若只需要手動 indexing，可直接使用 `uv run myagent-documents index`。
 
 The example configuration uses microphone device `3`, `wake.toml`, Qwen3-ASR,
 LanceDB memory, Brave search, and the `default` user. Change these values in
@@ -154,7 +162,7 @@ Enable local semantic memory retrieval with Qwen3 Embedding:
 ```toml
 [taskbrain]
 memory_backend = "lancedb"
-memory = "data/memory.lancedb"
+memory = "data/memory/memory.lancedb"
 user_id = "user-001"
 embedding = "qwen3-embedding-0.6b"
 embedding_device = "mps"
@@ -165,8 +173,8 @@ not require the wake word again; ten seconds of silence returns to wake-word
 standby. `--max-turns` is no longer used as an automatic shutdown condition.
 After a wake word, it says `我在` if no follow-up speech starts within 0.8 seconds.
 
-Memory records are stored in LanceDB under `data/memory.lancedb`. The legacy
-`data/memory.json` store is not used at runtime; current identity-scoped data
+Memory records are stored in LanceDB under `data/memory/memory.lancedb`. The legacy
+`data/memory/memory.json` store is not used at runtime; current identity-scoped data
 uses the sequential system user ID from `user_profile`.
 
 ## Document Knowledge Base
@@ -196,9 +204,20 @@ Index, list, and search documents with the dedicated CLI:
 ```sh
 uv run myagent-documents index
 uv run myagent-documents index --force
+uv run myagent-documents repair
+uv run myagent-documents repair --prune-orphans
+uv run myagent-documents queue
+uv run myagent-documents queue --status failed
 uv run myagent-documents list
 uv run myagent-documents search "我的碩士論文"
+uv run myagent-documents watch
 ```
+
+`watch` 會在目前 process 中持續監控 `documents/`，自動處理新增、修改、移動與刪除。可用 `--poll-interval` 調整掃描間隔，使用 `--max-attempts` 設定單一文件的 indexing retry 次數；indexing queue 儲存在 SQLite，重啟後可恢復未完成的 queue job。
+
+`repair` 預設會修復失敗或未完成的 indexing，並報告孤立 vector；只有加上 `--prune-orphans` 才會刪除 metadata 不存在或已刪除文件的 vector。
+
+`queue` 顯示 durable indexing jobs，可用 `--status` 篩選 queued、running、succeeded 或 failed。
 
 The CLI uses the local Qwen embedding provider by default. KDB indexing uses
 document summaries and chunk vectors only as indexes; precise answers read
@@ -253,7 +272,7 @@ Enable recognition in the main agent:
 ```sh
 uv run --extra speaker myagent --brain taskbrain \
   --speaker-recognition speechbrain \
-  --speaker-profiles data/speaker_profiles.sqlite3
+  --speaker-profiles data/speaker/speaker_profiles.sqlite3
 ```
 
 To test the current profiles interactively without starting the full agent:

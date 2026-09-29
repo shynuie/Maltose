@@ -19,8 +19,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--user-id",
         help="Stable user id; defaults to the next sequential user-NNN id.",
     )
-    parser.add_argument("--profiles", type=Path, default=Path("data/speaker_profiles.sqlite3"))
-    parser.add_argument("--model-dir", type=Path, default=Path("data/models/speechbrain-ecapa"))
+    parser.add_argument("--profiles", type=Path, default=Path("data/speaker/speaker_profiles.sqlite3"))
+    parser.add_argument("--model-dir", type=Path, default=Path("models/speechbrain-ecapa"))
     parser.add_argument("--device", help="sounddevice input device id or name.")
     parser.add_argument("--max-wait", type=float, default=20.0)
     parser.add_argument("--attempts", type=int, default=3)

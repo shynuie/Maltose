@@ -117,7 +117,7 @@ def _normalize(values: Iterable[float]) -> list[float]:
 class SpeakerProfileStore:
     """Small SQLite store for enrolled, normalized speaker voiceprints."""
 
-    def __init__(self, path: str | Path = "data/speaker_profiles.sqlite3") -> None:
+    def __init__(self, path: str | Path = "data/speaker/speaker_profiles.sqlite3") -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
@@ -348,7 +348,7 @@ class SpeechBrainECAPAEncoder:
         self,
         *,
         source: str = model_name,
-        savedir: str | Path = "data/models/speechbrain-ecapa",
+        savedir: str | Path = "models/speechbrain-ecapa",
         device: str = "cpu",
     ) -> None:
         self.model_name = source

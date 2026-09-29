@@ -4,9 +4,10 @@
 
 ## 1. 文件狀態
 
-- 整體狀態：`planned`
-- 目前階段：Phase 0 - Architecture & Boundary
-- 最後更新：2026-09-20
+- 整體狀態：`in_progress`
+- 目前階段：Phase 6 - Watcher & Operational Improvements
+- 原始需求：[plan_doc_knowledge.md](../../plan_doc_knowledge.md)
+- 最後更新：2026-09-29
 
 狀態定義：`planned` 尚未開始；`in_progress` 開發中；`blocked` 受到外部條件阻擋；`done` 已完成並驗證；`deferred` 刻意延後。
 
@@ -400,8 +401,8 @@ myagent documents remove <document-id>
 - [x] 確認第一版採 in-process service。
 - [x] 確認 TaskBrain 為第一個整合點。
 - [x] 建立本開發計畫文件。
-- [ ] 確認 metadata storage 與 vector storage 的最終選型。
-- [ ] 確認第一版 summary provider。
+- [x] 確認 metadata storage 與 vector storage 的最終選型：SQLite metadata、LanceDB vectors。
+- [x] 確認第一版 summary provider：extractive summary fallback。
 
 完成條件：service 邊界、storage 隔離與第一版工作拆分確定。
 
@@ -421,12 +422,12 @@ myagent documents remove <document-id>
 
 ### Phase 2 - Metadata Storage & Scanner
 
-狀態：`in_progress`
+狀態：`done`
 
 - [x] 建立 SQLite metadata repository。
 - [x] 實作 recursive scanner 與 SHA-256。
 - [x] 實作基本 supported-extension filtering。
-- [ ] 建立 metadata repository interface。
+- [x] 建立 metadata repository interface。
 - [x] 實作 configurable document root。
 - [x] 實作新增、未變更、修改判斷。
 - [x] 實作刪除 cleanup / soft-delete。
@@ -438,22 +439,22 @@ myagent documents remove <document-id>
 
 ### Phase 3 - Chunking, Embedding & Indexing
 
-狀態：`planned`
+狀態：`done`
 
 - [x] 實作 chunking service。
 - [x] 抽出共用 embedding provider interface。
-- [ ] adapter 化既有 Qwen embedding provider。
+- [x] adapter 化既有 Qwen embedding provider。
 - [x] 建立 document summary embedding index repository。
 - [x] 建立 chunk embedding index repository。
 - [x] 實作 DocumentIndexer orchestration 與 vector replacement contract。
-- [ ] 加入 PDF parser。
-- [ ] 建立 document/chunk retrieval tests。
+- [x] 加入 PDF parser。
+- [x] 建立 document/chunk retrieval tests。
 
 完成條件：新文件可完成 parse → summary → chunk → embedding → persist，修改後不混用舊 chunks。
 
 ### Phase 4 - Source Reader & Retrieval Service
 
-狀態：`in_progress`
+狀態：`done`
 
 - [x] 實作 SourceReader。
 - [x] 實作 TXT/Markdown offset read。
@@ -467,7 +468,7 @@ myagent documents remove <document-id>
 
 ### Phase 5 - TaskBrain Integration
 
-狀態：`in_progress`
+狀態：`done`
 
 - [x] 實作 DocumentIngestionService。
 - [x] 加入 `import_document` tool。
@@ -486,14 +487,23 @@ myagent documents remove <document-id>
 
 ### Phase 6 - Watcher & Operational Improvements
 
-狀態：`deferred`
+狀態：`in_progress`
 
-- [ ] 加入 file watcher abstraction。
-- [ ] 加入 background indexing queue。
-- [ ] 加入 indexing status、retry 與錯誤記錄。
+- [x] 加入 file watcher abstraction（先以 polling implementation 提供可替換事件模型）。
+- [x] 定義 background indexing queue 的 job、狀態、retry 與錯誤記錄契約。
+- [x] 加入 in-process background indexing worker 與 queue job 消費流程。
+- [x] 將 watcher event 映射到 queue，並處理 delete/move 的 metadata 更新。
+- [x] 建立 `KnowledgeRuntime`，串接 watcher、dispatcher、queue 與 worker lifecycle。
+- [x] 接入 `myagent-documents watch` CLI 與 polling/retry runtime options。
+- [x] 將 `./start` 整合為同時啟動 Agent 與 watcher，並在退出時統一 shutdown。
+- [x] 加入 `myagent-documents repair`，修復 `indexing_failed` 與 `pending_index` 文件。
+- [x] 加入 orphan vector detection 與明確的 `--prune-orphans` cleanup option。
+- [x] 加入 SQLite durable indexing queue，保存 job state 並恢復中斷工作。
+- [x] 加入 `myagent-documents queue` 狀態查詢與 status filter。
+- [x] 將 watcher 空輪詢降為 DEBUG，並將 `./start` 的 KDB log 分離到 `data/logs/knowledge.log`。
 - [x] 加入 scanner、change detection、indexing 與 CLI progress logging。
 - [ ] 加入 embedding batch processing。
-- [ ] 加入 reindex / repair command。
+- [x] 加入 reindex / repair command。
 - [ ] 評估是否拆成獨立 background service。
 
 完成條件：文件異動可自動觸發 indexing，失敗不破壞既有可用 index。
@@ -502,36 +512,36 @@ myagent documents remove <document-id>
 
 ### 功能
 
-- [ ] 可設定 document root。
-- [ ] 可索引 TXT、Markdown、PDF。
-- [ ] 可搜尋文件級 summary。
-- [ ] 可在指定文件內搜尋 chunks。
-- [ ] 可讀取原始文件全文或指定位置。
-- [ ] hash 未變更時不重複 indexing。
-- [ ] 修改後會重建相關 index。
-- [ ] 刪除後不會出現 orphan retrieval result。
-- [ ] 外部文件可被複製到 managed document root 後完成 indexing。
-- [ ] Agent 可建立文件並完成 indexing。
-- [ ] 未指定分類的文件會進入 `inbox/`。
-- [ ] 移動相同 hash 的文件不會重新建立 embedding。
+- [x] 可設定 document root。
+- [x] 可索引 TXT、Markdown、PDF。
+- [x] 可搜尋文件級 summary。
+- [x] 可在指定文件內搜尋 chunks。
+- [x] 可讀取原始文件全文或指定位置。
+- [x] hash 未變更時不重複 indexing。
+- [x] 修改後會重建相關 index。
+- [x] 刪除後不會出現 orphan retrieval result。
+- [x] 外部文件可被複製到 managed document root 後完成 indexing。
+- [x] Agent 可建立文件並完成 indexing。
+- [x] 未指定分類的文件會進入 `inbox/`。
+- [x] 移動相同 hash 的文件不會重新建立 embedding。
 
 ### 架構
 
-- [ ] KDB 與 Memory 使用不同 storage/domain model。
-- [ ] Brain 不直接操作 storage implementation。
-- [ ] Parser 不依賴 retrieval service。
-- [ ] Embedding provider 可替換。
-- [ ] retrieval result 帶有可定位的 document/location 資訊。
+- [x] KDB 與 Memory 使用不同 storage/domain model。
+- [x] Brain 不直接操作 storage implementation。
+- [x] Parser 不依賴 retrieval service。
+- [x] Embedding provider 可替換。
+- [x] retrieval result 帶有可定位的 document/location 資訊。
 
 ### 安全與可靠性
 
-- [ ] path traversal 被阻擋。
-- [ ] document root 外檔案不可被讀取。
-- [ ] 原始文件不存在時回傳明確錯誤。
+- [x] path traversal 被阻擋。
+- [x] document root 外檔案不可被讀取。
+- [x] 原始文件不存在時回傳明確錯誤。
 - [ ] index 部分失敗時不破壞上一版 index。
-- [ ] 空結果時 Brain 不編造文件內容。
-- [ ] Agent 不可寫入 document root 之外的路徑。
-- [ ] indexing 失敗時原始文件仍被保留並標記失敗狀態。
+- [x] 空結果時 Brain 不編造文件內容。
+- [x] Agent 不可寫入 document root 之外的路徑。
+- [x] indexing 失敗時原始文件仍被保留並標記失敗狀態。
 
 ## 14. 測試策略
 
@@ -583,17 +593,53 @@ summary、embedding 與 chunk cache 只用於定位；精確回答前必須能�
 - 已檢查現有 TaskBrain、Capability、Memory、Embedding、CLI 與 config 架構。
 - 已確定 KDB 不修改既有 Memory 設計。
 - 已建立本開發計畫文件。
+- 已完成 KDB 核心 domain model、parser、scanner、change detection、metadata repository 與 vector repository。
+- 已完成 TXT、Markdown、PDF 的 parsing、chunking、summary 與 indexing pipeline。
+- 已完成 source-of-truth reader 與 document/chunk 階層式 retrieval。
+- 已完成 Agent tools、TaskBrain bootstrap、TOML config 與 `myagent-documents` CLI 整合。
+- 已加入 lazy embedding loading、force reindex、indexing progress logging 與錯誤狀態保存。
+- 已完成 Agent 對話 session、speech interrupt 與 KDB/Memory 共存的整合驗證。
 
 ### 目前進行中
 
-- Phase 5：將 KDB tool adapter 接入 TaskBrain、config 與 CLI。
+- Phase 6：補齊 reindex/repair、batch processing 與 crash recovery。
 
 ### 下一步
 
-1. 加入 `import_document`、`create_document` Agent tools。
-2. 補完 metadata repository protocol。
-3. 驗證 Memory tools 與 KDB tools 同時運作。
-4. 補充 pypdf PDF integration tests 與完整 runtime smoke test。
+1. 加入 reindex / repair command，支援失敗文件與孤立 index 的修復。
+2. 評估 embedding batch processing。
+3. 評估 process crash recovery，以及是否需要 durable queue。
+4. 再決定 watcher 與 queue 是否拆成獨立 background service。
+
+### 2026-09-29 Progress Update
+
+- 狀態：`in_progress`
+- 完成：
+  - [x] 同步 Phase 0–5 的實際完成狀態。
+  - [x] KDB 測試套件 45 項通過。
+  - [x] 建立 `DocumentWatcher` contract、watch event model 與 polling watcher。
+  - [x] 覆蓋 create、modify、delete、move 與 watcher lifecycle 測試。
+  - [x] 建立 `IndexingQueue` contract 與 thread-safe in-memory queue。
+  - [x] 定義 queued、running、succeeded、failed 狀態與 bounded retry 行為。
+  - [x] 建立可同步 drain、可停止 background thread 的 `IndexingWorker`。
+  - [x] 驗證 worker 的成功、retry、永久失敗與停止流程。
+  - [x] 建立 watcher event dispatcher，串接 create/modify、move、delete lifecycle。
+  - [x] delete 時同步 soft-delete metadata 並移除 document vectors。
+  - [x] 驗證手動 polling cycle 與 background runtime 自動 indexing。
+  - [x] 接入 `myagent-documents watch`、poll interval 與 max retry options。
+  - [x] `watch` 使用 lazy embedding，避免啟動時無條件載入模型。
+  - [x] 更新 `./start` 使用完整 KDB/voice extras，避免啟動時清除 vector-memory 依賴。
+  - [x] 加入 repair planner 與 CLI no-work path；無待修復文件時不載入 embedding。
+  - [x] 加入 orphan vector detection 與選擇性 pruning。
+  - [x] 將 `watch` runtime 改用 SQLite durable queue，支援 process restart recovery。
+  - [x] 提供 queued/running/succeeded/failed job 的 CLI 可觀測性。
+  - [x] 降低 watcher 空輪詢的 INFO log noise，避免每秒輸出影響主 Agent 可觀測性。
+- 進行中：
+  - [ ] Phase 6 operational improvements。
+- 驗證：`uv run python -m unittest discover -s tests -p 'test_knowledge*.py'`
+- 結果：51 tests passed；`bash -n start` 通過。
+- 阻塞：無。
+- 下一步：評估 queue 的 stale job policy、並行 worker 數量與是否拆成獨立 background service。
 
 ## 17. 進度更新格式
 

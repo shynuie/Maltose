@@ -53,8 +53,11 @@ def load_cli_defaults(path: Path) -> dict[str, Any]:
         "documents_root": "knowledge_documents_root",
         "metadata": "knowledge_metadata",
         "vectors": "knowledge_vectors",
+        "queue": "knowledge_queue",
         "embedding": "knowledge_embedding",
         "embedding_device": "knowledge_embedding_device",
+        "watcher_poll_interval": "knowledge_watcher_poll_interval",
+        "indexing_max_attempts": "knowledge_indexing_max_attempts",
     })
     copy("voice", {
         "model": "model", "stt_provider": "stt_provider", "language": "language",

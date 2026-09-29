@@ -34,9 +34,10 @@ class DocumentScanner:
             raise ValueError("supported extensions must start with '.'")
         self.supported_extensions = frozenset(normalized)
 
-    def scan(self, root: Path) -> ScanResult:
+    def scan(self, root: Path, *, verbose: bool = True) -> ScanResult:
         root = root.expanduser().resolve()
-        logger.info("kdb_scan_started root=%s", root)
+        log = logger.info if verbose else logger.debug
+        log("kdb_scan_started root=%s", root)
         if not root.exists():
             raise FileNotFoundError(root)
         if not root.is_dir():
@@ -59,7 +60,7 @@ class DocumentScanner:
                 )
             )
         result = ScanResult(files=tuple(files))
-        logger.info(
+        log(
             "kdb_scan_completed root=%s supported_files=%d",
             root,
             len(result.files),

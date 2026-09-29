@@ -28,6 +28,7 @@ from myagent.voice import (
     measure_utterance,
     normalize_utterance_peak,
     NullSpeakerIdentifier,
+    RenderedAudio,
     SpeakerIdentifier,
     SpeakerIdentityManager,
     SpeakerResult,
@@ -325,6 +326,10 @@ class VoiceAgent:
 
     def _speak_stream(self, chunks: Iterator[str]) -> tuple[str, PendingTurn | None]:
         """Coordinate LLM streaming, sentence TTS, and optional barge-in listening."""
+        if callable(getattr(self.speaker, "render", None)) and callable(
+            getattr(self.speaker, "play", None)
+        ):
+            return self._speak_stream_with_rendered_audio(chunks)
         self.state = AgentState.SPEAKING
         buffer = ""
         spoken_parts: list[str] = []
@@ -463,6 +468,212 @@ class VoiceAgent:
 
         if interrupted:
             return "".join(spoken_parts), deferred
+        return "".join(spoken_parts), deferred
+
+    def _speak_stream_with_rendered_audio(
+        self, chunks: Iterator[str]
+    ) -> tuple[str, PendingTurn | None]:
+        """Stream sentences while rendering the next audio artifact ahead of playback."""
+        self.state = AgentState.SPEAKING
+        buffer = ""
+        spoken_parts: list[str] = []
+        punctuation = re.compile(r"[。！？!?；;\n]")
+        deferred: PendingTurn | None = None
+        stream_queue: queue.Queue[object] = queue.Queue()
+        stream_done = object()
+        sentence_done = object()
+        audio_done = object()
+        stream_stop = threading.Event()
+        listener_stop = threading.Event()
+        pipeline_stop = threading.Event()
+        sentence_queue: queue.Queue[object] = queue.Queue()
+        audio_queue: queue.Queue[object] = queue.Queue(maxsize=2)
+        tts_error: list[BaseException] = []
+
+        def receive_stream() -> None:
+            try:
+                for chunk in chunks:
+                    if stream_stop.is_set():
+                        break
+                    stream_queue.put(chunk)
+            except BaseException as exc:
+                stream_queue.put(exc)
+            finally:
+                close_stream = getattr(chunks, "close", None)
+                if callable(close_stream):
+                    close_stream()
+                stream_queue.put(stream_done)
+
+        receiver = threading.Thread(target=receive_stream, name="myagent-llm-stream")
+        receiver.start()
+
+        def render_audio() -> None:
+            try:
+                while not pipeline_stop.is_set():
+                    item = sentence_queue.get()
+                    if item is sentence_done:
+                        break
+                    artifact = self.speaker.render(
+                        TTSRequest(
+                            text=item,
+                            voice=self.config.tts_voice,
+                            rate=self.config.tts_rate,
+                        )
+                    )
+                    while not pipeline_stop.is_set():
+                        try:
+                            audio_queue.put(artifact, timeout=0.05)
+                            break
+                        except queue.Full:
+                            continue
+                    else:
+                        artifact.cleanup()
+                        break
+            except BaseException as exc:
+                tts_error.append(exc)
+            finally:
+                audio_queue.put(audio_done)
+
+        renderer = threading.Thread(target=render_audio, name="myagent-tts-render")
+        renderer.start()
+
+        can_listen = self.config.interruptible_tts and callable(getattr(self.speaker, "stop", None))
+        listener_events: queue.Queue[object] = queue.Queue()
+        listener_thread: threading.Thread | None = None
+        if can_listen:
+            listener = self._create_stream_listener(listener_stop)
+
+            def receive_listener_events() -> None:
+                try:
+                    for event in listener:
+                        listener_events.put(event)
+                finally:
+                    listener_events.put(None)
+
+            listener_thread = threading.Thread(
+                target=receive_listener_events,
+                name="myagent-stream-listener",
+                daemon=True,
+            )
+            listener_thread.start()
+
+        playback_thread: threading.Thread | None = None
+        current_audio: RenderedAudio | None = None
+        playback_finished = False
+        interrupted = False
+        try:
+            while not playback_finished or playback_thread is not None:
+                if playback_thread is not None and not playback_thread.is_alive():
+                    playback_thread.join()
+                    playback_thread = None
+                    if current_audio is not None:
+                        current_audio.cleanup()
+                        current_audio = None
+                    if tts_error:
+                        raise tts_error[0]
+
+                if playback_thread is None and not playback_finished:
+                    try:
+                        audio = audio_queue.get_nowait()
+                    except queue.Empty:
+                        audio = None
+                    if audio is audio_done:
+                        playback_finished = True
+                    elif isinstance(audio, RenderedAudio):
+                        current_audio = audio
+
+                        def play_current(artifact: RenderedAudio = audio) -> None:
+                            try:
+                                self.speaker.play(artifact)
+                            except BaseException as exc:
+                                tts_error.append(exc)
+
+                        playback_thread = threading.Thread(
+                            target=play_current,
+                            name="myagent-tts-play",
+                        )
+                        playback_thread.start()
+
+                if can_listen:
+                    try:
+                        event = listener_events.get_nowait()
+                    except queue.Empty:
+                        event = None
+                    if event is not None and getattr(event, "kind", None) == "speech_started":
+                        logger.info("speech_barge_in_started awaiting_interrupt_decision")
+                    elif event is not None and getattr(event, "kind", None) == "speech_ended":
+                        utterance = getattr(event, "utterance", None)
+                        if utterance is not None:
+                            transcript, speaker_result = self._transcribe_barge_in(utterance)
+                            should_interrupt = self._should_interrupt_speech(transcript)
+                            logger.info(
+                                "speech_barge_in_decision interrupt=%s transcript=%s",
+                                should_interrupt,
+                                transcript,
+                            )
+                            if transcript and should_interrupt:
+                                interrupted = True
+                                self.speaker.stop()
+                                deferred = PendingTurn(
+                                    utterance, transcript, speaker_result, interrupt_requested=True
+                                )
+                                break
+                            if transcript:
+                                deferred = PendingTurn(
+                                    utterance, transcript, speaker_result, interrupt_requested=False
+                                )
+
+                try:
+                    item = stream_queue.get(timeout=0.03)
+                except queue.Empty:
+                    continue
+                if item is stream_done:
+                    if buffer.strip():
+                        sentence_queue.put(self._clean_spoken_sentence(buffer))
+                        buffer = ""
+                    sentence_queue.put(sentence_done)
+                    continue
+                if isinstance(item, BaseException):
+                    raise item
+                if not isinstance(item, str) or not item:
+                    continue
+                buffer += item
+                while True:
+                    match = punctuation.search(buffer)
+                    if match is None:
+                        break
+                    sentence = self._clean_spoken_sentence(buffer[: match.end()])
+                    buffer = buffer[match.end():]
+                    if sentence:
+                        spoken_parts.append(sentence)
+                        logger.info("stream_sentence text=%s", sentence)
+                        sentence_queue.put(sentence)
+        finally:
+            stream_stop.set()
+            listener_stop.set()
+            pipeline_stop.set()
+            sentence_queue.put(sentence_done)
+            if interrupted:
+                self.speaker.stop()
+            renderer.join(timeout=2.0)
+            if playback_thread is not None:
+                self.speaker.stop()
+                playback_thread.join(timeout=2.0)
+            if current_audio is not None:
+                current_audio.cleanup()
+            while True:
+                try:
+                    queued_audio = audio_queue.get_nowait()
+                except queue.Empty:
+                    break
+                if isinstance(queued_audio, RenderedAudio):
+                    queued_audio.cleanup()
+            receiver.join(timeout=1.0)
+            if listener_thread is not None:
+                listener_thread.join(timeout=1.0)
+
+        if tts_error and not interrupted:
+            raise tts_error[0]
         return "".join(spoken_parts), deferred
 
     def _create_stream_listener(self, stop_event: threading.Event) -> Iterator[ListeningEvent]:

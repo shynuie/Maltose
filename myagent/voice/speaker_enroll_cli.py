@@ -15,13 +15,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--profiles",
         type=Path,
-        default=Path("data/speaker_profiles.sqlite3"),
+        default=Path("data/speaker/speaker_profiles.sqlite3"),
         help="SQLite speaker profile database.",
     )
     parser.add_argument(
         "--model-dir",
         type=Path,
-        default=Path("data/models/speechbrain-ecapa"),
+        default=Path("models/speechbrain-ecapa"),
         help="SpeechBrain model cache directory.",
     )
     parser.add_argument("audio", nargs="+", type=Path, help="Enrollment WAV files.")

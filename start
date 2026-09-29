@@ -11,4 +11,26 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-exec uv run --extra speaker myagent "$@"
+EXTRAS=(--extra wake --extra qwen-asr --extra vector-memory --extra speaker)
+WATCHER_PID=""
+KNOWLEDGE_LOG_DIR="data/logs"
+KNOWLEDGE_LOG_FILE="$KNOWLEDGE_LOG_DIR/knowledge.log"
+
+mkdir -p "$KNOWLEDGE_LOG_DIR"
+
+cleanup() {
+  status=$?
+  trap - EXIT
+  if [[ -n "$WATCHER_PID" ]]; then
+    kill "$WATCHER_PID" 2>/dev/null || true
+    wait "$WATCHER_PID" 2>/dev/null || true
+  fi
+  exit "$status"
+}
+
+trap cleanup EXIT
+
+uv run "${EXTRAS[@]}" myagent-documents watch >"$KNOWLEDGE_LOG_FILE" 2>&1 &
+WATCHER_PID=$!
+
+uv run "${EXTRAS[@]}" myagent "$@"

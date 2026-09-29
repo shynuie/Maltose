@@ -35,7 +35,7 @@ class KnowledgeVectorRepositoryTests(unittest.TestCase):
         )
         self.assertNotEqual(
             Path("data/knowledge/vectors.lancedb"),
-            Path("data/memory.lancedb"),
+            Path("data/memory/memory.lancedb"),
         )
 
 

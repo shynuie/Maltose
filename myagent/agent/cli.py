@@ -136,7 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--taskbrain-tasks",
         type=Path,
-        default=Path("data/tasks.sqlite3"),
+        default=Path("data/tasks/tasks.sqlite3"),
         help="SQLite database for durable task state.",
     )
     parser.add_argument(
@@ -160,7 +160,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--taskbrain-memory",
         type=Path,
-        default=Path("data/memory.json"),
+        default=Path("data/memory/memory.json"),
         help="Persistent local memory JSON file.",
     )
     parser.add_argument(
@@ -172,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--taskbrain-memory-source",
         type=Path,
-        default=Path("data/memory.json"),
+        default=Path("data/memory/memory.json"),
         help="Legacy JSON memory file to import into LanceDB.",
     )
     parser.add_argument("--taskbrain-user-id", default="user-001")
@@ -185,13 +185,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--speaker-profiles",
         type=Path,
-        default=Path("data/speaker_profiles.sqlite3"),
+        default=Path("data/speaker/speaker_profiles.sqlite3"),
         help="SQLite database containing enrolled speaker profiles.",
     )
     parser.add_argument(
         "--speaker-model-dir",
         type=Path,
-        default=Path("data/models/speechbrain-ecapa"),
+        default=Path("models/speechbrain-ecapa"),
         help="Local cache directory for the SpeechBrain speaker model.",
     )
     parser.add_argument(

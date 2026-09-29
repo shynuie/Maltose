@@ -76,6 +76,21 @@ class LanceVectorRepository:
             [self._chunk_row(document_id, chunk, embedding) for chunk, embedding in chunks],
         )
 
+    def delete_document(self, document_id: str) -> None:
+        """Remove summary and chunk vectors for a deleted source document."""
+        self._delete_document_rows(document_id)
+
+    def list_document_ids(self) -> set[str]:
+        """List ids from both vector tables for repair/orphan detection."""
+        document_ids: set[str] = set()
+        for name in (self.summary_table_name, self.chunk_table_name):
+            table = self._table(name)
+            if table is None:
+                continue
+            rows = table.to_arrow().column("document_id").to_pylist()
+            document_ids.update(str(document_id) for document_id in rows)
+        return document_ids
+
     def _delete_document_rows(self, document_id: str) -> None:
         escaped = document_id.replace("'", "''")
         for name in (self.summary_table_name, self.chunk_table_name):

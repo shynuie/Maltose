@@ -132,7 +132,7 @@ class ScheduleRecord:
 class TaskStore:
     """SQLite-backed task state store safe for worker threads."""
 
-    def __init__(self, path: str | Path = "data/tasks.sqlite3") -> None:
+    def __init__(self, path: str | Path = "data/tasks/tasks.sqlite3") -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()

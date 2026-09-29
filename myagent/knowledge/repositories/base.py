@@ -8,6 +8,14 @@ from myagent.knowledge.models import DocumentChunk
 
 
 class VectorRepository(Protocol):
+    def list_document_ids(self) -> set[str]:
+        """Return document ids currently represented in vector storage."""
+        ...
+
+    def delete_document(self, document_id: str) -> None:
+        """Delete all vector rows belonging to a document."""
+        ...
+
     def replace_document(
         self,
         document_id: str,

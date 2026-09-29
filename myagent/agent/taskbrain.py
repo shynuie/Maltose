@@ -107,7 +107,7 @@ class MemoryStore:
 
     def __init__(
         self,
-        path: str | Path = "data/memory.json",
+        path: str | Path = "data/memory/memory.json",
         embedder: EmbeddingProvider | None = None,
     ) -> None:
         self.path = Path(path)
@@ -232,7 +232,7 @@ class LanceMemoryStore:
 
     def __init__(
         self,
-        path: str | Path = "data/memory.lancedb",
+        path: str | Path = "data/memory/memory.lancedb",
         embedder: EmbeddingProvider | None = None,
         user_id: str = "default",
     ) -> None:
@@ -335,7 +335,7 @@ class LanceMemoryStore:
             row["tags"] = json.loads(row.get("tags", "[]"))
         return rows
 
-    def migrate_json(self, source: str | Path = "data/memory.json") -> int:
+    def migrate_json(self, source: str | Path = "data/memory/memory.json") -> int:
         source_path = Path(source)
         if not source_path.exists():
             return 0
@@ -375,7 +375,7 @@ class UserProfileStore:
 
     table_name = "user_profile"
 
-    def __init__(self, path: str | Path = "data/memory.lancedb", user_id: str = "default") -> None:
+    def __init__(self, path: str | Path = "data/memory/memory.lancedb", user_id: str = "default") -> None:
         try:
             import lancedb
         except ImportError as exc:
