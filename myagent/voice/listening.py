@@ -266,6 +266,12 @@ def microphone_events(
     segmenter = UtteranceSegmenter(detector, settings)
     wake_gate = WakeWordGate(wake_word_detector) if wake_word_detector is not None else None
     wake_detected = wake_gate is None
+    if wake_gate is not None:
+        # A listener is recreated after every conversation/standby transition.
+        # Reset stateful KWS runtimes (notably Alibaba SoundConnect) at this
+        # boundary so a previous conversation cannot poison the next wake.
+        wake_gate.reset()
+        logger.info("wake_detector_reset reason=listener_started")
     wake_ack_deadline: float | None = None
     wake_buffer: deque[bytes] = deque(maxlen=settings.frames_for_ms(wake_buffer_ms))
     pending_wake_frames: list[bytes] = []

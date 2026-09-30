@@ -1,0 +1,25 @@
+# Remote ModelScope training config for the normalized-12000 KWS A/B run.
+# Paths are inside the training container (/workspace/data).
+work_dir: /workspace/data/kws/training/marvin-mini/work-3ch-split4-normalized12000-split4b
+workers: 8
+keywords:
+- mai_ya_tang,1,2,3,4
+main_keyword: mai_ya_tang
+test_pos_data_dir: /workspace/data/kws/training/marvin-mini/test_pos_3ch
+test_pos_anno_dir: /workspace/data/kws/training/marvin-mini/test_annotation_3ch
+test_neg_data_dir: /workspace/data/kws/training/marvin-mini/test_neg_3ch
+train_pos_list:
+- /workspace/data/kws/training/marvin-mini/positive_train_normalized12000_split4_container.txt,1.0
+train_neg_list:
+- /workspace/data/kws/training/marvin-mini/negative_train_normalized12000_container.txt,1.0
+single_noise1_list:
+- /workspace/data/kws/training/marvin-mini/noise_normalized12000_container.txt,1.0
+multi_noise1_list:
+- /workspace/data/kws/training/marvin-mini/noise_normalized12000_container.txt,1.0
+train_interf_list:
+- /workspace/data/kws/training/marvin-mini/noise_normalized12000_container.txt,1.0
+train_ref_list:
+- /workspace/data/kws/training/marvin-mini/noise_normalized12000_container.txt,1.0
+max_epochs: 100
+train_iters_per_epoch: 20
+val_iters_per_epoch: 5

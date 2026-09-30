@@ -45,6 +45,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable the same per-frame peak normalization used by the live detector.",
     )
+    parser.add_argument("--target-peak", type=int, help="Override peak-normalization target.")
+    parser.add_argument("--min-peak", type=int, help="Override peak-normalization threshold.")
+    parser.add_argument("--max-gain", type=float, help="Override peak-normalization maximum gain.")
     parser.add_argument(
         "--preprocessor",
         choices=("raw", "peak", "smooth-rms", "highpass-smooth-rms", "spectral-gate"),
@@ -64,7 +67,7 @@ def main() -> None:
     if args.sample_rate <= 0 or args.frame_ms <= 0:
         raise ValueError("--sample-rate and --frame-ms must be greater than zero")
 
-    paths = sorted(args.input_dir.glob(args.pattern))
+    paths = sorted(args.input_dir.rglob(args.pattern))
     if not paths:
         raise FileNotFoundError(f"No WAV files found under {args.input_dir!s}")
 
@@ -106,6 +109,14 @@ def main() -> None:
             normalize_audio=args.preprocessor != "raw",
             normalization_mode=args.preprocessor,
         )
+    peak_overrides = {
+        "target_peak": args.target_peak,
+        "min_peak": args.min_peak,
+        "max_gain": args.max_gain,
+    }
+    peak_overrides = {key: value for key, value in peak_overrides.items() if value is not None}
+    if peak_overrides:
+        config = replace(config, **peak_overrides)
     rms_overrides = {
         "rms_target": args.rms_target,
         "rms_noise_floor": args.rms_noise_floor,

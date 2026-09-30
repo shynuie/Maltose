@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import logging
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
 from myagent.voice.audio import normalize_pcm_peak
 from myagent.voice.enhancement import SpectralGateConfig, SpectralNoiseSuppressor
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -38,10 +42,18 @@ class SherpaOnnxKWSConfig:
 
 
 @dataclass(frozen=True)
+class AlibabaKWSConfig:
+    model_dir: Path
+    python: Path
+
+
+@dataclass(frozen=True)
 class WakeWordConfig:
     enabled: bool = True
     provider: str = "sherpa-onnx"
     sherpa_onnx: SherpaOnnxKWSConfig | None = None
+    alibaba: AlibabaKWSConfig | None = None
+    fallback_config: Path | None = None
     normalize_audio: bool = True
     normalization_mode: str = "peak"
     target_peak: int = 12000
@@ -63,6 +75,38 @@ class WakeWordGate:
         if hit is not None:
             self._detector.reset()
         return hit
+
+    def reset(self) -> None:
+        """Start a fresh wake-listening cycle without replacing the detector."""
+        self._detector.reset()
+
+
+class FallbackWakeWordDetector:
+    """Switch to a local fallback detector after worker failure."""
+
+    def __init__(self, primary: WakeWordDetector, fallback: WakeWordDetector) -> None:
+        self._primary = primary
+        self._fallback = fallback
+        self._using_fallback = False
+
+    def process_frame(self, pcm_frame: bytes, sample_rate: int) -> WakeWordHit | None:
+        if self._using_fallback:
+            return self._fallback.process_frame(pcm_frame, sample_rate)
+        try:
+            return self._primary.process_frame(pcm_frame, sample_rate)
+        except Exception as exc:
+            logger.exception("wake_primary_failed_using_fallback error=%s", exc)
+            self._using_fallback = True
+            close = getattr(self._primary, "close", None)
+            if callable(close):
+                close()
+            return self._fallback.process_frame(pcm_frame, sample_rate)
+
+    def reset(self) -> None:
+        if self._using_fallback:
+            self._fallback.reset()
+        else:
+            self._primary.reset()
 
 
 class GainWakeWordDetector:
@@ -241,11 +285,29 @@ class SherpaOnnxKeywordSpotter:
 def create_wake_word_detector(config: WakeWordConfig) -> WakeWordDetector | None:
     if not config.enabled:
         return None
-    if config.provider != "sherpa-onnx":
+    if config.provider == "alibaba-modelscope":
+        if config.alibaba is None:
+            raise ValueError("Alibaba KWS config is required.")
+        from myagent.voice.alibaba_kws import AlibabaKWSDetector
+
+        detector: WakeWordDetector = AlibabaKWSDetector(
+            config.alibaba.model_dir,
+            python=config.alibaba.python,
+        )
+        if config.fallback_config is not None:
+            fallback_config = load_wake_word_config(config.fallback_config)
+            fallback_config = replace(fallback_config, normalize_audio=False)
+            fallback = create_wake_word_detector(fallback_config)
+            if fallback is None:
+                raise ValueError("Alibaba KWS fallback config is disabled")
+            detector = FallbackWakeWordDetector(detector, fallback)
+    elif config.provider == "sherpa-onnx":
+        if config.sherpa_onnx is None:
+            raise ValueError("sherpa-onnx wake config is required.")
+        detector = SherpaOnnxKeywordSpotter(config.sherpa_onnx)
+    else:
         raise ValueError(f"Unsupported wake word provider: {config.provider}")
-    if config.sherpa_onnx is None:
-        raise ValueError("sherpa-onnx wake config is required.")
-    detector: WakeWordDetector = SherpaOnnxKeywordSpotter(config.sherpa_onnx)
+
     if not config.normalize_audio or config.normalization_mode == "none":
         return detector
 
@@ -286,6 +348,7 @@ def load_wake_word_config(path: Path) -> WakeWordConfig:
 
     sherpa_data = wake_data.get("sherpa_onnx", wake_data.get("sherpa-onnx", wake_data))
     sherpa_config = None
+    alibaba_config = None
     if provider == "sherpa-onnx":
         sherpa_config = SherpaOnnxKWSConfig(
             tokens=_resolve_config_path(path, sherpa_data["tokens"]),
@@ -300,11 +363,23 @@ def load_wake_word_config(path: Path) -> WakeWordConfig:
             keywords_threshold=float(sherpa_data.get("keywords_threshold", 0.25)),
             num_trailing_blanks=int(sherpa_data.get("num_trailing_blanks", 1)),
         )
+    elif provider == "alibaba-modelscope":
+        alibaba_data = wake_data.get("alibaba", wake_data)
+        alibaba_config = AlibabaKWSConfig(
+            model_dir=_resolve_config_path(path, alibaba_data["model_dir"]),
+            python=Path(alibaba_data.get("python", "python3.10")).expanduser(),
+        )
 
     return WakeWordConfig(
         enabled=bool(wake_data.get("enabled", True)),
         provider=provider,
         sherpa_onnx=sherpa_config,
+        alibaba=alibaba_config,
+        fallback_config=(
+            _resolve_config_path(path, wake_data["fallback_config"])
+            if wake_data.get("fallback_config")
+            else None
+        ),
         normalize_audio=bool(wake_data.get("normalize_audio", True)),
         normalization_mode=str(wake_data.get("normalization_mode", "peak")),
         target_peak=int(wake_data.get("target_peak", 12000)),

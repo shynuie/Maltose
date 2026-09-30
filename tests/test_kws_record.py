@@ -3,7 +3,7 @@ import unittest
 import wave
 from pathlib import Path
 
-from myagent.voice.kws_record_cli import next_recording_path, write_pcm_wav
+from myagent.voice.kws_record_cli import append_metadata, next_recording_path, write_pcm_wav
 
 
 class KWSRecordTest(unittest.TestCase):
@@ -28,3 +28,9 @@ class KWSRecordTest(unittest.TestCase):
     def test_uses_indexed_negative_filename(self) -> None:
         path = next_recording_path(Path("recordings/kws/negative"), 2, kind="negative")
         self.assertIn("kws-negative-002-", path.name)
+
+    def test_appends_jsonl_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "metadata.jsonl"
+            append_metadata(path, {"path": "sample.wav", "distance": "far"})
+            self.assertEqual(path.read_text(encoding="utf-8").strip(), '{"path": "sample.wav", "distance": "far"}')

@@ -16,6 +16,7 @@ htmlcov/
 .env
 .env.*
 myagent.toml
+training_server
 data/
 documents/
 

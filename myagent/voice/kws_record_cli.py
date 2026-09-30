@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import audioop
+import json
 import logging
 import queue
 import time
@@ -60,6 +61,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds to record after pressing Enter (default: 2.0).",
     )
     parser.add_argument("--device", help="sounddevice input device id or name.")
+    parser.add_argument("--speaker-id", default="marvin", help="Speaker label stored in metadata.")
+    parser.add_argument(
+        "--distance",
+        choices=("near", "normal", "far"),
+        default="normal",
+        help="Recording distance label stored in metadata.",
+    )
+    parser.add_argument("--environment", default="unknown", help="Room/noise label stored in metadata.")
+    parser.add_argument(
+        "--metadata-file",
+        type=Path,
+        default=None,
+        help="JSONL metadata path; defaults to metadata.jsonl under --output-dir.",
+    )
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--sample-rate", type=int, default=16000)
     parser.add_argument(
@@ -104,6 +119,7 @@ def main() -> None:
         args.device or "default",
     )
     prompts = tuple(args.prompts or NEGATIVE_PROMPTS) if args.kind == "negative" else ()
+    metadata_file = args.metadata_file or output_dir / "metadata.jsonl"
     if args.kind == "positive":
         logger.info("按 Enter 開始錄音；錄音時請說：麥芽糖。Ctrl-C 結束。")
     else:
@@ -139,6 +155,24 @@ def main() -> None:
                 len(pcm) / (args.sample_rate * 2),
                 rms,
                 peak,
+            )
+            append_metadata(
+                metadata_file,
+                {
+                    "path": str(path),
+                    "kind": args.kind,
+                    "keyword": "麥芽糖" if args.kind == "positive" else None,
+                    "speaker_id": args.speaker_id,
+                    "distance": args.distance,
+                    "environment": args.environment,
+                    "prompt": prompt if args.kind == "negative" else None,
+                    "device": args.device,
+                    "sample_rate": args.sample_rate,
+                    "duration_seconds": len(pcm) / (args.sample_rate * 2),
+                    "rms": rms,
+                    "peak": peak,
+                    "recorded_at": datetime.now().astimezone().isoformat(),
+                },
             )
             if args.count is None or recorded < args.count:
                 if args.kind == "positive":
@@ -193,6 +227,12 @@ def write_pcm_wav(path: Path, pcm: bytes, *, sample_rate: int) -> None:
         wav_file.setsampwidth(2)
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(pcm)
+
+
+def append_metadata(path: Path, record: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as metadata_file:
+        metadata_file.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":

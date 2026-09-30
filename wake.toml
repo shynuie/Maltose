@@ -1,10 +1,14 @@
 [wake]
 enabled = true
-provider = "sherpa-onnx"
-normalize_audio = true
+provider = "alibaba-modelscope"
+normalize_audio = false
 target_peak = 12000
 min_peak = 6000
 max_gain = 4.0
+
+[wake.alibaba]
+model_dir = "models/alibaba-kws-maiyatang-checkpoint99"
+python = "/private/tmp/myagent-kws310/bin/python"
 
 [wake.sherpa_onnx]
 tokens = "models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/tokens.txt"

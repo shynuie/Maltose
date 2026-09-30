@@ -251,6 +251,14 @@ class WakeWordGateTest(unittest.TestCase):
         self.assertEqual(hit, WakeWordHit(keyword="小助手"))
         self.assertEqual(detector.reset_count, 1)
 
+    def test_can_reset_detector_at_listener_cycle_boundary(self) -> None:
+        detector = FakeWakeDetector()
+        gate = WakeWordGate(detector)
+
+        gate.reset()
+
+        self.assertEqual(detector.reset_count, 1)
+
     def test_loads_wake_word_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config_path = Path(directory) / "wake.toml"
