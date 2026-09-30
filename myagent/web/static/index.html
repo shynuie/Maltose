@@ -7,28 +7,31 @@
     <style>
       :root { color-scheme: dark; font-family: system-ui, sans-serif; }
       body { margin: 0; background: #111827; color: #e5e7eb; }
-      main { max-width: 900px; margin: 0 auto; padding: 24px; }
+      main { max-width: 900px; height: 100vh; box-sizing: border-box; margin: 0 auto; padding: 24px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 16px; }
       header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
       h1 { margin: 0; font-size: 1.35rem; }
       #status { color: #93c5fd; font-size: .9rem; }
-      #messages { min-height: 60vh; margin: 24px 0; display: grid; gap: 12px; align-content: start; }
+      #conversation-panel { min-height: 0; overflow-y: auto; border: 1px solid #263244; border-radius: 16px; background: #0b1220; padding: 16px; }
+      #messages { display: grid; gap: 12px; align-content: start; }
       .message { padding: 14px 16px; border-radius: 14px; white-space: pre-wrap; line-height: 1.55; }
       .user { background: #1d4ed8; margin-left: 15%; }
       .assistant { background: #1f2937; margin-right: 15%; }
-      form { display: flex; gap: 10px; position: sticky; bottom: 16px; }
+      form { display: flex; gap: 10px; }
       input { flex: 1; padding: 13px 15px; border: 1px solid #4b5563; border-radius: 12px; background: #030712; color: inherit; font-size: 1rem; }
       button { padding: 0 20px; border: 0; border-radius: 12px; background: #60a5fa; color: #0f172a; font-weight: 700; }
       button:disabled { opacity: .5; }
+      @media (max-width: 640px) { main { padding: 14px; gap: 10px; } .user, .assistant { margin-left: 0; margin-right: 0; } }
     </style>
   </head>
   <body>
     <main>
       <header><h1>MyAgent</h1><span id="status">connecting…</span></header>
-      <section id="messages" aria-live="polite"></section>
+      <section id="conversation-panel" aria-label="对话内容"><div id="messages" aria-live="polite"></div></section>
       <form id="input-form"><input id="input" autocomplete="off" placeholder="输入指令…" /><button>发送</button></form>
     </main>
     <script>
       const messages = document.querySelector('#messages');
+      const conversationPanel = document.querySelector('#conversation-panel');
       const status = document.querySelector('#status');
       const input = document.querySelector('#input');
       const streamingMessages = new Map();
@@ -37,7 +40,7 @@
         node.className = `message ${role}`;
         node.textContent = content;
         messages.appendChild(node);
-        node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        conversationPanel.scrollTop = conversationPanel.scrollHeight;
         return node;
       };
       const source = new EventSource('/api/events');
@@ -58,7 +61,7 @@
         const node = streamingMessages.get(data.message_id);
         if (node) {
           node.textContent += data.content;
-          node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          conversationPanel.scrollTop = conversationPanel.scrollHeight;
         }
       });
       source.addEventListener('assistant_end', event => {
