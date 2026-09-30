@@ -409,6 +409,14 @@ def main() -> None:
             timeout=args.openclaw_timeout,
         )
     elif args.brain == "taskbrain":
+        ui_publisher = (
+            lambda block_type, payload: event_hub.publish(
+                "ui_block",
+                {"block_type": block_type, **payload},
+            )
+            if args.web
+            else None
+        )
         embedder = None
         if args.taskbrain_embedding == "qwen3-embedding-0.6b":
             embedder = QwenEmbeddingProvider(device=args.taskbrain_embedding_device)
@@ -525,7 +533,7 @@ def main() -> None:
                 external_ip_url=args.external_ip_url,
                 timeout=args.environment_timeout,
             ),
-            ui_publisher=event_hub.publish if args.web else None,
+            ui_publisher=ui_publisher,
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)
