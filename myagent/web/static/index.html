@@ -308,13 +308,18 @@
           nodes.set(item.id, {x, y, width, height});
         });
         const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-        marker.setAttribute('id', `arrow-${sceneId}`); marker.setAttribute('viewBox', '0 0 7 6'); marker.setAttribute('markerWidth', '7'); marker.setAttribute('markerHeight', '6'); marker.setAttribute('refX', '7'); marker.setAttribute('refY', '3'); marker.setAttribute('orient', 'auto'); marker.setAttribute('markerUnits', 'userSpaceOnUse');
-        const markerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path'); markerPath.setAttribute('d', 'M0,0 L0,6 L7,3 z'); markerPath.setAttribute('fill', '#8995aa'); marker.appendChild(markerPath);
+        const markerId = `arrow-${String(sceneId).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+        marker.setAttribute('id', markerId); marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('markerWidth', '10'); marker.setAttribute('markerHeight', '10'); marker.setAttribute('refX', '9'); marker.setAttribute('refY', '5'); marker.setAttribute('orient', 'auto'); marker.setAttribute('markerUnits', 'userSpaceOnUse');
+        const markerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path'); markerPath.setAttribute('d', 'M0,0 L10,5 L0,10 z'); markerPath.setAttribute('fill', '#8995aa'); marker.appendChild(markerPath);
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); defs.appendChild(marker); svg.appendChild(defs);
         elements.filter(item => item && item.type === 'arrow').forEach(item => {
           const from = nodes.get(item.from), to = nodes.get(item.to); if (!from || !to) return;
           const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', from.x + from.width / 2); line.setAttribute('y1', from.y + from.height / 2); line.setAttribute('x2', to.x + to.width / 2); line.setAttribute('y2', to.y + to.height / 2); line.setAttribute('stroke', '#8995aa'); line.setAttribute('stroke-width', '2'); line.setAttribute('marker-end', `url(#arrow-${sceneId})`); svg.appendChild(line);
+          const x1 = from.x + from.width / 2, y1 = from.y + from.height / 2, x2 = to.x + to.width / 2, y2 = to.y + to.height / 2;
+          line.setAttribute('x1', x1); line.setAttribute('y1', y1); line.setAttribute('x2', x2); line.setAttribute('y2', y2); line.setAttribute('stroke', '#8995aa'); line.setAttribute('stroke-width', '2'); line.setAttribute('marker-end', `url(#${markerId})`); svg.appendChild(line);
+          const angle = Math.atan2(y2 - y1, x2 - x1), size = 11, wing = 5;
+          const points = `${x2},${y2} ${x2 - size * Math.cos(angle) + wing * Math.sin(angle)},${y2 - size * Math.sin(angle) - wing * Math.cos(angle)} ${x2 - size * Math.cos(angle) - wing * Math.sin(angle)},${y2 - size * Math.sin(angle) + wing * Math.cos(angle)}`;
+          const arrowhead = document.createElementNS('http://www.w3.org/2000/svg', 'polygon'); arrowhead.setAttribute('points', points); arrowhead.setAttribute('fill', '#8995aa'); svg.appendChild(arrowhead);
         });
         elements.filter(item => item && item.type === 'node').forEach(item => {
           const box = nodes.get(item.id); if (!box) return;
