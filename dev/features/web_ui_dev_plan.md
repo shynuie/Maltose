@@ -65,11 +65,11 @@ Web / Voice / CLI input
 
 ### M3：Agent 整合
 
-- [ ] Web input 與 voice input 進入同一個 session boundary。
-- [ ] 保留現有 VoiceAgent 行為與測試。
-- [ ] CLI 增加可選 Web UI 啟動參數。
+- [x] Web input 與 voice input 進入同一個 session boundary。
+- [x] 保留現有 VoiceAgent 行為與測試。
+- [x] CLI 增加可選 Web UI 啟動參數。
 
-驗證：現有 agent/voice focused tests 加上 Web UI integration tests。
+驗證：25 個 focused regression/integration tests 通過；原有完整 `test_agent.py` 仍有 5 個與本變更無關的既有 optional dependency/TaskBrain failures。
 
 ### M4：可呈現內容
 
@@ -83,6 +83,7 @@ Web / Voice / CLI input
 - [x] 建立本 feature plan。
 - [x] 實作 M1。
 - [x] 實作 M2 的本地 Web server 與最小 UI。
+- [x] 實作 M3 的 text command queue、Agent event publishing 與 CLI wiring。
 
 ## 下一步
 

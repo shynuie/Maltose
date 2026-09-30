@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import queue
 import re
+import inspect
 import tempfile
 import threading
 import time
@@ -15,6 +16,7 @@ from typing import Callable, Iterator, Protocol
 
 from myagent.agent.brain import AgentBrain, EchoBrain, TurnContext
 from myagent.agent.config import AgentConfig
+from myagent.runtime import EventHub
 from myagent.voice import (
     FasterWhisperSTT,
     ListeningEvent,
@@ -85,6 +87,7 @@ class VoiceAgent:
         speaker_identifier: SpeakerIdentifier | None = None,
         speaker_identity_manager: SpeakerIdentityManager | None = None,
         listener_factory: ListenerFactory = microphone_events,
+        event_hub: EventHub | None = None,
     ) -> None:
         self.config = config or AgentConfig()
         self.brain = brain or EchoBrain()
@@ -93,8 +96,27 @@ class VoiceAgent:
         self._speaker_identifier = speaker_identifier or NullSpeakerIdentifier()
         self._speaker_identity_manager = speaker_identity_manager
         self._listener_factory = listener_factory
-        self.state = AgentState.INITIALIZING
+        self._event_hub = event_hub
+        self._command_queue: queue.Queue[str] = queue.Queue()
+        self._state = AgentState.INITIALIZING
         self.turn_count = 0
+
+    @property
+    def state(self) -> AgentState:
+        return self._state
+
+    @state.setter
+    def state(self, value: AgentState) -> None:
+        self._state = value
+        if self._event_hub is not None:
+            self._event_hub.publish("state_changed", {"state": value.value})
+
+    def submit_text(self, text: str) -> None:
+        """Queue text from a non-voice interface for the current Agent session."""
+        text = text.strip()
+        if not text:
+            raise ValueError("Agent text input cannot be empty")
+        self._command_queue.put(text)
 
     @property
     def transcriber(self) -> STTProvider:
@@ -139,15 +161,41 @@ class VoiceAgent:
                 captured_utterance = pending_turn.utterance if pending_turn else None
                 pretranscribed_turn = pending_turn
                 pending_turn = None
+                external_text: str | None = None
                 if captured_utterance is None:
-                    for event in self._listener_factory(
-                        self.config.vad_settings,
-                        self.config.device,
-                        self.config.standby_timeout if conversation_active else None,
-                        None if conversation_active else self.config.wake_word_detector,
-                        self.config.wake_ack_delay,
-                        self.config.wake_buffer_ms,
-                    ):
+                    listening_events: queue.Queue[object] = queue.Queue()
+                    listener_stop = threading.Event()
+
+                    def receive_listening_events() -> None:
+                        try:
+                            for event in self._invoke_listener(listener_stop, conversation_active):
+                                listening_events.put(event)
+                        except BaseException as exc:
+                            listening_events.put(exc)
+                        finally:
+                            listening_events.put(None)
+
+                    listener_thread = threading.Thread(
+                        target=receive_listening_events,
+                        name="myagent-listener",
+                        daemon=True,
+                    )
+                    listener_thread.start()
+                    while captured_utterance is None and external_text is None:
+                        try:
+                            external_text = self._command_queue.get_nowait()
+                            listener_stop.set()
+                            break
+                        except queue.Empty:
+                            pass
+                        try:
+                            event = listening_events.get(timeout=0.05)
+                        except queue.Empty:
+                            continue
+                        if event is None:
+                            break
+                        if isinstance(event, BaseException):
+                            raise event
                         if event.kind == "standby_timeout":
                             logger.info(
                                 "conversation_silence_timeout returning_to_listening_without_ending_session"
@@ -173,20 +221,35 @@ class VoiceAgent:
                                 captured_utterance.duration_seconds,
                             )
                             break
+                    listener_stop.set()
+                    listener_thread.join(timeout=1.0)
+
+                if external_text is not None:
+                    result = STTResult(
+                        text=external_text,
+                        language=self.config.whisper_language,
+                        duration=0.0,
+                        segments=[],
+                    )
+                    speaker_result = SpeakerResult(None, None, "web")
+                elif captured_utterance is None:
+                    continue
 
                 if self.state == AgentState.SHUTDOWN:
                     break
                 if captured_utterance is None:
-                    continue
+                    self.turn_count += 1
+                else:
+                    self.turn_count += 1
+                    path = _next_output_path(self.config.output_dir, self.turn_count)
+                    stt_utterance = self._prepare_stt_utterance(captured_utterance)
+                    write_utterance_wav(path, stt_utterance)
 
-                self.turn_count += 1
                 self.state = AgentState.THINKING
 
-                path = _next_output_path(self.config.output_dir, self.turn_count)
-                stt_utterance = self._prepare_stt_utterance(captured_utterance)
-                write_utterance_wav(path, stt_utterance)
-
-                if pretranscribed_turn is not None:
+                if external_text is not None:
+                    pass
+                elif pretranscribed_turn is not None:
                     result = STTResult(
                         text=pretranscribed_turn.transcript,
                         language=self.config.whisper_language,
@@ -228,6 +291,7 @@ class VoiceAgent:
                     speaker_label,
                     result.text.strip(),
                 )
+                self._publish("user_message", {"content": result.text.strip(), "source": "web" if external_text is not None else "voice"})
 
                 if not result.text.strip():
                     logger.info("empty_transcript_ignored")
@@ -264,6 +328,7 @@ class VoiceAgent:
                             )
                         )
                 logger.info("brain_reply text=%s", reply_text)
+                self._publish("assistant_message", {"content": reply_text})
                 logger.info("speaking_done")
                 if interrupted_utterance is not None:
                     conversation_active = True
@@ -309,6 +374,39 @@ class VoiceAgent:
         end_session = getattr(self.brain, "end_session", None)
         if callable(end_session):
             end_session()
+
+    def _publish(self, event_type: str, payload: dict[str, object]) -> None:
+        if self._event_hub is not None:
+            self._event_hub.publish(event_type, payload)
+
+    def _invoke_listener(
+        self,
+        stop_event: threading.Event,
+        conversation_active: bool,
+    ) -> Iterator[ListeningEvent]:
+        arguments = (
+            self.config.vad_settings,
+            self.config.device,
+            self.config.standby_timeout if conversation_active else None,
+            None if conversation_active else self.config.wake_word_detector,
+            self.config.wake_ack_delay,
+            self.config.wake_buffer_ms,
+        )
+        try:
+            signature = inspect.signature(self._listener_factory)
+            accepts_stop_event = (
+                "stop_event" in signature.parameters
+                or any(
+                    parameter.kind == inspect.Parameter.VAR_POSITIONAL
+                    for parameter in signature.parameters.values()
+                )
+                or len(signature.parameters) >= 7
+            )
+        except (TypeError, ValueError):
+            accepts_stop_event = False
+        if accepts_stop_event:
+            return self._listener_factory(*arguments, stop_event)
+        return self._listener_factory(*arguments)
 
     def _speak_task_notifications(self) -> None:
         consume = getattr(self.brain, "consume_task_notifications", None)

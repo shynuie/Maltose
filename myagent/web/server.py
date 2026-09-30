@@ -60,6 +60,8 @@ class WebServer:
         logger.info("web_server_started host=%s port=%s", *self.address)
 
     def close(self) -> None:
+        if self._thread is None:
+            return
         self._server.shutdown()
         self._server.server_close()
         if self._thread is not None:

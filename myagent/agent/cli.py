@@ -33,6 +33,8 @@ from myagent.knowledge.scanner import DocumentScanner
 from myagent.knowledge.summaries import ExtractiveDocumentSummarizer
 from myagent.knowledge.tools import DocumentToolAdapter
 from myagent.logging import configure_logging
+from myagent.runtime import EventHub
+from myagent.web import WebServer
 from myagent.voice import (
     NullSpeakerIdentifier,
     ProfileSpeakerIdentifier,
@@ -58,6 +60,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("myagent.toml"),
         help="Unified TOML configuration file (default: myagent.toml if present).",
     )
+    parser.add_argument("--web", action="store_true", help="Enable the local Web UI.")
+    parser.add_argument("--web-host", default="127.0.0.1")
+    parser.add_argument("--web-port", type=int, default=8765)
     parser.add_argument(
         "--timeout",
         "-t",
@@ -541,15 +546,34 @@ def main() -> None:
         logger.info("speaker_recognition_enabled backend=speechbrain threshold=%s", args.speaker_threshold)
     else:
         speaker_identity_manager = None
+    event_hub = EventHub()
     agent = VoiceAgent(
         config=config,
         brain=brain,
         speaker_identifier=speaker_identifier,
         speaker_identity_manager=speaker_identity_manager,
+        event_hub=event_hub,
     )
+    web_server: WebServer | None = None
+    if args.web:
+        web_server = WebServer(
+            event_hub,
+            input_handler=agent.submit_text,
+            state_provider=lambda: {
+                "state": agent.state.value,
+                "turn_count": agent.turn_count,
+            },
+            host=args.web_host,
+            port=args.web_port,
+        )
     try:
+        if web_server is not None:
+            web_server.start()
+            logger.info("web_ui_available url=http://%s:%s", *web_server.address)
         agent.run()
     finally:
+        if web_server is not None:
+            web_server.close()
         for client in mcp_clients:
             client.close()
         if task_manager is not None:
