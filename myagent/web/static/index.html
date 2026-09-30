@@ -37,6 +37,14 @@
       .message { padding: 14px 16px; border-radius: 16px; white-space: pre-wrap; line-height: 1.58; box-shadow: 0 3px 10px rgba(43, 56, 85, .04); }
       .user { background: #e9efff; color: #28458c; margin-left: 15%; border: 1px solid #dbe5ff; }
       .assistant { background: #fff; color: #253047; margin-right: 15%; border: 1px solid #e5e9f1; }
+      .ui-block { margin-right: 15%; padding: 15px 16px; border: 1px solid #dfe5ef; border-radius: 16px; background: #fff; box-shadow: 0 3px 10px rgba(43, 56, 85, .04); }
+      .ui-title { margin: 0 0 8px; font-size: .92rem; }
+      .ui-content { white-space: pre-wrap; color: #526078; line-height: 1.55; }
+      .ui-progress-track { height: 8px; overflow: hidden; border-radius: 99px; background: #e8ecf4; }
+      .ui-progress-value { height: 100%; border-radius: inherit; background: #5264d9; transition: width .25s ease; }
+      .ui-progress-label { display: flex; justify-content: space-between; margin-top: 8px; color: #69758c; font-size: .78rem; }
+      .ui-actions { display: flex; gap: 8px; margin-top: 12px; }
+      .ui-actions button { padding: 8px 12px; }
       form { display: flex; gap: 10px; padding: 5px; border: 1px solid #e1e6ef; border-radius: 17px; background: #fff; box-shadow: 0 10px 30px rgba(43, 56, 85, .08); }
       input { flex: 1; min-width: 0; padding: 12px 13px; border: 0; outline: 0; border-radius: 12px; background: transparent; color: inherit; font-size: 1rem; }
       button { padding: 0 20px; border: 0; border-radius: 12px; background: #5264d9; color: #fff; font-weight: 700; cursor: pointer; }
@@ -113,6 +121,38 @@
         const node = streamingMessages.get(data.message_id);
         if (node && !node.textContent) node.textContent = data.content || '';
         streamingMessages.delete(data.message_id);
+      });
+      source.addEventListener('ui_block', event => {
+        const data = JSON.parse(event.data).payload;
+        const node = document.createElement('article');
+        node.className = 'ui-block';
+        if (data.block_type === 'ui_progress') {
+          const value = Math.max(0, Math.min(100, Number(data.percent || 0)));
+          node.innerHTML = `<h3 class="ui-title"></h3><div class="ui-progress-track"><div class="ui-progress-value"></div></div><div class="ui-progress-label"><span class="ui-progress-text"></span><span>${value}%</span></div>`;
+          node.querySelector('.ui-title').textContent = data.title || 'Progress';
+          node.querySelector('.ui-progress-value').style.width = `${value}%`;
+          node.querySelector('.ui-progress-text').textContent = data.text || '';
+        } else if (data.block_type === 'ui_confirmation') {
+          node.innerHTML = `<h3 class="ui-title"></h3><div class="ui-content"></div><div class="ui-actions"></div>`;
+          node.querySelector('.ui-title').textContent = data.title || 'Confirmation';
+          node.querySelector('.ui-content').textContent = data.content || '';
+          const actions = Array.isArray(data.actions) ? data.actions : [{id: 'confirm', label: 'Confirm'}];
+          actions.forEach(action => {
+            const button = document.createElement('button');
+            button.textContent = action.label || action.id;
+            button.addEventListener('click', async () => {
+              button.disabled = true;
+              await fetch('/api/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action_id: action.id, value: data.value}) });
+            });
+            node.querySelector('.ui-actions').appendChild(button);
+          });
+        } else {
+          node.innerHTML = `<h3 class="ui-title"></h3><div class="ui-content"></div>`;
+          node.querySelector('.ui-title').textContent = data.title || (data.block_type === 'ui_markdown' ? 'Note' : 'Agent');
+          node.querySelector('.ui-content').textContent = data.content || '';
+        }
+        messages.appendChild(node);
+        conversationPanel.scrollTop = conversationPanel.scrollHeight;
       });
       document.querySelector('#input-form').addEventListener('submit', async event => {
         event.preventDefault();

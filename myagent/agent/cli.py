@@ -556,9 +556,16 @@ def main() -> None:
     )
     web_server: WebServer | None = None
     if args.web:
+        def handle_ui_action(action_id: str, value: object) -> None:
+            event_hub.publish(
+                "ui_action",
+                {"action_id": action_id, "value": value},
+            )
+
         web_server = WebServer(
             event_hub,
             input_handler=agent.submit_text,
+            action_handler=handle_ui_action,
             state_provider=lambda: {
                 "state": agent.state.value,
                 "turn_count": agent.turn_count,

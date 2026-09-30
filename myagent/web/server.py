@@ -15,6 +15,7 @@ from myagent.runtime import AgentEvent, EventHub
 logger = logging.getLogger(__name__)
 
 InputHandler = Callable[[str], None]
+ActionHandler = Callable[[str, Any], None]
 StateProvider = Callable[[], dict[str, Any]]
 
 
@@ -30,12 +31,14 @@ class WebServer:
         hub: EventHub,
         *,
         input_handler: InputHandler | None = None,
+        action_handler: ActionHandler | None = None,
         state_provider: StateProvider | None = None,
         host: str = "127.0.0.1",
         port: int = 8765,
     ) -> None:
         self.hub = hub
         self.input_handler = input_handler
+        self.action_handler = action_handler
         self.state_provider = state_provider or (lambda: {})
         self._server = _ThreadingHTTPServer(
             (host, port),
@@ -98,6 +101,9 @@ def _make_handler(web_server: WebServer) -> type[BaseHTTPRequestHandler]:
 
         def do_POST(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
             path = urlsplit(self.path).path
+            if path == "/api/action":
+                self._handle_action()
+                return
             if path != "/api/input":
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
                 return
@@ -119,6 +125,23 @@ def _make_handler(web_server: WebServer) -> type[BaseHTTPRequestHandler]:
             except Exception:
                 logger.exception("web_input_handler_failed")
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "input_failed"})
+                return
+            self._send_json(HTTPStatus.ACCEPTED, {"accepted": True})
+
+        def _handle_action(self) -> None:
+            if web_server.action_handler is None:
+                self._send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "actions_unavailable"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                body = json.loads(self.rfile.read(length).decode("utf-8"))
+                action_id = body.get("action_id") if isinstance(body, dict) else None
+                value = body.get("value") if isinstance(body, dict) else None
+                if not isinstance(action_id, str) or not action_id.strip():
+                    raise ValueError("action_id must be a non-empty string")
+                web_server.action_handler(action_id.strip(), value)
+            except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 return
             self._send_json(HTTPStatus.ACCEPTED, {"accepted": True})
 

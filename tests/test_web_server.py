@@ -13,9 +13,11 @@ class WebServerTest(unittest.TestCase):
     def setUp(self) -> None:
         self.hub = EventHub()
         self.inputs: list[str] = []
+        self.actions: list[tuple[str, object]] = []
         self.server = WebServer(
             self.hub,
             input_handler=self.inputs.append,
+            action_handler=lambda action_id, value: self.actions.append((action_id, value)),
             state_provider=lambda: {"state": "thinking"},
             port=0,
         )
@@ -42,6 +44,17 @@ class WebServerTest(unittest.TestCase):
         with urlopen(request) as response:
             self.assertEqual(response.status, 202)
         self.assertEqual(self.inputs, ["打开窗帘"])
+
+    def test_accepts_ui_action(self) -> None:
+        request = Request(
+            self.base_url + "/api/action",
+            data=json.dumps({"action_id": "confirm", "value": {"job": 1}}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request) as response:
+            self.assertEqual(response.status, 202)
+        self.assertEqual(self.actions, [("confirm", {"job": 1})])
 
     def test_sse_stream_delivers_event(self) -> None:
         result: list[bytes] = []

@@ -384,6 +384,13 @@ class VoiceAgent:
         if self._event_hub is not None:
             self._event_hub.publish(event_type, payload)
 
+    def publish_ui_block(self, block_type: str, payload: dict[str, object]) -> None:
+        """Publish a UI block for Web and other runtime presentations."""
+        block_type = block_type.strip()
+        if not block_type:
+            raise ValueError("block_type cannot be empty")
+        self._publish("ui_block", {"block_type": block_type, **payload})
+
     def _start_assistant_stream(self) -> str:
         message_id = uuid.uuid4().hex
         self._publish("assistant_start", {"message_id": message_id})
