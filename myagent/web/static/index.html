@@ -8,16 +8,16 @@
       :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       body { margin: 0; background: #f5f7fb; color: #172033; }
       main { max-width: 900px; height: 100vh; box-sizing: border-box; margin: 0 auto; padding: 24px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 16px; }
-      header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 18px; border: 1px solid #e4e8f0; border-radius: 22px; background: rgba(255,255,255,.86); box-shadow: 0 10px 30px rgba(43, 56, 85, .07); }
-      .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+      header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 22px; border: 1px solid #e4e8f0; border-radius: 22px; background: rgba(255,255,255,.86); box-shadow: 0 10px 30px rgba(43, 56, 85, .07); }
+      .brand { display: flex; align-items: center; gap: 18px; min-width: 0; }
       h1 { margin: 0; font-size: 1.15rem; letter-spacing: -.02em; }
       #status { margin-top: 3px; color: #69758c; font-size: .86rem; }
       .presence { display: flex; align-items: center; gap: 7px; color: #718096; font-size: .76rem; }
       .presence-dot { width: 7px; height: 7px; border-radius: 50%; background: #35b77a; box-shadow: 0 0 0 4px #e7f8ef; }
-      #agent-orb { --orb-color: #5b6ee1; position: relative; width: 58px; height: 58px; flex: 0 0 58px; display: grid; place-items: center; }
+      #agent-orb { --orb-color: #5b6ee1; position: relative; width: 92px; height: 92px; flex: 0 0 92px; display: grid; place-items: center; }
       #agent-orb::before, #agent-orb::after { content: ""; position: absolute; inset: 5px; border: 1px solid color-mix(in srgb, var(--orb-color), transparent 66%); border-radius: 28% 72% 62% 38% / 42% 40% 60% 58%; transform: rotate(24deg); animation: orb-ring 8s linear infinite; }
       #agent-orb::after { inset: 1px; border-color: color-mix(in srgb, var(--orb-color), transparent 84%); transform: rotate(-32deg) scale(.84); animation-duration: 11s; animation-direction: reverse; }
-      .orb-core { position: relative; z-index: 1; width: 27px; height: 27px; border-radius: 38% 62% 58% 42% / 45% 44% 56% 55%; background: radial-gradient(circle at 35% 28%, #fff 0 7%, color-mix(in srgb, var(--orb-color), white 28%) 18%, var(--orb-color) 72%); box-shadow: 0 8px 20px color-mix(in srgb, var(--orb-color), transparent 62%), 0 0 0 7px color-mix(in srgb, var(--orb-color), transparent 90%); animation: orb-breathe 3.8s ease-in-out infinite; }
+      .orb-core { position: relative; z-index: 1; width: 40px; height: 40px; border-radius: 38% 62% 58% 42% / 45% 44% 56% 55%; background: radial-gradient(circle at 35% 28%, #fff 0 7%, color-mix(in srgb, var(--orb-color), white 28%) 18%, var(--orb-color) 72%); box-shadow: 0 10px 26px color-mix(in srgb, var(--orb-color), transparent 62%), 0 0 0 9px color-mix(in srgb, var(--orb-color), transparent 90%); animation: orb-breathe 3.8s ease-in-out infinite; }
       #agent-orb.state-listening { --orb-color: #0ca6a6; }
       #agent-orb.state-thinking { --orb-color: #8168e8; }
       #agent-orb.state-speaking { --orb-color: #ee8a45; }
@@ -25,6 +25,10 @@
       #agent-orb.state-thinking::before { animation-duration: 2.2s; }
       #agent-orb.state-listening::before { animation: orb-listen 1.4s ease-out infinite; }
       #agent-orb.state-speaking .orb-core { animation: orb-speak .8s ease-in-out infinite alternate; }
+      #agent-orb.state-standby::before { animation-duration: 13s; }
+      #agent-orb.state-standby::after { animation-duration: 18s; }
+      #agent-orb.state-standby .orb-core { animation-duration: 5.8s; }
+      #agent-orb.state-thinking .orb-core { animation-duration: 2.4s; }
       #conversation-panel { min-height: 0; overflow-y: auto; border: 1px solid #e4e8f0; border-radius: 22px; background: rgba(255,255,255,.72); padding: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,.8); }
       #messages { display: grid; gap: 12px; align-content: start; }
       .message { padding: 14px 16px; border-radius: 16px; white-space: pre-wrap; line-height: 1.58; box-shadow: 0 3px 10px rgba(43, 56, 85, .04); }
@@ -39,7 +43,7 @@
       @keyframes orb-listen { 0% { transform: scale(.82); opacity: .9; } 70%, 100% { transform: scale(1.25); opacity: 0; } }
       @keyframes orb-speak { from { transform: scale(.88) rotate(-5deg); } to { transform: scale(1.16) rotate(5deg); } }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
-      @media (max-width: 640px) { main { padding: 14px; gap: 10px; } .user, .assistant { margin-left: 0; margin-right: 0; } }
+      @media (max-width: 640px) { main { padding: 14px; gap: 10px; } header { padding: 14px 16px; } #agent-orb { width: 76px; height: 76px; flex-basis: 76px; } .orb-core { width: 34px; height: 34px; } .user, .assistant { margin-left: 0; margin-right: 0; } }
     </style>
   </head>
   <body>
