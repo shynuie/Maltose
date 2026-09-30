@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MyAgent</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; background: #111827; color: #e5e7eb; }
+      main { max-width: 900px; margin: 0 auto; padding: 24px; }
+      header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+      h1 { margin: 0; font-size: 1.35rem; }
+      #status { color: #93c5fd; font-size: .9rem; }
+      #messages { min-height: 60vh; margin: 24px 0; display: grid; gap: 12px; align-content: start; }
+      .message { padding: 14px 16px; border-radius: 14px; white-space: pre-wrap; line-height: 1.55; }
+      .user { background: #1d4ed8; margin-left: 15%; }
+      .assistant { background: #1f2937; margin-right: 15%; }
+      form { display: flex; gap: 10px; position: sticky; bottom: 16px; }
+      input { flex: 1; padding: 13px 15px; border: 1px solid #4b5563; border-radius: 12px; background: #030712; color: inherit; font-size: 1rem; }
+      button { padding: 0 20px; border: 0; border-radius: 12px; background: #60a5fa; color: #0f172a; font-weight: 700; }
+      button:disabled { opacity: .5; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header><h1>MyAgent</h1><span id="status">connecting…</span></header>
+      <section id="messages" aria-live="polite"></section>
+      <form id="input-form"><input id="input" autocomplete="off" placeholder="输入指令…" /><button>发送</button></form>
+    </main>
+    <script>
+      const messages = document.querySelector('#messages');
+      const status = document.querySelector('#status');
+      const input = document.querySelector('#input');
+      const addMessage = (role, content) => {
+        const node = document.createElement('div');
+        node.className = `message ${role}`;
+        node.textContent = content;
+        messages.appendChild(node);
+        node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      };
+      const source = new EventSource('/api/events');
+      source.onopen = () => { status.textContent = 'online'; };
+      source.onerror = () => { status.textContent = 'reconnecting…'; };
+      source.addEventListener('state_changed', event => {
+        const data = JSON.parse(event.data);
+        status.textContent = data.payload.state || 'online';
+      });
+      source.addEventListener('user_message', event => addMessage('user', JSON.parse(event.data).payload.content));
+      source.addEventListener('assistant_message', event => addMessage('assistant', JSON.parse(event.data).payload.content));
+      document.querySelector('#input-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        input.disabled = true;
+        try {
+          const response = await fetch('/api/input', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text}) });
+          if (!response.ok) throw new Error('input failed');
+          input.value = '';
+        } catch (error) { status.textContent = 'input error'; }
+        input.disabled = false;
+        input.focus();
+      });
+    </script>
+  </body>
+</html>

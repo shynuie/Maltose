@@ -48,20 +48,20 @@ Web / Voice / CLI input
 
 ### M1：Runtime 事件骨架
 
-- [ ] 建立 thread-safe event hub 與事件資料模型。
-- [ ] Agent state、user input、assistant output 能發布事件。
-- [ ] 事件測試涵蓋訂閱、取消訂閱與慢速 subscriber。
+- [x] 建立 thread-safe event hub 與事件資料模型。
+- [x] 為 state、user input、assistant output 定義事件 payload 介面。
+- [x] 事件測試涵蓋訂閱、取消訂閱與慢速 subscriber。
 
-驗證：focused unit tests、`git diff --check`。
+驗證：4 個 focused unit tests 通過、`git diff --check` 通過。
 
 ### M2：本地 Web server
 
-- [ ] 提供靜態首頁。
-- [ ] `GET /api/events` 使用 SSE 推送事件。
-- [ ] `POST /api/input` 接收文字指令並交給 runtime。
-- [ ] `GET /api/state` 回傳目前狀態。
+- [x] 提供靜態首頁。
+- [x] `GET /api/events` 使用 SSE 推送事件。
+- [x] `POST /api/input` 接收文字指令並交給 runtime。
+- [x] `GET /api/state` 回傳目前狀態。
 
-驗證：HTTP integration tests，不啟動真實 microphone 或模型。
+驗證：3 個 HTTP integration tests 通過，不啟動真實 microphone 或模型。
 
 ### M3：Agent 整合
 
@@ -81,8 +81,9 @@ Web / Voice / CLI input
 
 - [x] 從 `kws` 的已提交 HEAD 建立獨立 `web-ui` branch/worktree。
 - [x] 建立本 feature plan。
-- [ ] 實作 M1。
+- [x] 實作 M1。
+- [x] 實作 M2 的本地 Web server 與最小 UI。
 
 ## 下一步
 
-實作 M1 的事件模型與 thread-safe event hub，先用純單元測試固定協議，再接 HTTP 層。
+將 Web input 接入 Agent Runtime，先定義統一的 text command queue，再讓 VoiceAgent 和 Web UI 共用 session 與狀態事件。
