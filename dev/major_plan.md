@@ -25,6 +25,7 @@ MyAgent 是一個以語音互動為主的個人 Agent，核心開發方向如下
 | Voice interaction loop | `in_progress` | [voice_dev_plan.md](features/voice_dev_plan.md) | TTS audio render/play pipeline |
 | KWS sensitivity and audio front-end | `in_progress` | [kws_dev_plan.md](features/kws_dev_plan.md) | dataset、offline replay、AGC/NS evaluation |
 | TaskBrain / Memory | `in_progress` | 待建立獨立 feature plan | 整理 Memory、tools 與 session 的長期邊界 |
+| Web UI / Agent Runtime | `in_progress` | [web_ui_dev_plan.md](features/web_ui_dev_plan.md) | runtime events、local Web UI、统一输入边界 |
 
 ## 目前優先級
 

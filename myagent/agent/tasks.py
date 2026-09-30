@@ -503,6 +503,7 @@ class TaskManager:
         max_workers: int = 2,
         max_tasks_per_plan: int = 8,
         workers: dict[str, TaskWorker] | None = None,
+        progress_publisher: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         if max_workers < 1:
             raise ValueError("max_workers must be positive.")
@@ -511,6 +512,7 @@ class TaskManager:
         self.store = store
         self.max_tasks_per_plan = max_tasks_per_plan
         self._workers = workers or {}
+        self._progress_publisher = progress_publisher
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="myagent-task"
         )
@@ -651,7 +653,8 @@ class TaskManager:
                 )
                 self._queue_notification(failed)
                 return
-            self.store.update(task_id, status=TaskStatus.RUNNING, progress=1)
+            running = self.store.update(task_id, status=TaskStatus.RUNNING, progress=1)
+            self._publish_progress(running)
             self._progress_marks[task_id] = 0
             self._futures[task_id] = self._executor.submit(self._run, task_id, worker)
 
@@ -662,10 +665,12 @@ class TaskManager:
             completed = self.store.update(
                 task_id, status=TaskStatus.SUCCEEDED, progress=100, result_summary=result
             )
+            self._publish_progress(completed)
             self._queue_notification(completed)
         except Exception as exc:
             logger.exception("task_failed task_id=%s", task_id)
             failed = self.store.update(task_id, status=TaskStatus.FAILED, error=str(exc))
+            self._publish_progress(failed)
             self._queue_notification(failed)
         finally:
             with self._lock:
@@ -675,6 +680,7 @@ class TaskManager:
 
     def _report_progress(self, task_id: str, progress: int) -> None:
         updated = self.store.update(task_id, progress=progress)
+        self._publish_progress(updated)
         if progress >= 100:
             return
         mark = min((progress // 25) * 25, 75)
@@ -683,6 +689,23 @@ class TaskManager:
             if mark >= 25 and mark > last_mark:
                 self._progress_marks[task_id] = mark
                 self._queue_notification(updated, kind="progress")
+
+    def _publish_progress(self, task: TaskRecord) -> None:
+        if self._progress_publisher is None:
+            return
+        try:
+            self._progress_publisher(
+                {
+                    "progress_id": task.id,
+                    "title": task.title,
+                    "percent": task.progress,
+                    "text": task.result_summary or task.error or task.status,
+                    "status": task.status,
+                    "task_id": task.id,
+                }
+            )
+        except Exception:
+            logger.exception("task_progress_publish_failed task_id=%s", task.id)
 
     def _schedule_dependents(self, completed_id: str) -> None:
         completed = self.store.get(completed_id)

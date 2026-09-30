@@ -33,6 +33,8 @@ from myagent.knowledge.scanner import DocumentScanner
 from myagent.knowledge.summaries import ExtractiveDocumentSummarizer
 from myagent.knowledge.tools import DocumentToolAdapter
 from myagent.logging import configure_logging
+from myagent.runtime import EventHub, PresentationStore
+from myagent.web import WebServer
 from myagent.voice import (
     NullSpeakerIdentifier,
     ProfileSpeakerIdentifier,
@@ -58,6 +60,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("myagent.toml"),
         help="Unified TOML configuration file (default: myagent.toml if present).",
     )
+    parser.add_argument("--web", action="store_true", help="Enable the local Web UI.")
+    parser.add_argument("--web-host", default="127.0.0.1")
+    parser.add_argument("--web-port", type=int, default=8765)
     parser.add_argument(
         "--timeout",
         "-t",
@@ -391,6 +396,16 @@ def main() -> None:
         wake_ack_delay=args.wake_ack_delay,
         wake_buffer_ms=args.wake_buffer_ms,
     )
+    event_hub = EventHub()
+    presentation = PresentationStore()
+
+    def publish_ui_block(block_type: str, payload: dict[str, object]) -> None:
+        block = presentation.upsert(block_type, payload)
+        if args.web:
+            event_hub.publish("ui_block", block)
+
+    def publish_task_progress(payload: dict[str, object]) -> None:
+        publish_ui_block("ui_progress", payload)
 
     mcp_clients: list[MCPStdioClient] = []
     task_manager: TaskManager | None = None
@@ -477,6 +492,7 @@ def main() -> None:
         task_manager = TaskManager(
             TaskStore(args.taskbrain_tasks),
             max_workers=args.taskbrain_max_workers,
+            progress_publisher=publish_task_progress if args.web else None,
         )
         task_manager.register_worker(
             "codex_readonly",
@@ -519,6 +535,8 @@ def main() -> None:
                 external_ip_url=args.external_ip_url,
                 timeout=args.environment_timeout,
             ),
+            ui_publisher=publish_ui_block if args.web else None,
+            ui_state_provider=presentation.snapshot if args.web else None,
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)
@@ -546,10 +564,40 @@ def main() -> None:
         brain=brain,
         speaker_identifier=speaker_identifier,
         speaker_identity_manager=speaker_identity_manager,
+        event_hub=event_hub,
     )
+    web_server: WebServer | None = None
+    if args.web:
+        def handle_ui_action(action_id: str, value: object) -> None:
+            if action_id == "ui.close" and isinstance(value, dict):
+                block_id = value.get("block_id")
+                if isinstance(block_id, str):
+                    presentation.close(block_id)
+            event_hub.publish(
+                "ui_action",
+                {"action_id": action_id, "value": value},
+            )
+
+        web_server = WebServer(
+            event_hub,
+            input_handler=agent.submit_text,
+            action_handler=handle_ui_action,
+            state_provider=lambda: {
+                "state": agent.state.value,
+                "turn_count": agent.turn_count,
+                "presentation": presentation.snapshot(),
+            },
+            host=args.web_host,
+            port=args.web_port,
+        )
     try:
+        if web_server is not None:
+            web_server.start()
+            logger.info("web_ui_available url=http://%s:%s", *web_server.address)
         agent.run()
     finally:
+        if web_server is not None:
+            web_server.close()
         for client in mcp_clients:
             client.close()
         if task_manager is not None:
