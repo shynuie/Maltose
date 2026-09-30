@@ -22,6 +22,35 @@ class QuietTTS:
 
 
 class WebAgentIntegrationTest(unittest.TestCase):
+    def test_streaming_reply_publishes_deltas_before_completion(self) -> None:
+        hub = EventHub()
+        subscription = hub.subscribe()
+        agent = VoiceAgent(
+            config=AgentConfig(interruptible_tts=False),
+            speaker=QuietTTS(),
+            event_hub=hub,
+        )
+
+        reply, interrupted = agent._speak_stream(iter(["第一", "句。", "第二句！"]))
+
+        events = []
+        subscription.close()
+        while True:
+            try:
+                events.append(next(subscription))
+            except StopIteration:
+                break
+        self.assertIsNone(interrupted)
+        self.assertEqual(reply, "第一句。第二句！")
+        self.assertEqual(
+            [event.type for event in events],
+            ["state_changed", "assistant_start", "assistant_delta", "assistant_delta", "assistant_delta", "assistant_end"],
+        )
+        self.assertEqual(
+            "".join(event.payload["content"] for event in events if event.type == "assistant_delta"),
+            reply,
+        )
+
     def test_web_text_uses_same_agent_brain_session_and_events(self) -> None:
         hub = EventHub()
         subscription = hub.subscribe()

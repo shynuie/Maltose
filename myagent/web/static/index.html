@@ -31,12 +31,14 @@
       const messages = document.querySelector('#messages');
       const status = document.querySelector('#status');
       const input = document.querySelector('#input');
+      const streamingMessages = new Map();
       const addMessage = (role, content) => {
         const node = document.createElement('div');
         node.className = `message ${role}`;
         node.textContent = content;
         messages.appendChild(node);
         node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        return node;
       };
       const source = new EventSource('/api/events');
       source.onopen = () => { status.textContent = 'online'; };
@@ -47,6 +49,24 @@
       });
       source.addEventListener('user_message', event => addMessage('user', JSON.parse(event.data).payload.content));
       source.addEventListener('assistant_message', event => addMessage('assistant', JSON.parse(event.data).payload.content));
+      source.addEventListener('assistant_start', event => {
+        const data = JSON.parse(event.data).payload;
+        streamingMessages.set(data.message_id, addMessage('assistant', ''));
+      });
+      source.addEventListener('assistant_delta', event => {
+        const data = JSON.parse(event.data).payload;
+        const node = streamingMessages.get(data.message_id);
+        if (node) {
+          node.textContent += data.content;
+          node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+      });
+      source.addEventListener('assistant_end', event => {
+        const data = JSON.parse(event.data).payload;
+        const node = streamingMessages.get(data.message_id);
+        if (node && !node.textContent) node.textContent = data.content || '';
+        streamingMessages.delete(data.message_id);
+      });
       document.querySelector('#input-form').addEventListener('submit', async event => {
         event.preventDefault();
         const text = input.value.trim();

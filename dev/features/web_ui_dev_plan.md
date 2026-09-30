@@ -73,6 +73,7 @@ Web / Voice / CLI input
 
 ### M4：可呈現內容
 
+- [x] Streaming reply 以 `assistant_start`、`assistant_delta`、`assistant_end` 事件增量呈現。
 - [ ] Markdown、code block、table 維持安全的前端渲染。
 - [ ] 增加 progress 與 confirmation event schema。
 - [ ] 補充 ADR，固定 runtime 與 UI 的責任邊界。
@@ -84,6 +85,7 @@ Web / Voice / CLI input
 - [x] 實作 M1。
 - [x] 實作 M2 的本地 Web server 與最小 UI。
 - [x] 實作 M3 的 text command queue、Agent event publishing 與 CLI wiring。
+- [x] 實作 streaming SSE delta 與前端即時追加文字。
 
 ## 下一步
 

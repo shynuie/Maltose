@@ -7,6 +7,7 @@ import inspect
 import tempfile
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from dataclasses import dataclass
@@ -307,6 +308,7 @@ class VoiceAgent:
                             rate=self.config.tts_rate,
                         )
                     )
+                    streamed_reply = False
                 else:
                     turn_context = TurnContext(
                         user_id=speaker_result.user_id,
@@ -318,6 +320,7 @@ class VoiceAgent:
                         reply_text, interrupted_utterance = self._speak_stream(
                             stream_process(result.text, context=turn_context)
                         )
+                        streamed_reply = True
                     else:
                         reply_text = self.brain.process(result.text, context=turn_context)
                         interrupted_utterance = self._speak_reply(
@@ -326,9 +329,11 @@ class VoiceAgent:
                                 voice=self.config.tts_voice,
                                 rate=self.config.tts_rate,
                             )
-                        )
+                            )
+                        streamed_reply = False
                 logger.info("brain_reply text=%s", reply_text)
-                self._publish("assistant_message", {"content": reply_text})
+                if not streamed_reply:
+                    self._publish("assistant_message", {"content": reply_text})
                 logger.info("speaking_done")
                 if interrupted_utterance is not None:
                     conversation_active = True
@@ -378,6 +383,33 @@ class VoiceAgent:
     def _publish(self, event_type: str, payload: dict[str, object]) -> None:
         if self._event_hub is not None:
             self._event_hub.publish(event_type, payload)
+
+    def _start_assistant_stream(self) -> str:
+        message_id = uuid.uuid4().hex
+        self._publish("assistant_start", {"message_id": message_id})
+        return message_id
+
+    def _publish_assistant_delta(self, message_id: str, content: str) -> None:
+        self._publish(
+            "assistant_delta",
+            {"message_id": message_id, "content": content},
+        )
+
+    def _finish_assistant_stream(
+        self,
+        message_id: str,
+        content: str,
+        *,
+        interrupted: bool = False,
+    ) -> None:
+        self._publish(
+            "assistant_end",
+            {
+                "message_id": message_id,
+                "content": content,
+                "interrupted": interrupted,
+            },
+        )
 
     def _invoke_listener(
         self,
@@ -429,8 +461,10 @@ class VoiceAgent:
         ):
             return self._speak_stream_with_rendered_audio(chunks)
         self.state = AgentState.SPEAKING
+        message_id = self._start_assistant_stream()
         buffer = ""
         spoken_parts: list[str] = []
+        assistant_parts: list[str] = []
         punctuation = re.compile(r"[。！？!?；;\n]")
         deferred: PendingTurn | None = None
         stream_queue: queue.Queue[object] = queue.Queue()
@@ -544,6 +578,8 @@ class VoiceAgent:
                     raise item
                 if not isinstance(item, str) or not item:
                     continue
+                assistant_parts.append(item)
+                self._publish_assistant_delta(message_id, item)
                 buffer += item
                 while True:
                     match = punctuation.search(buffer)
@@ -564,6 +600,11 @@ class VoiceAgent:
             if listener_thread is not None:
                 listener_thread.join(timeout=1.0)
 
+        self._finish_assistant_stream(
+            message_id,
+            "".join(assistant_parts),
+            interrupted=interrupted,
+        )
         if interrupted:
             return "".join(spoken_parts), deferred
         return "".join(spoken_parts), deferred
@@ -573,8 +614,10 @@ class VoiceAgent:
     ) -> tuple[str, PendingTurn | None]:
         """Stream sentences while rendering the next audio artifact ahead of playback."""
         self.state = AgentState.SPEAKING
+        message_id = self._start_assistant_stream()
         buffer = ""
         spoken_parts: list[str] = []
+        assistant_parts: list[str] = []
         punctuation = re.compile(r"[。！？!?；;\n]")
         deferred: PendingTurn | None = None
         stream_queue: queue.Queue[object] = queue.Queue()
@@ -735,6 +778,8 @@ class VoiceAgent:
                     raise item
                 if not isinstance(item, str) or not item:
                     continue
+                assistant_parts.append(item)
+                self._publish_assistant_delta(message_id, item)
                 buffer += item
                 while True:
                     match = punctuation.search(buffer)
@@ -772,6 +817,11 @@ class VoiceAgent:
 
         if tts_error and not interrupted:
             raise tts_error[0]
+        self._finish_assistant_stream(
+            message_id,
+            "".join(assistant_parts),
+            interrupted=interrupted,
+        )
         return "".join(spoken_parts), deferred
 
     def _create_stream_listener(self, stop_event: threading.Event) -> Iterator[ListeningEvent]:
