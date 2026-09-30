@@ -513,6 +513,7 @@ class TaskBrain:
         capability_adapters: list[CapabilityAdapter] | None = None,
         environment_tools: EnvironmentTools | None = None,
         ui_publisher: Callable[[str, dict[str, Any]], Any] | None = None,
+        ui_state_provider: Callable[[], dict[str, Any]] | None = None,
     ) -> None:
         if max_session_turns < 1:
             raise ValueError("Maximum session turns must be positive.")
@@ -524,6 +525,7 @@ class TaskBrain:
         self.search_provider = search_provider
         self.environment_tools = environment_tools or EnvironmentTools()
         self.ui_publisher = ui_publisher
+        self.ui_state_provider = ui_state_provider
         self._active_user_id = getattr(self.memory, "user_id", "default")
         self._active_speaker_status = "unknown"
         self._return_to_standby = False
@@ -1050,6 +1052,44 @@ class TaskBrain:
                 },
                 lambda args: publish("ui_markdown", args),
             )
+        if not self.tools.has("get_ui_state"):
+            self.tools.register(
+                "get_ui_state",
+                "Read the currently visible pinned UI components and their state.",
+                {"type": "object", "properties": {}},
+                lambda _args: self.ui_state_provider() if self.ui_state_provider else {"blocks": []},
+            )
+        if not self.tools.has("get_ui_block"):
+            self.tools.register(
+                "get_ui_block",
+                "Read one visible UI component by block_id, including its current payload.",
+                {
+                    "type": "object",
+                    "properties": {"block_id": {"type": "string"}},
+                    "required": ["block_id"],
+                },
+                lambda args: (
+                    self.ui_state_provider().get("blocks", [])
+                    and next(
+                        (block for block in self.ui_state_provider()["blocks"] if block.get("block_id") == args["block_id"]),
+                        {"error": "ui_block_not_found"},
+                    )
+                    or {"error": "ui_block_not_found"}
+                    if self.ui_state_provider
+                    else {"error": "ui_state_unavailable"}
+                ),
+            )
+        if not self.tools.has("get_canvas_scene"):
+            self.tools.register(
+                "get_canvas_scene",
+                "Read the elements currently present in a canvas scene by scene_id.",
+                {
+                    "type": "object",
+                    "properties": {"scene_id": {"type": "string"}},
+                    "required": ["scene_id"],
+                },
+                lambda args: self._get_canvas_scene(args["scene_id"]),
+            )
         if not self.tools.has("display_ui_card"):
             self.tools.register(
                 "display_ui_card",
@@ -1207,6 +1247,15 @@ class TaskBrain:
                 },
                 lambda args: publish("ui_confirmation", args),
             )
+
+    def _get_canvas_scene(self, scene_id: str) -> dict[str, Any]:
+        if self.ui_state_provider is None:
+            return {"error": "ui_state_unavailable"}
+        for block in self.ui_state_provider().get("blocks", []):
+            if block.get("block_id") == scene_id or block.get("scene_id") == scene_id:
+                if block.get("block_type") == "ui_canvas":
+                    return block
+        return {"error": "canvas_scene_not_found"}
     def process(self, user_text: str, context: TurnContext | None = None) -> str:
         text = user_text.strip()
         if not text:

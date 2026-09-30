@@ -261,6 +261,27 @@
         conversationPanel.scrollTop = conversationPanel.scrollHeight;
       };
       const canvasScenes = new Map();
+      const normalizeCanvasElements = rawElements => {
+        const elements = Array.isArray(rawElements) ? rawElements : [];
+        const positioned = elements.filter(item => item && (item.type === 'node' || item.type === 'text'));
+        if (!positioned.length) return elements;
+        const bounds = positioned.reduce((result, item) => {
+          const x = Number(item.x) || 0, y = Number(item.y) || 0;
+          const width = item.type === 'node' ? (Number(item.width) || 150) : 0;
+          const height = item.type === 'node' ? (Number(item.height) || 56) : 0;
+          return { minX: Math.min(result.minX, x), minY: Math.min(result.minY, y), maxX: Math.max(result.maxX, x + width), maxY: Math.max(result.maxY, y + height) };
+        }, {minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity});
+        const padding = 40, canvasWidth = 800, canvasHeight = 450;
+        const width = Math.max(1, bounds.maxX - bounds.minX), height = Math.max(1, bounds.maxY - bounds.minY);
+        const scale = Math.min(1, (canvasWidth - padding * 2) / width, (canvasHeight - padding * 2) / height);
+        const offsetX = (canvasWidth - width * scale) / 2, offsetY = (canvasHeight - height * scale) / 2;
+        return elements.map(item => {
+          if (!item || (item.type !== 'node' && item.type !== 'text')) return item;
+          const next = {...item, x: ((Number(item.x) || 0) - bounds.minX) * scale + offsetX, y: ((Number(item.y) || 0) - bounds.minY) * scale + offsetY};
+          if (item.type === 'node') { next.width = (Number(item.width) || 150) * scale; next.height = (Number(item.height) || 56) * scale; }
+          return next;
+        });
+      };
       const renderCanvas = data => {
         const sceneId = data.scene_id || `scene-${Date.now()}`;
         const old = canvasScenes.get(sceneId);
@@ -278,7 +299,7 @@
         svg.setAttribute('viewBox', '0 0 800 450');
         svg.setAttribute('role', 'img');
         svg.setAttribute('aria-label', data.title || 'Agent diagram');
-        const elements = Array.isArray(data.elements) ? data.elements : [];
+        const elements = normalizeCanvasElements(data.elements);
         const nodes = new Map();
         const number = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
         const color = value => /^#[0-9a-f]{3,8}$/i.test(value || '') ? value : '#5264d9';

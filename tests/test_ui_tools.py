@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from myagent.agent.taskbrain import TaskBrain
+from myagent.runtime import PresentationStore
 
 
 class UIToolTest(unittest.TestCase):
@@ -51,3 +52,20 @@ class UIToolTest(unittest.TestCase):
     def test_ui_tools_are_not_added_without_a_ui_publisher(self) -> None:
         brain = TaskBrain(model=object())
         self.assertFalse(brain.tools.has("display_ui_card"))
+
+    def test_brain_can_read_current_canvas_state(self) -> None:
+        store = PresentationStore()
+        brain = TaskBrain(
+            model=object(),
+            ui_publisher=lambda block_type, payload: store.upsert(block_type, payload),
+            ui_state_provider=store.snapshot,
+        )
+        brain.tools.execute(
+            "display_ui_canvas",
+            {"scene_id": "scene-1", "elements": [{"type": "node", "id": "a", "label": "A"}]},
+        )
+
+        scene = brain.tools.execute("get_canvas_scene", {"scene_id": "scene-1"})
+
+        self.assertEqual(scene["block_id"], "scene-1")
+        self.assertEqual(scene["elements"][0]["label"], "A")

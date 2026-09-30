@@ -83,6 +83,9 @@ Web / Voice / CLI input
 - [x] 增加 `ui_timeline` 與 `ui_table`，支援任務階段與結構化結果呈現。
 - [x] 增加受約束的 `ui_canvas` scene graph，支援 node、text、arrow 與同 scene_id 更新。
 - [x] 將 progress、timeline、canvas、confirmation 放入可關閉的固定 Workspace panel。
+- [x] 建立 PresentationStore，讓 TaskBrain 可查詢 UI state、UI block 與 Canvas scene。
+- [x] 將 UI close action 回寫到 PresentationStore。
+- [x] Canvas render 前自動做 bounds normalization，避免內容超出畫布。
 - [ ] Markdown、code block、table 做更完整的安全富渲染。
 - [ ] 補充 ADR，固定 runtime 與 UI 的責任邊界。
 
