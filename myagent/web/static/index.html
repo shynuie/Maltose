@@ -7,17 +7,21 @@
     <style>
       :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       body { margin: 0; background: #f5f7fb; color: #172033; }
-      main { max-width: 900px; height: 100vh; box-sizing: border-box; margin: 0 auto; padding: 24px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 16px; }
-      header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 22px; border: 1px solid #e4e8f0; border-radius: 22px; background: rgba(255,255,255,.86); box-shadow: 0 10px 30px rgba(43, 56, 85, .07); }
+      main { max-width: 1100px; height: 100vh; box-sizing: border-box; margin: 0 auto; padding: 24px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 16px; }
+      header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 18px; border: 1px solid #e4e8f0; border-radius: 18px; background: rgba(255,255,255,.86); box-shadow: 0 10px 30px rgba(43, 56, 85, .07); }
       .brand { display: flex; align-items: center; gap: 18px; min-width: 0; }
       h1 { margin: 0; font-size: 1.15rem; letter-spacing: -.02em; }
       #status { margin-top: 3px; color: #69758c; font-size: .86rem; }
       .presence { display: flex; align-items: center; gap: 7px; color: #718096; font-size: .76rem; }
       .presence-dot { width: 7px; height: 7px; border-radius: 50%; background: #35b77a; box-shadow: 0 0 0 4px #e7f8ef; }
-      #agent-orb { --orb-color: #5b6ee1; position: relative; width: 92px; height: 92px; flex: 0 0 92px; display: grid; place-items: center; }
+      .workspace { min-height: 0; display: grid; grid-template-columns: minmax(220px, .36fr) minmax(0, 1fr); gap: 16px; }
+      #agent-panel { min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; border: 1px solid #e4e8f0; border-radius: 22px; background: linear-gradient(155deg, #fff 0%, #f4f6ff 100%); box-shadow: 0 10px 30px rgba(43, 56, 85, .07); text-align: center; }
+      #agent-panel h2 { margin: 0; font-size: 1.2rem; letter-spacing: -.02em; }
+      #agent-panel .agent-note { max-width: 180px; margin: 0; color: #7b879c; font-size: .8rem; line-height: 1.5; }
+      #agent-orb { --orb-color: #5b6ee1; position: relative; width: 160px; height: 160px; flex: 0 0 160px; display: grid; place-items: center; }
       #agent-orb::before, #agent-orb::after { content: ""; position: absolute; inset: 5px; border: 1px solid color-mix(in srgb, var(--orb-color), transparent 66%); border-radius: 28% 72% 62% 38% / 42% 40% 60% 58%; transform: rotate(24deg); animation: orb-ring 8s linear infinite; }
       #agent-orb::after { inset: 1px; border-color: color-mix(in srgb, var(--orb-color), transparent 84%); transform: rotate(-32deg) scale(.84); animation-duration: 11s; animation-direction: reverse; }
-      .orb-core { position: relative; z-index: 1; width: 40px; height: 40px; border-radius: 38% 62% 58% 42% / 45% 44% 56% 55%; background: radial-gradient(circle at 35% 28%, #fff 0 7%, color-mix(in srgb, var(--orb-color), white 28%) 18%, var(--orb-color) 72%); box-shadow: 0 10px 26px color-mix(in srgb, var(--orb-color), transparent 62%), 0 0 0 9px color-mix(in srgb, var(--orb-color), transparent 90%); animation: orb-breathe 3.8s ease-in-out infinite; }
+      .orb-core { position: relative; z-index: 1; width: 66px; height: 66px; border-radius: 38% 62% 58% 42% / 45% 44% 56% 55%; background: radial-gradient(circle at 35% 28%, #fff 0 7%, color-mix(in srgb, var(--orb-color), white 28%) 18%, var(--orb-color) 72%); box-shadow: 0 10px 32px color-mix(in srgb, var(--orb-color), transparent 62%), 0 0 0 14px color-mix(in srgb, var(--orb-color), transparent 90%); animation: orb-breathe 3.8s ease-in-out infinite; }
       #agent-orb.state-listening { --orb-color: #0ca6a6; }
       #agent-orb.state-thinking { --orb-color: #8168e8; }
       #agent-orb.state-speaking { --orb-color: #ee8a45; }
@@ -43,19 +47,22 @@
       @keyframes orb-listen { 0% { transform: scale(.82); opacity: .9; } 70%, 100% { transform: scale(1.25); opacity: 0; } }
       @keyframes orb-speak { from { transform: scale(.88) rotate(-5deg); } to { transform: scale(1.16) rotate(5deg); } }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
-      @media (max-width: 640px) { main { padding: 14px; gap: 10px; } header { padding: 14px 16px; } #agent-orb { width: 76px; height: 76px; flex-basis: 76px; } .orb-core { width: 34px; height: 34px; } .user, .assistant { margin-left: 0; margin-right: 0; } }
+      @media (max-width: 760px) { main { padding: 14px; gap: 10px; } header { padding: 12px 14px; } .workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); } #agent-panel { flex-direction: row; justify-content: flex-start; gap: 14px; padding: 12px 16px; text-align: left; } #agent-panel .agent-note { display: none; } #agent-orb { width: 76px; height: 76px; flex-basis: 76px; } .orb-core { width: 34px; height: 34px; } .user, .assistant { margin-left: 0; margin-right: 0; } }
     </style>
   </head>
   <body>
     <main>
       <header>
-        <div class="brand">
-          <div id="agent-orb" class="state-standby" role="img" aria-label="MyAgent 正在待命"><span class="orb-core"></span></div>
-          <div><h1>MyAgent</h1><div id="status" aria-live="polite">connecting…</div></div>
-        </div>
+        <div class="brand"><h1>MyAgent</h1></div>
         <div class="presence"><span class="presence-dot"></span> alive</div>
       </header>
-      <section id="conversation-panel" aria-label="对话内容"><div id="messages" aria-live="polite"></div></section>
+      <section class="workspace" aria-label="Agent workspace">
+        <aside id="agent-panel" aria-label="Agent 状态">
+          <div id="agent-orb" class="state-standby" role="img" aria-label="MyAgent 正在待命"><span class="orb-core"></span></div>
+          <div><h2>MyAgent</h2><div id="status" aria-live="polite">connecting…</div><p class="agent-note">我在这里，随时准备听你说。</p></div>
+        </aside>
+        <section id="conversation-panel" aria-label="对话内容"><div id="messages" aria-live="polite"></div></section>
+      </section>
       <form id="input-form"><input id="input" autocomplete="off" placeholder="输入指令…" /><button>发送</button></form>
     </main>
     <script>
