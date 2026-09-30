@@ -308,7 +308,7 @@
           nodes.set(item.id, {x, y, width, height});
         });
         const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-        marker.setAttribute('id', `arrow-${sceneId}`); marker.setAttribute('markerWidth', '8'); marker.setAttribute('markerHeight', '8'); marker.setAttribute('refX', '7'); marker.setAttribute('refY', '3'); marker.setAttribute('orient', 'auto');
+        marker.setAttribute('id', `arrow-${sceneId}`); marker.setAttribute('viewBox', '0 0 7 6'); marker.setAttribute('markerWidth', '7'); marker.setAttribute('markerHeight', '6'); marker.setAttribute('refX', '7'); marker.setAttribute('refY', '3'); marker.setAttribute('orient', 'auto'); marker.setAttribute('markerUnits', 'userSpaceOnUse');
         const markerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path'); markerPath.setAttribute('d', 'M0,0 L0,6 L7,3 z'); markerPath.setAttribute('fill', '#8995aa'); marker.appendChild(markerPath);
         const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); defs.appendChild(marker); svg.appendChild(defs);
         elements.filter(item => item && item.type === 'arrow').forEach(item => {
