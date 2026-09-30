@@ -1105,6 +1105,47 @@ class TaskBrain:
                 },
                 lambda args: publish("ui_progress", args),
             )
+        if not self.tools.has("display_ui_timeline"):
+            self.tools.register(
+                "display_ui_timeline",
+                "Display ordered stages or task dependencies in the Web UI. Use for multi-step work, not ordinary answers.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "items": {
+                            "type": "array",
+                            "maxItems": 20,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "label": {"type": "string"},
+                                    "status": {"type": "string", "enum": ["pending", "running", "done", "failed"]},
+                                    "detail": {"type": "string"},
+                                },
+                                "required": ["label", "status"],
+                            },
+                        },
+                    },
+                    "required": ["items"],
+                },
+                lambda args: publish("ui_timeline", args),
+            )
+        if not self.tools.has("display_ui_table"):
+            self.tools.register(
+                "display_ui_table",
+                "Display structured rows in a compact Web UI table. Use when comparing multiple records or search results.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "columns": {"type": "array", "items": {"type": "string"}, "maxItems": 12},
+                        "rows": {"type": "array", "maxItems": 50, "items": {"type": "array"}},
+                    },
+                    "required": ["columns", "rows"],
+                },
+                lambda args: publish("ui_table", args),
+            )
         if not self.tools.has("request_ui_confirmation"):
             self.tools.register(
                 "request_ui_confirmation",

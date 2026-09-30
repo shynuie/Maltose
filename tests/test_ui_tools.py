@@ -14,6 +14,8 @@ class UIToolTest(unittest.TestCase):
         )
 
         self.assertTrue(brain.tools.has("display_ui_links"))
+        self.assertTrue(brain.tools.has("display_ui_timeline"))
+        self.assertTrue(brain.tools.has("display_ui_table"))
         result = brain.tools.execute(
             "display_ui_links",
             {

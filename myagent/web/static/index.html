@@ -50,6 +50,18 @@
       .link-card:hover { border-color: #aab8ee; background: #f3f5ff; }
       .link-label { display: block; font-weight: 700; }
       .link-description { display: block; margin-top: 3px; color: #718096; font-size: .8rem; line-height: 1.4; }
+      .timeline { display: grid; gap: 10px; }
+      .timeline-item { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; }
+      .timeline-marker { width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: #cbd3e2; box-shadow: 0 0 0 4px #f0f2f7; }
+      .timeline-item.running .timeline-marker { background: #5264d9; box-shadow: 0 0 0 4px #e6e9ff; }
+      .timeline-item.done .timeline-marker { background: #35b77a; box-shadow: 0 0 0 4px #e7f8ef; }
+      .timeline-item.failed .timeline-marker { background: #df6a6a; box-shadow: 0 0 0 4px #fff0f0; }
+      .timeline-label { font-weight: 700; }
+      .timeline-detail { margin-top: 2px; color: #718096; font-size: .8rem; }
+      .ui-table-wrap { overflow-x: auto; }
+      .ui-table { width: 100%; border-collapse: collapse; color: #526078; font-size: .86rem; }
+      .ui-table th, .ui-table td { padding: 9px 10px; border-bottom: 1px solid #e7ebf2; text-align: left; white-space: nowrap; }
+      .ui-table th { color: #273653; font-weight: 700; }
       form { display: flex; gap: 10px; padding: 5px; border: 1px solid #e1e6ef; border-radius: 17px; background: #fff; box-shadow: 0 10px 30px rgba(43, 56, 85, .08); }
       input { flex: 1; min-width: 0; padding: 12px 13px; border: 0; outline: 0; border-radius: 12px; background: transparent; color: inherit; font-size: 1rem; }
       button { padding: 0 20px; border: 0; border-radius: 12px; background: #5264d9; color: #fff; font-weight: 700; cursor: pointer; }
@@ -201,7 +213,27 @@
         }
         const node = document.createElement('article');
         node.className = 'ui-block';
-        if (data.block_type === 'ui_progress') {
+        if (data.block_type === 'ui_timeline') {
+          node.innerHTML = `<h3 class="ui-title"></h3><div class="timeline"></div>`;
+          node.querySelector('.ui-title').textContent = data.title || 'Timeline';
+          (Array.isArray(data.items) ? data.items : []).forEach(item => {
+            const row = document.createElement('div');
+            row.className = `timeline-item ${item.status || 'pending'}`;
+            row.innerHTML = `<span class="timeline-marker"></span><div><div class="timeline-label"></div><div class="timeline-detail"></div></div>`;
+            row.querySelector('.timeline-label').textContent = item.label || '';
+            row.querySelector('.timeline-detail').textContent = item.detail || '';
+            node.querySelector('.timeline').appendChild(row);
+          });
+        } else if (data.block_type === 'ui_table') {
+          node.innerHTML = `<h3 class="ui-title"></h3><div class="ui-table-wrap"><table class="ui-table"><thead></thead><tbody></tbody></table></div>`;
+          node.querySelector('.ui-title').textContent = data.title || 'Table';
+          const header = node.querySelector('thead').insertRow();
+          (Array.isArray(data.columns) ? data.columns : []).forEach(column => { const cell = document.createElement('th'); cell.textContent = column; header.appendChild(cell); });
+          (Array.isArray(data.rows) ? data.rows : []).forEach(rowData => {
+            const row = node.querySelector('tbody').insertRow();
+            (Array.isArray(rowData) ? rowData : []).forEach(value => { const cell = row.insertCell(); cell.textContent = value == null ? '' : String(value); });
+          });
+        } else if (data.block_type === 'ui_progress') {
           const progressId = data.progress_id || `progress-${Date.now()}-${Math.random()}`;
           const existing = progressBlocks.get(progressId);
           if (existing) {
