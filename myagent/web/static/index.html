@@ -46,6 +46,7 @@
       #pinned-blocks { display: grid; gap: 10px; }
       #pinned-blocks .ui-block { margin: 0; }
       .pinned-block { position: relative; }
+      .pinned-block > .ui-title { padding-right: 28px; }
       .block-close { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; padding: 0; border-radius: 50%; background: #eef1f7; color: #68758c; font-size: 1rem; line-height: 1; }
       #messages { display: grid; gap: 12px; align-content: start; }
       .message { padding: 14px 16px; border-radius: 16px; white-space: pre-wrap; line-height: 1.58; box-shadow: 0 3px 10px rgba(43, 56, 85, .04); }
@@ -143,6 +144,7 @@
       };
       const addCloseButton = (node, blockId) => {
         if (!blockId) return;
+        node.classList.add('pinned-block');
         const close = document.createElement('button');
         close.className = 'block-close'; close.type = 'button'; close.title = 'Close'; close.setAttribute('aria-label', 'Close'); close.textContent = '×';
         close.addEventListener('click', () => closePinned(blockId, node));
