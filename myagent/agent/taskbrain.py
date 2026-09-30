@@ -1146,6 +1146,40 @@ class TaskBrain:
                 },
                 lambda args: publish("ui_table", args),
             )
+        if not self.tools.has("display_ui_canvas"):
+            self.tools.register(
+                "display_ui_canvas",
+                "Draw or update a simple visual diagram in the Web UI. Use nodes, labels, and arrows for architecture, workflows, and relationships.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "scene_id": {"type": "string"},
+                        "title": {"type": "string"},
+                        "elements": {
+                            "type": "array",
+                            "maxItems": 100,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {"type": "string", "enum": ["node", "text", "arrow"]},
+                                    "id": {"type": "string"},
+                                    "from": {"type": "string"},
+                                    "to": {"type": "string"},
+                                    "x": {"type": "number"},
+                                    "y": {"type": "number"},
+                                    "width": {"type": "number"},
+                                    "height": {"type": "number"},
+                                    "label": {"type": "string"},
+                                    "color": {"type": "string"},
+                                },
+                                "required": ["type"],
+                            },
+                        },
+                    },
+                    "required": ["scene_id", "elements"],
+                },
+                lambda args: publish("ui_canvas", args),
+            )
         if not self.tools.has("request_ui_confirmation"):
             self.tools.register(
                 "request_ui_confirmation",
