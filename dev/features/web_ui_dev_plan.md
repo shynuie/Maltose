@@ -75,6 +75,8 @@ Web / Voice / CLI input
 
 - [x] Streaming reply 以 `assistant_start`、`assistant_delta`、`assistant_end` 事件增量呈現。
 - [x] 增加 `ui_markdown`、`ui_card`、`ui_progress`、`ui_confirmation` block schema 與前端呈現。
+- [x] 普通文字中的 `http/https` URL 自動轉為安全可點擊連結。
+- [x] 增加 `ui_links` block，以標題與描述呈現獨立連結卡片。
 - [x] 增加 UI action endpoint，將 confirmation action 回傳 runtime event。
 - [ ] Markdown、code block、table 做更完整的安全富渲染。
 - [ ] 補充 ADR，固定 runtime 與 UI 的責任邊界。

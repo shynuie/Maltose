@@ -45,6 +45,11 @@
       .ui-progress-label { display: flex; justify-content: space-between; margin-top: 8px; color: #69758c; font-size: .78rem; }
       .ui-actions { display: flex; gap: 8px; margin-top: 12px; }
       .ui-actions button { padding: 8px 12px; }
+      .link-list { display: grid; gap: 8px; }
+      .link-card { display: block; padding: 10px 12px; border: 1px solid #e2e7f0; border-radius: 12px; background: #fbfcff; color: #3151bd; text-decoration: none; }
+      .link-card:hover { border-color: #aab8ee; background: #f3f5ff; }
+      .link-label { display: block; font-weight: 700; }
+      .link-description { display: block; margin-top: 3px; color: #718096; font-size: .8rem; line-height: 1.4; }
       form { display: flex; gap: 10px; padding: 5px; border: 1px solid #e1e6ef; border-radius: 17px; background: #fff; box-shadow: 0 10px 30px rgba(43, 56, 85, .08); }
       input { flex: 1; min-width: 0; padding: 12px 13px; border: 0; outline: 0; border-radius: 12px; background: transparent; color: inherit; font-size: 1rem; }
       button { padding: 0 20px; border: 0; border-radius: 12px; background: #5264d9; color: #fff; font-weight: 700; cursor: pointer; }
@@ -79,10 +84,36 @@
       const orb = document.querySelector('#agent-orb');
       const input = document.querySelector('#input');
       const streamingMessages = new Map();
+      const urlPattern = /(https?:\/\/[^\s<>"']+)/gi;
+      const renderRichText = (node, content) => {
+        node.replaceChildren();
+        let cursor = 0;
+        for (const match of content.matchAll(urlPattern)) {
+          const start = match.index;
+          const rawUrl = match[0];
+          const url = rawUrl.replace(/[.,!?;:，。！？；：)\]}]+$/g, '');
+          node.append(document.createTextNode(content.slice(cursor, start)));
+          try {
+            const parsed = new URL(url);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('unsupported protocol');
+            const link = document.createElement('a');
+            link.href = parsed.href;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = url;
+            node.append(link);
+            node.append(document.createTextNode(rawUrl.slice(url.length)));
+          } catch (_) {
+            node.append(document.createTextNode(rawUrl));
+          }
+          cursor = start + rawUrl.length;
+        }
+        node.append(document.createTextNode(content.slice(cursor)));
+      };
       const addMessage = (role, content) => {
         const node = document.createElement('div');
         node.className = `message ${role}`;
-        node.textContent = content;
+        renderRichText(node, content);
         messages.appendChild(node);
         conversationPanel.scrollTop = conversationPanel.scrollHeight;
         return node;
@@ -106,24 +137,67 @@
       source.addEventListener('assistant_message', event => addMessage('assistant', JSON.parse(event.data).payload.content));
       source.addEventListener('assistant_start', event => {
         const data = JSON.parse(event.data).payload;
-        streamingMessages.set(data.message_id, addMessage('assistant', ''));
+        streamingMessages.set(data.message_id, { node: addMessage('assistant', ''), content: '' });
       });
       source.addEventListener('assistant_delta', event => {
         const data = JSON.parse(event.data).payload;
-        const node = streamingMessages.get(data.message_id);
-        if (node) {
-          node.textContent += data.content;
+        const message = streamingMessages.get(data.message_id);
+        if (message) {
+          message.content += data.content;
+          renderRichText(message.node, message.content);
           conversationPanel.scrollTop = conversationPanel.scrollHeight;
         }
       });
       source.addEventListener('assistant_end', event => {
         const data = JSON.parse(event.data).payload;
-        const node = streamingMessages.get(data.message_id);
-        if (node && !node.textContent) node.textContent = data.content || '';
+        const message = streamingMessages.get(data.message_id);
+        if (message && !message.content) renderRichText(message.node, data.content || '');
         streamingMessages.delete(data.message_id);
       });
+      const renderLinkList = (links, title) => {
+        const node = document.createElement('article');
+        node.className = 'ui-block';
+        if (title) {
+          const heading = document.createElement('h3');
+          heading.className = 'ui-title';
+          heading.textContent = title;
+          node.appendChild(heading);
+        }
+        const list = document.createElement('div');
+        list.className = 'link-list';
+        (Array.isArray(links) ? links : []).forEach(item => {
+          if (!item || typeof item.url !== 'string') return;
+          try {
+            const parsed = new URL(item.url);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+            const link = document.createElement('a');
+            link.className = 'link-card';
+            link.href = parsed.href;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            const label = document.createElement('span');
+            label.className = 'link-label';
+            label.textContent = item.label || parsed.hostname;
+            link.appendChild(label);
+            if (item.description) {
+              const description = document.createElement('span');
+              description.className = 'link-description';
+              description.textContent = item.description;
+              link.appendChild(description);
+            }
+            list.appendChild(link);
+          } catch (_) { /* Ignore malformed or unsafe URLs. */ }
+        });
+        node.appendChild(list);
+        messages.appendChild(node);
+        conversationPanel.scrollTop = conversationPanel.scrollHeight;
+      };
       source.addEventListener('ui_block', event => {
         const data = JSON.parse(event.data).payload;
+        if (data.block_type === 'ui_links') {
+          renderLinkList(data.links, data.title || 'Links');
+          return;
+        }
         const node = document.createElement('article');
         node.className = 'ui-block';
         if (data.block_type === 'ui_progress') {
