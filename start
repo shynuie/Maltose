@@ -12,6 +12,7 @@ if [[ -f .env ]]; then
 fi
 
 EXTRAS=(--extra wake --extra qwen-asr --extra vector-memory --extra speaker)
+DEFAULT_BRAIN="${MYAGENT_BRAIN:-taskbrain}"
 WATCHER_PID=""
 KNOWLEDGE_LOG_DIR="data/logs"
 KNOWLEDGE_LOG_FILE="$KNOWLEDGE_LOG_DIR/knowledge.log"
@@ -35,4 +36,4 @@ WATCHER_PID=$!
 
 # Start the local UI by default; additional arguments still pass through to
 # myagent, so callers can override the normal runtime configuration.
-uv run "${EXTRAS[@]}" myagent --web "$@"
+uv run "${EXTRAS[@]}" myagent --web --brain "$DEFAULT_BRAIN" "$@"
