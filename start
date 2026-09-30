@@ -33,4 +33,6 @@ trap cleanup EXIT
 uv run "${EXTRAS[@]}" myagent-documents watch >"$KNOWLEDGE_LOG_FILE" 2>&1 &
 WATCHER_PID=$!
 
-uv run "${EXTRAS[@]}" myagent "$@"
+# Start the local UI by default; additional arguments still pass through to
+# myagent, so callers can override the normal runtime configuration.
+uv run "${EXTRAS[@]}" myagent --web "$@"
