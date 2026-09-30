@@ -16,8 +16,7 @@
       .presence-dot { width: 7px; height: 7px; border-radius: 50%; background: #35b77a; box-shadow: 0 0 0 4px #e7f8ef; }
       .workspace { min-height: 0; display: grid; grid-template-columns: minmax(220px, .36fr) minmax(0, 1fr); gap: 16px; }
       #agent-panel { min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; border: 1px solid #e4e8f0; border-radius: 22px; background: linear-gradient(155deg, #fff 0%, #f4f6ff 100%); box-shadow: 0 10px 30px rgba(43, 56, 85, .07); text-align: center; }
-      #agent-panel h2 { margin: 0; font-size: 1.2rem; letter-spacing: -.02em; }
-      #agent-panel .agent-note { max-width: 180px; margin: 0; color: #7b879c; font-size: .8rem; line-height: 1.5; }
+      #agent-panel #status { margin-top: 0; }
       #agent-orb { --orb-color: #5b6ee1; position: relative; width: 160px; height: 160px; flex: 0 0 160px; display: grid; place-items: center; }
       #agent-orb::before, #agent-orb::after { content: ""; position: absolute; inset: 5px; border: 1px solid color-mix(in srgb, var(--orb-color), transparent 66%); border-radius: 28% 72% 62% 38% / 42% 40% 60% 58%; transform: rotate(24deg); animation: orb-ring 8s linear infinite; }
       #agent-orb::after { inset: 1px; border-color: color-mix(in srgb, var(--orb-color), transparent 84%); transform: rotate(-32deg) scale(.84); animation-duration: 11s; animation-direction: reverse; }
@@ -47,7 +46,7 @@
       @keyframes orb-listen { 0% { transform: scale(.82); opacity: .9; } 70%, 100% { transform: scale(1.25); opacity: 0; } }
       @keyframes orb-speak { from { transform: scale(.88) rotate(-5deg); } to { transform: scale(1.16) rotate(5deg); } }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
-      @media (max-width: 760px) { main { padding: 14px; gap: 10px; } header { padding: 12px 14px; } .workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); } #agent-panel { flex-direction: row; justify-content: flex-start; gap: 14px; padding: 12px 16px; text-align: left; } #agent-panel .agent-note { display: none; } #agent-orb { width: 76px; height: 76px; flex-basis: 76px; } .orb-core { width: 34px; height: 34px; } .user, .assistant { margin-left: 0; margin-right: 0; } }
+      @media (max-width: 760px) { main { padding: 14px; gap: 10px; } header { padding: 12px 14px; } .workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); } #agent-panel { flex-direction: row; justify-content: flex-start; gap: 14px; padding: 12px 16px; text-align: left; } #agent-orb { width: 76px; height: 76px; flex-basis: 76px; } .orb-core { width: 34px; height: 34px; } .user, .assistant { margin-left: 0; margin-right: 0; } }
     </style>
   </head>
   <body>
@@ -59,7 +58,7 @@
       <section class="workspace" aria-label="Agent workspace">
         <aside id="agent-panel" aria-label="Agent 状态">
           <div id="agent-orb" class="state-standby" role="img" aria-label="MyAgent 正在待命"><span class="orb-core"></span></div>
-          <div><h2>MyAgent</h2><div id="status" aria-live="polite">connecting…</div><p class="agent-note">我在这里，随时准备听你说。</p></div>
+          <div><div id="status" aria-live="polite">connecting…</div></div>
         </aside>
         <section id="conversation-panel" aria-label="对话内容"><div id="messages" aria-live="polite"></div></section>
       </section>
