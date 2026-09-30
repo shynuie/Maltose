@@ -1,7 +1,7 @@
 __pycache__/
 .venv/
 recordings/
-models/
+models
 tools/location_helper.app/
 
 # Python
