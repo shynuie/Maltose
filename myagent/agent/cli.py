@@ -491,6 +491,13 @@ def main() -> None:
         task_manager = TaskManager(
             TaskStore(args.taskbrain_tasks),
             max_workers=args.taskbrain_max_workers,
+            progress_publisher=(
+                lambda payload: event_hub.publish(
+                    "ui_block", {"block_type": "ui_progress", **payload}
+                )
+                if args.web
+                else None
+            ),
         )
         task_manager.register_worker(
             "codex_readonly",

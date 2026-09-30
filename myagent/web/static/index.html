@@ -84,6 +84,7 @@
       const orb = document.querySelector('#agent-orb');
       const input = document.querySelector('#input');
       const streamingMessages = new Map();
+      const progressBlocks = new Map();
       const urlPattern = /(https?:\/\/[^\s<>"']+)/gi;
       const renderRichText = (node, content) => {
         node.replaceChildren();
@@ -201,11 +202,23 @@
         const node = document.createElement('article');
         node.className = 'ui-block';
         if (data.block_type === 'ui_progress') {
+          const progressId = data.progress_id || `progress-${Date.now()}-${Math.random()}`;
+          const existing = progressBlocks.get(progressId);
+          if (existing) {
+            existing.querySelector('.ui-title').textContent = data.title || 'Progress';
+            existing.querySelector('.ui-progress-value').style.width = `${Math.max(0, Math.min(100, Number(data.percent || 0)))}%`;
+            existing.querySelector('.ui-progress-percent').textContent = `${Math.max(0, Math.min(100, Number(data.percent || 0)))}%`;
+            existing.querySelector('.ui-progress-text').textContent = data.text || data.status || '';
+            if (data.status === 'succeeded' || data.status === 'failed' || data.status === 'cancelled') progressBlocks.delete(progressId);
+            conversationPanel.scrollTop = conversationPanel.scrollHeight;
+            return;
+          }
           const value = Math.max(0, Math.min(100, Number(data.percent || 0)));
-          node.innerHTML = `<h3 class="ui-title"></h3><div class="ui-progress-track"><div class="ui-progress-value"></div></div><div class="ui-progress-label"><span class="ui-progress-text"></span><span>${value}%</span></div>`;
+          node.innerHTML = `<h3 class="ui-title"></h3><div class="ui-progress-track"><div class="ui-progress-value"></div></div><div class="ui-progress-label"><span class="ui-progress-text"></span><span class="ui-progress-percent">${value}%</span></div>`;
           node.querySelector('.ui-title').textContent = data.title || 'Progress';
           node.querySelector('.ui-progress-value').style.width = `${value}%`;
-          node.querySelector('.ui-progress-text').textContent = data.text || '';
+          node.querySelector('.ui-progress-text').textContent = data.text || data.status || '';
+          progressBlocks.set(progressId, node);
         } else if (data.block_type === 'ui_confirmation') {
           node.innerHTML = `<h3 class="ui-title"></h3><div class="ui-content"></div><div class="ui-actions"></div>`;
           node.querySelector('.ui-title').textContent = data.title || 'Confirmation';

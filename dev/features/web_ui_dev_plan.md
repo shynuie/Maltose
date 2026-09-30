@@ -79,6 +79,7 @@ Web / Voice / CLI input
 - [x] 增加 `ui_links` block，以標題與描述呈現獨立連結卡片。
 - [x] 增加 UI action endpoint，將 confirmation action 回傳 runtime event。
 - [x] 將 UI blocks 以 opt-in function tools 暴露給 TaskBrain，讓 LLM 自主選擇是否呈現。
+- [x] 將 TaskManager worker 的真實 progress 以 `progress_id` 持續推送，並由 UI 原地更新。
 - [ ] Markdown、code block、table 做更完整的安全富渲染。
 - [ ] 補充 ADR，固定 runtime 與 UI 的責任邊界。
 

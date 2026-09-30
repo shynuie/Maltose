@@ -16,6 +16,29 @@ from myagent.agent import (
 
 
 class TaskManagerTest(unittest.TestCase):
+    def test_publishes_live_progress_for_running_task(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
+            published = []
+            manager = TaskManager(store, progress_publisher=published.append)
+            manager.register_worker("local", FunctionTaskWorker(lambda _data: "done"))
+            record = manager.create_plan(
+                [{"title": "Live task", "worker_type": "local"}], user_id="marvin"
+            )[0]
+
+            deadline = time.time() + 2
+            while time.time() < deadline:
+                if manager.get_status(record.id)["status"] == TaskStatus.SUCCEEDED:
+                    break
+                time.sleep(0.01)
+
+            self.assertGreaterEqual(len(published), 3)
+            self.assertEqual({item["progress_id"] for item in published}, {record.id})
+            self.assertEqual(published[-1]["status"], TaskStatus.SUCCEEDED)
+            self.assertEqual(published[-1]["percent"], 100)
+            manager.shutdown()
+            store.close()
+
     def test_assistant_message_worker_returns_exact_message(self) -> None:
         record = type("Record", (), {"title": "fallback", "input": {"message": "你好！"}})()
         self.assertEqual(AssistantMessageWorker().run(record, lambda _progress: None), "你好！")
