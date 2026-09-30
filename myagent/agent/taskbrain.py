@@ -512,6 +512,7 @@ class TaskBrain:
         max_session_turns: int = 12,
         capability_adapters: list[CapabilityAdapter] | None = None,
         environment_tools: EnvironmentTools | None = None,
+        ui_publisher: Callable[[str, dict[str, Any]], Any] | None = None,
     ) -> None:
         if max_session_turns < 1:
             raise ValueError("Maximum session turns must be positive.")
@@ -522,6 +523,7 @@ class TaskBrain:
         self.task_manager = task_manager
         self.search_provider = search_provider
         self.environment_tools = environment_tools or EnvironmentTools()
+        self.ui_publisher = ui_publisher
         self._active_user_id = getattr(self.memory, "user_id", "default")
         self._active_speaker_status = "unknown"
         self._return_to_standby = False
@@ -537,6 +539,7 @@ class TaskBrain:
         self._install_task_tools()
         self._install_search_tools()
         self._install_environment_tools()
+        self._install_ui_tools()
         for adapter in capability_adapters or []:
             register_capability_adapter(self.tools, adapter)
         if hasattr(self.memory, "backfill_embeddings"):
@@ -1023,6 +1026,112 @@ class TaskBrain:
                 {"type": "object", "properties": {}},
                 lambda _args: self.environment_tools.get_ip_addresses(),
             )
+
+    def _install_ui_tools(self) -> None:
+        """Expose safe presentation primitives when a UI runtime is attached."""
+        if self.ui_publisher is None:
+            return
+
+        def publish(block_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+            self.ui_publisher(block_type, payload)
+            return {"status": "displayed", "block_type": block_type}
+
+        if not self.tools.has("display_ui_markdown"):
+            self.tools.register(
+                "display_ui_markdown",
+                "Display a readable note in the Web UI when formatted visual context helps. Keep the spoken answer concise.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                    },
+                    "required": ["content"],
+                },
+                lambda args: publish("ui_markdown", args),
+            )
+        if not self.tools.has("display_ui_card"):
+            self.tools.register(
+                "display_ui_card",
+                "Display a compact information card in the Web UI. Use for a small, self-contained result.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                    },
+                    "required": ["title", "content"],
+                },
+                lambda args: publish("ui_card", args),
+            )
+        if not self.tools.has("display_ui_links"):
+            self.tools.register(
+                "display_ui_links",
+                "Display a short list of useful web links as titled clickable cards. Use URLs returned by web search or tools.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "links": {
+                            "type": "array",
+                            "maxItems": 8,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {"type": "string"},
+                                    "label": {"type": "string"},
+                                    "description": {"type": "string"},
+                                },
+                                "required": ["url", "label"],
+                            },
+                        },
+                    },
+                    "required": ["links"],
+                },
+                lambda args: publish("ui_links", args),
+            )
+        if not self.tools.has("display_ui_progress"):
+            self.tools.register(
+                "display_ui_progress",
+                "Display or update progress for a long-running operation. Percent must be between 0 and 100.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "percent": {"type": "number", "minimum": 0, "maximum": 100},
+                        "text": {"type": "string"},
+                    },
+                    "required": ["title", "percent"],
+                },
+                lambda args: publish("ui_progress", args),
+            )
+        if not self.tools.has("request_ui_confirmation"):
+            self.tools.register(
+                "request_ui_confirmation",
+                "Ask for confirmation in the Web UI before a consequential action. Do not use for ordinary conversation.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                        "action_id": {"type": "string"},
+                        "actions": {
+                            "type": "array",
+                            "maxItems": 3,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "label": {"type": "string"},
+                                },
+                                "required": ["id", "label"],
+                            },
+                        },
+                    },
+                    "required": ["title", "content", "action_id"],
+                },
+                lambda args: publish("ui_confirmation", args),
+            )
     def process(self, user_text: str, context: TurnContext | None = None) -> str:
         text = user_text.strip()
         if not text:
@@ -1051,6 +1160,13 @@ class TaskBrain:
             " If the user identity is not verified, do not guess identity and do not claim access "
             "to personal memory, profile, or task data; explain that speaker verification is required."
         )
+        if self.ui_publisher is not None:
+            system_content += (
+                " A Web UI is available with presentation tools. Use display_ui_links when a response has "
+                "useful URLs, display_ui_progress for genuinely long-running work, and request_ui_confirmation "
+                "before consequential actions. Use display_ui_card or display_ui_markdown when visual context "
+                "is clearer than spoken text; do not call UI tools for every ordinary answer."
+            )
         if self.tools.has("search_documents"):
             system_content += (
                 " Document Knowledge Base is available through search_documents, search_in_document, and read_document."
@@ -1152,6 +1268,13 @@ class TaskBrain:
             "and cite its URLs when available. If the user identity is not verified, do not guess identity "
             "and do not claim access to personal memory, profile, or task data; explain that speaker verification is required."
         )
+        if self.ui_publisher is not None:
+            system_content += (
+                " A Web UI is available with presentation tools. Use display_ui_links when a response has "
+                "useful URLs, display_ui_progress for genuinely long-running work, and request_ui_confirmation "
+                "before consequential actions. Use display_ui_card or display_ui_markdown when visual context "
+                "is clearer than spoken text; do not call UI tools for every ordinary answer."
+            )
         if self.tools.has("search_documents"):
             system_content += (
                 " Document Knowledge Base is available through search_documents, search_in_document, and read_document."

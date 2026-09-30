@@ -78,6 +78,7 @@ Web / Voice / CLI input
 - [x] 普通文字中的 `http/https` URL 自動轉為安全可點擊連結。
 - [x] 增加 `ui_links` block，以標題與描述呈現獨立連結卡片。
 - [x] 增加 UI action endpoint，將 confirmation action 回傳 runtime event。
+- [x] 將 UI blocks 以 opt-in function tools 暴露給 TaskBrain，讓 LLM 自主選擇是否呈現。
 - [ ] Markdown、code block、table 做更完整的安全富渲染。
 - [ ] 補充 ADR，固定 runtime 與 UI 的責任邊界。
 
@@ -90,6 +91,7 @@ Web / Voice / CLI input
 - [x] 實作 M3 的 text command queue、Agent event publishing 與 CLI wiring。
 - [x] 實作 streaming SSE delta 與前端即時追加文字。
 - [x] 實作可擴充 UI blocks 與 confirmation action transport。
+- [x] 實作 TaskBrain UI function tools 與 typed block publisher。
 
 ## 下一步
 

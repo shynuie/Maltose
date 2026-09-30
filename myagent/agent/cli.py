@@ -396,6 +396,7 @@ def main() -> None:
         wake_ack_delay=args.wake_ack_delay,
         wake_buffer_ms=args.wake_buffer_ms,
     )
+    event_hub = EventHub()
 
     mcp_clients: list[MCPStdioClient] = []
     task_manager: TaskManager | None = None
@@ -524,6 +525,7 @@ def main() -> None:
                 external_ip_url=args.external_ip_url,
                 timeout=args.environment_timeout,
             ),
+            ui_publisher=event_hub.publish if args.web else None,
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)
@@ -546,7 +548,6 @@ def main() -> None:
         logger.info("speaker_recognition_enabled backend=speechbrain threshold=%s", args.speaker_threshold)
     else:
         speaker_identity_manager = None
-    event_hub = EventHub()
     agent = VoiceAgent(
         config=config,
         brain=brain,
