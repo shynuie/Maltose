@@ -1,0 +1,88 @@
+# Web UI Development Plan
+
+> 狀態：`in_progress`
+> 最後更新：2026-09-30
+
+## 目標
+
+為 MyAgent 提供一個本地 Web UI，讓使用者能：
+
+- 看見 Agent 的即時狀態與對話內容。
+- 透過文字輸入送出指令，與語音入口共用 Agent session。
+- 接收 Markdown、程式碼、表格、進度與後續可擴充的 UI 事件。
+
+UI 是 Agent Runtime 的觀察與互動層，不直接耦合 TaskBrain、Voice 或 KDB 的內部實作。
+
+## 邊界
+
+第一階段聚焦於單機、本地、單使用者場景：
+
+- 使用標準庫 HTTP server，避免先引入前端框架與額外部署負擔。
+- 使用 SSE 推送 Agent 事件；使用 HTTP POST 接收 Web UI 輸入。
+- 不在本階段處理遠端登入、多人 session、TLS 或完整插件市場。
+- 不改動 KWS 的偵測與音訊演算法。
+
+## 設計
+
+```text
+Web / Voice / CLI input
+          │
+          ▼
+     Agent Runtime
+          │
+          ▼
+  typed events / state
+          │
+          ▼
+       Web UI
+```
+
+事件至少包含 `type`、`timestamp` 與可序列化 payload。第一批事件類型：
+
+- `state_changed`
+- `user_message`
+- `assistant_message`
+- `error`
+
+## 里程碑與驗收
+
+### M1：Runtime 事件骨架
+
+- [ ] 建立 thread-safe event hub 與事件資料模型。
+- [ ] Agent state、user input、assistant output 能發布事件。
+- [ ] 事件測試涵蓋訂閱、取消訂閱與慢速 subscriber。
+
+驗證：focused unit tests、`git diff --check`。
+
+### M2：本地 Web server
+
+- [ ] 提供靜態首頁。
+- [ ] `GET /api/events` 使用 SSE 推送事件。
+- [ ] `POST /api/input` 接收文字指令並交給 runtime。
+- [ ] `GET /api/state` 回傳目前狀態。
+
+驗證：HTTP integration tests，不啟動真實 microphone 或模型。
+
+### M3：Agent 整合
+
+- [ ] Web input 與 voice input 進入同一個 session boundary。
+- [ ] 保留現有 VoiceAgent 行為與測試。
+- [ ] CLI 增加可選 Web UI 啟動參數。
+
+驗證：現有 agent/voice focused tests 加上 Web UI integration tests。
+
+### M4：可呈現內容
+
+- [ ] Markdown、code block、table 維持安全的前端渲染。
+- [ ] 增加 progress 與 confirmation event schema。
+- [ ] 補充 ADR，固定 runtime 與 UI 的責任邊界。
+
+## 目前進度
+
+- [x] 從 `kws` 的已提交 HEAD 建立獨立 `web-ui` branch/worktree。
+- [x] 建立本 feature plan。
+- [ ] 實作 M1。
+
+## 下一步
+
+實作 M1 的事件模型與 thread-safe event hub，先用純單元測試固定協議，再接 HTTP 層。
