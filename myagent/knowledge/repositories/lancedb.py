@@ -40,8 +40,32 @@ class LanceVectorRepository:
         table = self._table(name)
         if table is None:
             self._db.create_table(name, data=rows)
+        elif self._requires_nullable_schema_migration(table, rows):
+            # LanceDB infers a column as Null when the first batch contains
+            # only None values. Rebuild the table with the old and new rows so
+            # optional fields (for example Markdown section) become a real
+            # nullable string/int column instead of an unusable Null column.
+            existing_rows = table.to_arrow().to_pylist()
+            self._db.create_table(
+                name,
+                data=existing_rows + rows,
+                mode="overwrite",
+            )
         else:
             table.add(rows)
+
+    @staticmethod
+    def _requires_nullable_schema_migration(table, rows: list[dict]) -> bool:
+        import pyarrow as pa
+
+        schema = table.schema
+        for field_name in schema.names:
+            field = schema.field(field_name)
+            if not pa.types.is_null(field.type):
+                continue
+            if any(row.get(field_name) is not None for row in rows):
+                return True
+        return False
 
     def replace_document(
         self,

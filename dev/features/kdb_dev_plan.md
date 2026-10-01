@@ -641,6 +641,18 @@ summary、embedding 與 chunk cache 只用於定位；精確回答前必須能�
 - 阻塞：無。
 - 下一步：評估 queue 的 stale job policy、並行 worker 數量與是否拆成獨立 background service。
 
+### 2026-10-01 Progress Update
+
+- 狀態：`in_progress`
+- 完成：
+  - [x] 修復 LanceDB optional metadata column 初次全為 `None` 時被推斷為 `Null` 的 schema 問題。
+  - [x] 寫入新型別資料前自動以既有 rows + 新 rows 重建 nullable schema，保留既有 vectors。
+  - [x] 新增 `section=None` 後寫入 `section="Design"` 的真實 LanceDB regression test。
+- 驗證：25 個 KDB focused tests 通過；`py_compile` 與 `git diff --check` 通過。
+- 結果：後續 Markdown heading section 不會再因既有 `Null` schema 導致 indexing failure。
+- 阻塞：無。
+- 下一步：若現有 runtime database 已有 failed document，重新觸發該文件 indexing，讓 migration 在實際資料上完成。
+
 ## 17. 進度更新格式
 
 ```markdown
