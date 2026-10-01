@@ -3,7 +3,8 @@
 [agent]
 brain = "taskbrain"
 timeout = 10.0
-device = "3"
+# Omit device to follow macOS's current system input device.
+# device = "3"
 continuous = true
 output_dir = "recordings"
 

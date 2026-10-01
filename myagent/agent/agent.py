@@ -28,6 +28,7 @@ from myagent.voice import (
     Utterance,
     VADSettings,
     WakeWordDetector,
+    AudioInputDeviceController,
     measure_utterance,
     normalize_utterance_peak,
     NullSpeakerIdentifier,
@@ -41,6 +42,14 @@ from myagent.voice import (
 from myagent.voice.listening import microphone_events
 
 logger = logging.getLogger(__name__)
+
+_CJK_CHARACTER = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
+
+def _is_single_character_transcript(text: str) -> bool:
+    """Return whether STT produced only one Chinese character (ignoring punctuation)."""
+    normalized = re.sub(r"[\W_]+", "", text.strip(), flags=re.UNICODE)
+    return len(normalized) == 1 and _CJK_CHARACTER.fullmatch(normalized) is not None
 
 
 class AgentState(str, Enum):
@@ -89,6 +98,7 @@ class VoiceAgent:
         speaker_identity_manager: SpeakerIdentityManager | None = None,
         listener_factory: ListenerFactory = microphone_events,
         event_hub: EventHub | None = None,
+        audio_device_controller: AudioInputDeviceController | None = None,
     ) -> None:
         self.config = config or AgentConfig()
         self.brain = brain or EchoBrain()
@@ -98,6 +108,7 @@ class VoiceAgent:
         self._speaker_identity_manager = speaker_identity_manager
         self._listener_factory = listener_factory
         self._event_hub = event_hub
+        self._audio_device_controller = audio_device_controller
         self._command_queue: queue.Queue[str] = queue.Queue()
         self._state = AgentState.INITIALIZING
         self.turn_count = 0
@@ -280,6 +291,12 @@ class VoiceAgent:
                             else speaker_future.result()
                         )
                 logger.info("transcript text=%s", result.text)
+                if external_text is None and _is_single_character_transcript(result.text):
+                    logger.info(
+                        "single_character_transcript_ignored text=%r",
+                        result.text.strip(),
+                    )
+                    continue
                 logger.info(
                     "speaker_result user_id=%s score=%s status=%s",
                     speaker_result.user_id,
@@ -423,9 +440,14 @@ class VoiceAgent:
         stop_event: threading.Event,
         conversation_active: bool,
     ) -> Iterator[ListeningEvent]:
+        device = (
+            self._audio_device_controller.device_for_stream()
+            if self._audio_device_controller is not None
+            else self.config.device
+        )
         arguments = (
             self.config.vad_settings,
-            self.config.device,
+            device,
             self.config.standby_timeout if conversation_active else None,
             None if conversation_active else self.config.wake_word_detector,
             self.config.wake_ack_delay,
@@ -832,14 +854,19 @@ class VoiceAgent:
         return "".join(spoken_parts), deferred
 
     def _create_stream_listener(self, stop_event: threading.Event) -> Iterator[ListeningEvent]:
+        device = (
+            self._audio_device_controller.device_for_stream()
+            if self._audio_device_controller is not None
+            else self.config.device
+        )
         try:
             return iter(self._listener_factory(
-                self.config.vad_settings, self.config.device, None, None, 0.0, 0,
+                self.config.vad_settings, device, None, None, 0.0, 0,
                 stop_event=stop_event,
             ))
         except TypeError:
             return iter(self._listener_factory(
-                self.config.vad_settings, self.config.device, None, None, 0.0, 0,
+                self.config.vad_settings, device, None, None, 0.0, 0,
             ))
 
     @staticmethod
@@ -920,7 +947,9 @@ class VoiceAgent:
         listener = iter(
             self._listener_factory(
                 self.config.vad_settings,
-                self.config.device,
+                self._audio_device_controller.device_for_stream()
+                if self._audio_device_controller is not None
+                else self.config.device,
                 None,
                 None,
                 0.0,
@@ -992,7 +1021,13 @@ class VoiceAgent:
                     )
                     result = stt_future.result()
                     speaker_result = speaker_future.result()
-                return result.text.strip(), speaker_result
+                transcript = result.text.strip()
+                if _is_single_character_transcript(transcript):
+                    logger.info(
+                        "single_character_barge_in_ignored text=%r", transcript
+                    )
+                    return "", speaker_result
+                return transcript, speaker_result
         except Exception as exc:
             logger.warning("speech_barge_in_stt_failed error=%s", exc)
             return "", SpeakerResult(None, None, "unknown")

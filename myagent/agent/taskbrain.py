@@ -514,6 +514,7 @@ class TaskBrain:
         environment_tools: EnvironmentTools | None = None,
         ui_publisher: Callable[[str, dict[str, Any]], Any] | None = None,
         ui_state_provider: Callable[[], dict[str, Any]] | None = None,
+        audio_device_controller: Any | None = None,
     ) -> None:
         if max_session_turns < 1:
             raise ValueError("Maximum session turns must be positive.")
@@ -526,6 +527,7 @@ class TaskBrain:
         self.environment_tools = environment_tools or EnvironmentTools()
         self.ui_publisher = ui_publisher
         self.ui_state_provider = ui_state_provider
+        self.audio_device_controller = audio_device_controller
         self._active_user_id = getattr(self.memory, "user_id", "default")
         self._active_speaker_status = "unknown"
         self._return_to_standby = False
@@ -542,6 +544,7 @@ class TaskBrain:
         self._install_search_tools()
         self._install_environment_tools()
         self._install_ui_tools()
+        self._install_audio_device_tools()
         for adapter in capability_adapters or []:
             register_capability_adapter(self.tools, adapter)
         if hasattr(self.memory, "backfill_embeddings"):
@@ -1031,6 +1034,34 @@ class TaskBrain:
                 ),
                 {"type": "object", "properties": {}},
                 lambda _args: self.environment_tools.get_ip_addresses(),
+            )
+
+    def _install_audio_device_tools(self) -> None:
+        if self.audio_device_controller is None:
+            return
+        if not self.tools.has("get_audio_input_device"):
+            self.tools.register(
+                "get_audio_input_device",
+                "Show the input device currently used by MyAgent and all available input devices.",
+                {"type": "object", "properties": {}},
+                lambda _args: self.audio_device_controller.current(),
+            )
+        if not self.tools.has("set_audio_input_device"):
+            self.tools.register(
+                "set_audio_input_device",
+                (
+                    "Change the input device used by MyAgent for the next listening cycle. "
+                    "Use null, 'default', or 'system' to follow the macOS system default input; "
+                    "otherwise provide an input device index or name. This does not change macOS's global setting."
+                ),
+                {
+                    "type": "object",
+                    "properties": {
+                        "device": {"anyOf": [{"type": "integer"}, {"type": "string"}, {"type": "null"}]},
+                    },
+                    "required": ["device"],
+                },
+                lambda args: self.audio_device_controller.set_device(args.get("device")),
             )
 
     def _install_ui_tools(self) -> None:

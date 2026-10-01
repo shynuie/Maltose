@@ -593,6 +593,43 @@ class VoiceAgentTest(unittest.TestCase):
 
         self.assertEqual(fake_tts.synthesize_calls[-1].text, "我在")
 
+    def test_single_character_stt_is_ignored_before_brain_and_tts(self) -> None:
+        fake_stt = FakeSTT(transcript="嗯。")
+        fake_tts = FakeTTS()
+        fake_utterance = _make_fake_utterance()
+
+        class FailingBrain:
+            def process(self, _text, context=None):
+                raise AssertionError("single-character transcript should be ignored")
+
+        call_count = 0
+
+        def fake_listener(
+            _settings: VADSettings,
+            _device: str | int | None,
+            _timeout: float | None,
+            _wake_word_detector,
+            _wake_ack_delay: float,
+            _wake_buffer_ms: int,
+        ) -> Iterator[ListeningEvent]:
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                raise KeyboardInterrupt
+            yield ListeningEvent(kind="speech_ended", utterance=fake_utterance)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = VoiceAgent(
+                config=AgentConfig(output_dir=Path(tmpdir)),
+                brain=FailingBrain(),
+                transcriber=fake_stt,
+                speaker=fake_tts,
+                listener_factory=fake_listener,
+            )
+            agent.run()
+
+        self.assertEqual(len(fake_tts.synthesize_calls), 0)
+
     def test_stt_and_speaker_identification_run_for_same_turn(self) -> None:
         fake_stt = FakeSTT(transcript="你好")
         fake_tts = FakeTTS()

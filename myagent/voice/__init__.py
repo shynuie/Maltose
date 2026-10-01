@@ -15,6 +15,7 @@ from .listening import (
     microphone_events,
     write_utterance_wav,
 )
+from .devices import AudioInputDeviceController, AudioInputDeviceError
 from .stt import (
     FasterWhisperSTT,
     FunASRNanoSTT,
@@ -65,6 +66,8 @@ __all__ = [
     "FunASRNanoSTT",
     "Qwen3ASRSTT",
     "AudioStats",
+    "AudioInputDeviceController",
+    "AudioInputDeviceError",
     "GainWakeWordDetector",
     "HighPassWakeWordDetector",
     "SpectralGateWakeWordDetector",

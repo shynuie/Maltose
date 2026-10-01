@@ -36,6 +36,7 @@ from myagent.logging import configure_logging
 from myagent.runtime import EventHub, PresentationStore
 from myagent.web import WebServer
 from myagent.voice import (
+    AudioInputDeviceController,
     NullSpeakerIdentifier,
     ProfileSpeakerIdentifier,
     SpeakerProfileStore,
@@ -349,6 +350,7 @@ def main() -> None:
         min_speech_ms=args.min_speech_ms,
     )
     wake_word_detector = None
+    audio_device_controller = AudioInputDeviceController(_parse_device(args.device))
     if args.wake_config is not None:
         wake_config = load_wake_word_config(args.wake_config)
         sherpa_config = wake_config.sherpa_onnx
@@ -537,6 +539,7 @@ def main() -> None:
             ),
             ui_publisher=publish_ui_block if args.web else None,
             ui_state_provider=presentation.snapshot if args.web else None,
+            audio_device_controller=audio_device_controller,
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)
@@ -565,6 +568,7 @@ def main() -> None:
         speaker_identifier=speaker_identifier,
         speaker_identity_manager=speaker_identity_manager,
         event_hub=event_hub,
+        audio_device_controller=audio_device_controller,
     )
     web_server: WebServer | None = None
     if args.web:
