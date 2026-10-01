@@ -19,6 +19,12 @@ from myagent.agent.taskbrain import (
 )
 from myagent.agent.tasks import AssistantMessageWorker, CodexReadOnlyWorker, TaskManager, TaskStore
 from myagent.agent.capabilities import MCPStdioClient, MCPToolAdapter
+from myagent.filesystem.approval import ApprovalManager, AuditLog
+from myagent.filesystem.paths import FilesystemRoot, PathResolver
+from myagent.filesystem.policy import PolicyEngine, WorkingRoot
+from myagent.filesystem.service import FileService
+from myagent.filesystem.tools import FileToolAdapter
+from myagent.filesystem.ui import FilesystemApprovalUI
 from myagent.agent.search import BraveSearchProvider, WebResearchWorker
 from myagent.knowledge.config import KnowledgeConfig
 from myagent.knowledge.chunker import DocumentChunker
@@ -32,6 +38,10 @@ from myagent.knowledge.source_reader import SourceReader
 from myagent.knowledge.scanner import DocumentScanner
 from myagent.knowledge.summaries import ExtractiveDocumentSummarizer
 from myagent.knowledge.tools import DocumentToolAdapter
+from myagent.knowledge.curation import CuratedKnowledgeStore, KnowledgeProposalStore, KnowledgeSourcePolicy
+from myagent.knowledge.curation_tools import KnowledgeCurationToolAdapter
+from myagent.knowledge.curation_ui import KnowledgeProposalUI
+from myagent.knowledge.unified_retrieval import UnifiedKnowledgeService, UnifiedKnowledgeToolAdapter
 from myagent.logging import configure_logging
 from myagent.runtime import EventHub, PresentationStore
 from myagent.web import WebServer
@@ -49,6 +59,13 @@ from myagent.voice.listen_cli import _parse_device
 from myagent.voice.listening import VADSettings
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_filesystem_root(value: str) -> tuple[str, Path]:
+    name, separator, raw_path = value.partition("=")
+    if not separator or not name.strip() or not raw_path.strip():
+        raise argparse.ArgumentTypeError("filesystem root must use NAME=PATH")
+    return name.strip(), Path(raw_path.strip())
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -223,6 +240,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Device for the local embedding model.",
     )
     parser.add_argument(
+        "--filesystem-enabled",
+        action="store_true",
+        help="Enable explicitly configured filesystem capability tools.",
+    )
+    parser.add_argument("--filesystem-working-root", type=Path, default=Path("workspace"))
+    parser.add_argument(
+        "--filesystem-read-root",
+        action="append",
+        type=_parse_filesystem_root,
+        default=[],
+        metavar="NAME=PATH",
+        help="Additional read-only filesystem root; may be repeated.",
+    )
+    parser.add_argument("--filesystem-approvals", type=Path, default=Path("data/agent/approvals.json"))
+    parser.add_argument("--filesystem-trash", type=Path, default=Path("data/agent/trash"))
+    parser.add_argument("--filesystem-audit", type=Path, default=Path("data/agent/filesystem_audit.jsonl"))
+    parser.add_argument(
         "--knowledge-enabled",
         action="store_true",
         help="Enable Document Knowledge Base tools for TaskBrain.",
@@ -248,6 +282,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--knowledge-embedding-device",
         choices=("cpu", "mps"),
         default="cpu",
+    )
+    parser.add_argument(
+        "--knowledge-curation-enabled",
+        action="store_true",
+        help="Enable Agent knowledge proposals and Web UI review.",
+    )
+    parser.add_argument(
+        "--knowledge-proposals",
+        type=Path,
+        default=Path("data/knowledge/proposals/proposals.json"),
+    )
+    parser.add_argument(
+        "--knowledge-curated",
+        type=Path,
+        default=Path("data/knowledge/curated/curated.json"),
     )
     parser.add_argument(
         "--device",
@@ -409,6 +458,9 @@ def main() -> None:
     def publish_task_progress(payload: dict[str, object]) -> None:
         publish_ui_block("ui_progress", payload)
 
+    filesystem_approval_ui: FilesystemApprovalUI | None = None
+    knowledge_proposal_ui: KnowledgeProposalUI | None = None
+    curated_knowledge_store: CuratedKnowledgeStore | None = None
     mcp_clients: list[MCPStdioClient] = []
     task_manager: TaskManager | None = None
     if args.brain == "openclaw":
@@ -440,6 +492,74 @@ def main() -> None:
             MCPToolAdapter(client, prefix=f"mcp_{index}_")
             for index, client in enumerate(mcp_clients)
         ]
+        if args.filesystem_enabled:
+            filesystem_roots = {
+                "workspace": FilesystemRoot(
+                    "workspace",
+                    args.filesystem_working_root,
+                    read=True,
+                    write=True,
+                    delete=True,
+                ),
+                **{
+                    name: FilesystemRoot(name, path, read=True, write=False, delete=False)
+                    for name, path in args.filesystem_read_root
+                },
+            }
+            filesystem_resolver = PathResolver(filesystem_roots)
+            filesystem_approvals = ApprovalManager(args.filesystem_approvals)
+            filesystem_approval_ui = FilesystemApprovalUI(
+                filesystem_approvals,
+                session_id="cli",
+                publisher=publish_ui_block,
+            )
+            filesystem_policy = PolicyEngine(
+                filesystem_resolver,
+                working_root=WorkingRoot("workspace"),
+            )
+            capability_adapters.append(
+                FileToolAdapter(
+                    FileService(
+                        filesystem_resolver,
+                        filesystem_policy,
+                        approval_manager=filesystem_approvals,
+                        audit_log=AuditLog(args.filesystem_audit),
+                        session_id="cli",
+                        trash_path=args.filesystem_trash,
+                        approval_notifier=filesystem_approval_ui.publish_request,
+                    )
+                )
+            )
+            logger.info(
+                "filesystem_capabilities_enabled working_root=%s",
+                args.filesystem_working_root,
+            )
+        if args.knowledge_curation_enabled:
+            knowledge_proposals = KnowledgeProposalStore(
+                args.knowledge_proposals,
+                source_policy=KnowledgeSourcePolicy(
+                    {"documents": args.knowledge_documents_root}
+                ),
+            )
+            curated_knowledge = CuratedKnowledgeStore(
+                args.knowledge_curated,
+                embedder=embedder,
+            )
+            curated_knowledge_store = curated_knowledge
+            knowledge_proposal_ui = KnowledgeProposalUI(
+                knowledge_proposals,
+                reviewer="user",
+                publisher=publish_ui_block,
+                curated_store=curated_knowledge,
+            )
+            capability_adapters.append(
+                KnowledgeCurationToolAdapter(
+                    knowledge_proposals,
+                    proposal_notifier=knowledge_proposal_ui.publish_request,
+                    curated_store=curated_knowledge,
+                )
+            )
+            logger.info("knowledge_curation_enabled proposals=%s", args.knowledge_proposals)
         if args.knowledge_enabled:
             knowledge_embedder = embedder
             if args.knowledge_embedding == "qwen3-embedding-0.6b" and knowledge_embedder is None:
@@ -490,6 +610,19 @@ def main() -> None:
                     ),
                 )
             )
+            if curated_knowledge_store is not None:
+                capability_adapters.append(
+                    UnifiedKnowledgeToolAdapter(
+                        UnifiedKnowledgeService(
+                            truth=knowledge_service,
+                            curated=curated_knowledge_store,
+                        )
+                    )
+                )
+            if knowledge_proposal_ui is not None:
+                knowledge_proposal_ui.set_truth_checker(
+                    lambda content: knowledge_service.search_documents(content, top_k=3)
+                )
             logger.info("document_knowledge_enabled root=%s", knowledge_config.documents_root)
         task_manager = TaskManager(
             TaskStore(args.taskbrain_tasks),
@@ -577,6 +710,16 @@ def main() -> None:
                 block_id = value.get("block_id")
                 if isinstance(block_id, str):
                     presentation.close(block_id)
+            if filesystem_approval_ui is not None and action_id in {
+                "filesystem.approve",
+                "filesystem.reject",
+            }:
+                filesystem_approval_ui.handle_action(action_id, value)
+            if knowledge_proposal_ui is not None and action_id in {
+                "knowledge.approve",
+                "knowledge.reject",
+            }:
+                knowledge_proposal_ui.handle_action(action_id, value)
             event_hub.publish(
                 "ui_action",
                 {"action_id": action_id, "value": value},

@@ -105,6 +105,7 @@ class DocumentKnowledgeService:
     @staticmethod
     def _metadata(record: dict[str, Any]) -> dict[str, Any]:
         return {
+            "source_type": "truth",
             "collection": record.get("collection"),
             "file_type": record.get("file_type"),
             "content_hash": record.get("content_hash"),

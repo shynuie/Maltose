@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Protocol
+from typing import Callable, Protocol
 
 from myagent.knowledge.indexer import DocumentIndexer, IndexResult
 from myagent.knowledge.queue import IndexJob, IndexingQueue
@@ -26,12 +26,14 @@ class IndexingWorker:
         indexer: Indexer | DocumentIndexer,
         *,
         idle_interval: float = 0.25,
+        freshness_checker: Callable[[object], object | None] | None = None,
     ) -> None:
         if idle_interval <= 0:
             raise ValueError("idle_interval must be positive")
         self.queue = queue
         self.indexer = indexer
         self.idle_interval = idle_interval
+        self.freshness_checker = freshness_checker
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -41,7 +43,15 @@ class IndexingWorker:
         if job is None:
             return None
         try:
-            result = self.indexer.index(job.scanned_file)
+            scanned_file = job.scanned_file
+            if self.freshness_checker is not None:
+                scanned_file = self.freshness_checker(job.scanned_file)
+                if scanned_file is None:
+                    return self.queue.complete(
+                        job.job_id,
+                        IndexResult(job.scanned_file.relative_path, 0, "superseded"),
+                    )
+            result = self.indexer.index(scanned_file)
         except Exception as exc:
             return self.queue.fail(job.job_id, exc)
         return self.queue.complete(job.job_id, result)
