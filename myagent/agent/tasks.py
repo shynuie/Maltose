@@ -19,6 +19,16 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 logger = logging.getLogger(__name__)
 
 
+def _is_uuid(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
 class TaskStatus:
     PENDING = "pending"
     RUNNING = "running"
@@ -601,18 +611,31 @@ class TaskManager:
             raise ValueError(
                 f"Task plan cannot contain more than {self.max_tasks_per_plan} tasks."
             )
-        task_ids: set[str] = set()
+        # ``task_id`` is a database identifier, not a human-readable task name.
+        # Keep accepting it as a legacy dependency reference, but always create
+        # a fresh UUID for the persisted record. ``task_ref`` is the preferred
+        # short-lived alias for dependencies within this plan.
+        refs: dict[str, str] = {}
+        planned: list[tuple[dict[str, Any], str]] = []
         for item in tasks:
-            task_id = item.get("task_id")
-            if task_id and task_id in task_ids:
-                raise ValueError(f"Duplicate task_id in plan: {task_id}")
-            if task_id:
-                task_ids.add(task_id)
+            requested_id = item.get("task_id")
+            task_ref = item.get("task_ref") or (
+                requested_id if requested_id and not _is_uuid(requested_id) else None
+            )
+            if task_ref:
+                task_ref = str(task_ref)
+                if task_ref in refs:
+                    raise ValueError(f"Duplicate task_ref in plan: {task_ref}")
+            task_id = str(uuid.uuid4())
+            if task_ref:
+                refs[task_ref] = task_id
+            planned.append((item, task_id))
         records = []
-        for item in tasks:
+        for item, task_id in planned:
             dependencies = item.get("dependencies", [])
             if not isinstance(dependencies, list):
                 raise ValueError("Task dependencies must be a list.")
+            dependencies = [refs.get(str(dep), str(dep)) for dep in dependencies]
             records.append(
                 self.store.create(
                     title=str(item.get("title", "")),
@@ -620,7 +643,7 @@ class TaskManager:
                     input=item.get("input", {}),
                     dependencies=dependencies,
                     user_id=user_id,
-                    task_id=item.get("task_id"),
+                    task_id=task_id,
                 )
             )
         for record in records:

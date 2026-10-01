@@ -366,7 +366,7 @@ class TaskBrainTest(unittest.TestCase):
                 "create_task_plan",
                 {
                     "tasks": [
-                        {"task_id": "one", "title": "分析檔案", "worker_type": "codex_readonly"}
+                        {"title": "分析檔案", "worker_type": "codex_readonly"}
                     ]
                 },
             )

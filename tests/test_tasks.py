@@ -53,8 +53,8 @@ class TaskManagerTest(unittest.TestCase):
             )
             records = manager.create_plan(
                 [
-                    {"task_id": "a", "title": "A", "worker_type": "local", "input": {"name": "A"}},
-                    {"task_id": "b", "title": "B", "worker_type": "local", "input": {"name": "B"}},
+                    {"title": "A", "worker_type": "local", "input": {"name": "A"}},
+                    {"title": "B", "worker_type": "local", "input": {"name": "B"}},
                 ],
                 user_id="marvin",
             )
@@ -159,11 +159,11 @@ class TaskManagerTest(unittest.TestCase):
             store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
             manager = TaskManager(store)
             manager.register_worker("local", FunctionTaskWorker(lambda _data: "ok"))
-            manager.create_plan(
+            records = manager.create_plan(
                 [
-                    {"task_id": "parent", "title": "Parent", "worker_type": "local"},
+                    {"task_ref": "parent", "title": "Parent", "worker_type": "local"},
                     {
-                        "task_id": "child",
+                        "task_ref": "child",
                         "title": "Child",
                         "worker_type": "local",
                         "dependencies": ["parent"],
@@ -173,12 +173,29 @@ class TaskManagerTest(unittest.TestCase):
 
             deadline = time.time() + 2
             while time.time() < deadline:
-                if manager.get_status("child")["status"] == TaskStatus.SUCCEEDED:
+                if manager.get_status(records[1].id)["status"] == TaskStatus.SUCCEEDED:
                     break
                 time.sleep(0.01)
 
-            self.assertEqual(manager.get_status("parent")["status"], TaskStatus.SUCCEEDED)
-            self.assertEqual(manager.get_status("child")["status"], TaskStatus.SUCCEEDED)
+            self.assertEqual(manager.get_status(records[0].id)["status"], TaskStatus.SUCCEEDED)
+            self.assertEqual(manager.get_status(records[1].id)["status"], TaskStatus.SUCCEEDED)
+            manager.shutdown()
+            store.close()
+
+    def test_plan_ids_are_fresh_uuids_even_when_legacy_ids_are_reused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
+            manager = TaskManager(store)
+            first = manager.create_plan(
+                [{"task_id": "search_similar_papers", "title": "Search papers", "worker_type": "local"}]
+            )[0]
+            second = manager.create_plan(
+                [{"task_id": "search_similar_papers", "title": "Search again", "worker_type": "local"}]
+            )[0]
+
+            self.assertNotEqual(first.id, second.id)
+            self.assertRegex(first.id, r"^[0-9a-f-]{36}$")
+            self.assertRegex(second.id, r"^[0-9a-f-]{36}$")
             manager.shutdown()
             store.close()
 

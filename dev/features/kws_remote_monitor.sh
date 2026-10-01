@@ -10,25 +10,53 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STATE_DIR="$REPO_ROOT/data/kws/monitor"
-LOG_FILE="$STATE_DIR/full50.local.log"
-PID_FILE="$STATE_DIR/full50.local.pid"
+JOB_KEY="${KWS_JOB_KEY:-raw-clean35-speed}"
+LOG_FILE="$STATE_DIR/${JOB_KEY}.local.log"
+PID_FILE="$STATE_DIR/${JOB_KEY}.local.pid"
+ALERT_FILE="$STATE_DIR/${JOB_KEY}.alerted"
 INTERVAL="${KWS_MONITOR_INTERVAL:-60}"
 REMOTE="root@180.127.11.167"
 PORT="31416"
-CONTAINER_ID="72ac13383679"
+REMOTE_LOG="/root/myagent-kws/data/kws/training/marvin-mini/real-tts1000-raw-clean35-speed.log"
+REMOTE_WORK="/root/myagent-kws/data/kws/training/marvin-mini/work-3ch-split4-real-tts1000-raw-clean35-speed"
 
 mkdir -p "$STATE_DIR"
 
 remote_snapshot() {
   ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$PORT" "$REMOTE" \
-    "echo NOW; date; echo CONTAINER; docker ps --format '{{.ID}} {{.Status}} {{.Names}}' | grep '^$CONTAINER_ID' || true; echo PROGRESS; grep -E 'Start epoch|Evaluate epoch|Training finished|model txt path|Total Recall:' /root/myagent-kws/data/kws/training/marvin-mini/full50.log | tail -5; echo CHECKPOINTS; find /root/myagent-kws/data/kws/training/marvin-mini/work-3ch-split4-full50 -type f -name '*.pth' 2>/dev/null | wc -l; echo ERRORS; printf 'label_errors='; grep -c 'Label index out of bounds' /root/myagent-kws/data/kws/training/marvin-mini/full50.log; printf 'data_errors='; grep -c -E 'Unsupported audio format|Cannot open input file|Traceback' /root/myagent-kws/data/kws/training/marvin-mini/full50.log"
+    "log='$REMOTE_LOG'; work='$REMOTE_WORK'; active=\$(docker ps --format '{{.ID}} {{.Status}}' | head -1 || true); finished=\$(grep -c 'Training finished' \"\$log\" 2>/dev/null || true); label_errors=\$(grep -c 'Label index out of bounds' \"\$log\" 2>/dev/null || true); data_errors=\$(grep -c -E 'Unsupported audio format|Cannot open input file|Traceback|Segmentation fault' \"\$log\" 2>/dev/null || true); age=\$(test -f \"\$log\" && expr \$(date +%s) - \$(stat -c %Y \"\$log\") || echo 999999); echo NOW; date; echo ACTIVE_CONTAINER=\${active:-none}; echo LOG_AGE_SECONDS=\$age; echo TRAINING_FINISHED=\$finished; echo LABEL_ERRORS=\$label_errors; echo DATA_ERRORS=\$data_errors; echo CHECKPOINTS=\$(find \"\$work\" -type f -name '*.pth' 2>/dev/null | wc -l); echo PROGRESS; grep -E 'Start epoch|Epoch:|Evaluate epoch|Save model|Training finished' \"\$log\" 2>/dev/null | tail -5 || true"
 }
 
 once() {
+  snapshot="$(remote_snapshot 2>&1)" || snapshot="SSH_CHECK_FAILED\n$snapshot"
   {
     echo "=== $(date '+%F %T %Z') local_poll ==="
-    remote_snapshot
-  } 2>&1 | tee -a "$LOG_FILE"
+    echo "$snapshot"
+  } | tee -a "$LOG_FILE"
+
+  issue=0
+  if grep -q 'SSH_CHECK_FAILED' <<<"$snapshot" && ! grep -q 'TRAINING_FINISHED=1' <<<"$snapshot"; then
+    issue=1
+  fi
+  if grep -q 'LOG_AGE_SECONDS=' <<<"$snapshot" && ! grep -q 'TRAINING_FINISHED=1' <<<"$snapshot"; then
+    log_age="$(sed -n 's/^LOG_AGE_SECONDS=//p' <<<"$snapshot" | tail -1)"
+    if [[ "$log_age" =~ ^[0-9]+$ ]] && (( log_age > 600 )); then
+      issue=1
+    fi
+  fi
+  if grep -q 'LABEL_ERRORS=[1-9]\|DATA_ERRORS=[1-9]' <<<"$snapshot"; then
+    issue=1
+  fi
+  if (( issue )); then
+    if [[ ! -f "$ALERT_FILE" ]]; then
+      touch "$ALERT_FILE"
+      /usr/bin/afplay /System/Library/Sounds/Glass.aiff >/dev/null 2>&1 || true
+      /usr/bin/osascript -e 'display notification "KWS training requires attention" with title "MyAgent KWS monitor"' >/dev/null 2>&1 || true
+      echo "KWS monitor alert: $JOB_KEY requires attention" | tee -a "$LOG_FILE"
+    fi
+  else
+    rm -f "$ALERT_FILE"
+  fi
 }
 
 run_loop() {

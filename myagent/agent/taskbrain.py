@@ -767,8 +767,9 @@ class TaskBrain:
             self.tools.register(
                 "create_task_plan",
                 (
-                    "Create and start a bounded multi-task plan. Use explicit task_id values "
-                    "when another task depends on a task in the same plan. Tasks with no "
+                    "Create and start a bounded multi-task plan. The system generates UUID "
+                    "task IDs; use a short task_ref only when another task depends on a task "
+                    "in the same plan. Put the human-readable task description in title. Tasks with no "
                     "registered worker will remain safely failed and must not execute arbitrary commands. "
                     f"Currently registered worker types: {worker_types}. For web_research, put a "
                     "list of focused search strings in input.queries. For file changes, external "
@@ -784,7 +785,10 @@ class TaskBrain:
                             "items": {
                                 "type": "object",
                                 "properties": {
-                                    "task_id": {"type": "string"},
+                                    "task_ref": {
+                                        "type": "string",
+                                        "description": "Optional short alias used only for dependencies within this plan.",
+                                    },
                                     "title": {"type": "string"},
                                     "worker_type": {"type": "string"},
                                     "input": {"type": "object"},
@@ -793,7 +797,7 @@ class TaskBrain:
                                         "items": {"type": "string"},
                                     },
                                 },
-                                "required": ["task_id", "title", "worker_type"],
+                                "required": ["title", "worker_type"],
                             },
                         }
                     },
