@@ -14,8 +14,11 @@ fi
 EXTRAS=(--extra wake --extra qwen-asr --extra vector-memory --extra speaker)
 DEFAULT_BRAIN="${MYAGENT_BRAIN:-taskbrain}"
 WATCHER_PID=""
+AGENT_PID=""
 KNOWLEDGE_LOG_DIR="data/logs"
 KNOWLEDGE_LOG_FILE="$KNOWLEDGE_LOG_DIR/knowledge.log"
+WEB_URL="${MYAGENT_WEB_URL:-http://127.0.0.1:8765/}"
+WEB_STARTUP_TIMEOUT="${MYAGENT_WEB_STARTUP_TIMEOUT:-30}"
 
 mkdir -p "$KNOWLEDGE_LOG_DIR"
 
@@ -25,6 +28,10 @@ cleanup() {
   if [[ -n "$WATCHER_PID" ]]; then
     kill "$WATCHER_PID" 2>/dev/null || true
     wait "$WATCHER_PID" 2>/dev/null || true
+  fi
+  if [[ -n "$AGENT_PID" ]] && kill -0 "$AGENT_PID" 2>/dev/null; then
+    kill "$AGENT_PID" 2>/dev/null || true
+    wait "$AGENT_PID" 2>/dev/null || true
   fi
   exit "$status"
 }
@@ -36,4 +43,55 @@ WATCHER_PID=$!
 
 # Start the local UI by default; additional arguments still pass through to
 # myagent, so callers can override the normal runtime configuration.
-uv run "${EXTRAS[@]}" myagent --web --brain "$DEFAULT_BRAIN" "$@"
+uv run "${EXTRAS[@]}" myagent --web --brain "$DEFAULT_BRAIN" "$@" &
+AGENT_PID=$!
+
+wait_for_web_ui() {
+  local deadline=$((SECONDS + WEB_STARTUP_TIMEOUT))
+  while (( SECONDS < deadline )); do
+    if curl --silent --fail --max-time 1 "$WEB_URL" >/dev/null 2>&1; then
+      return 0
+    fi
+    if ! kill -0 "$AGENT_PID" 2>/dev/null; then
+      return 1
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+open_web_ui() {
+  if [[ "${MYAGENT_OPEN_BROWSER:-1}" == "0" ]]; then
+    return 0
+  fi
+  if ! wait_for_web_ui; then
+    printf 'MyAgent UI did not become ready at %s\n' "$WEB_URL" >&2
+    return 0
+  fi
+
+  case "${OSTYPE:-}" in
+    darwin*)
+      if [[ -n "${MYAGENT_BROWSER_APP:-}" ]]; then
+        open -a "$MYAGENT_BROWSER_APP" "$WEB_URL"
+      else
+        open "$WEB_URL"
+      fi
+      ;;
+    linux*)
+      if [[ -n "${MYAGENT_BROWSER_APP:-}" ]]; then
+        "$MYAGENT_BROWSER_APP" "$WEB_URL"
+      elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$WEB_URL" >/dev/null 2>&1 &
+      fi
+      ;;
+    msys*|cygwin*|win32*)
+      start "" "$WEB_URL"
+      ;;
+    *)
+      printf 'MyAgent UI is ready at %s\n' "$WEB_URL"
+      ;;
+  esac
+}
+
+open_web_ui
+wait "$AGENT_PID"

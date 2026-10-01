@@ -222,6 +222,23 @@
         if (message && !message.content) renderRichText(message.node, data.content || '');
         streamingMessages.delete(data.message_id);
       });
+      const executionLabels = {
+        'execution.queued': 'execution queued',
+        'execution.approval_required': 'execution waiting for approval',
+        'execution.running': 'execution running',
+        'execution.completed': 'execution completed',
+        'execution.failed': 'execution failed',
+        'execution.timed_out': 'execution timed out',
+        'execution.output_limit_exceeded': 'execution output limit exceeded',
+      };
+      Object.keys(executionLabels).forEach(type => {
+        source.addEventListener(type, event => {
+          const data = JSON.parse(event.data).payload || {};
+          const detail = data.error || data.reason || data.promotion || '';
+          const suffix = detail ? ` — ${detail}` : '';
+          addMessage('assistant', `${executionLabels[type]} (${data.execution_id || 'unknown'})${suffix}`);
+        });
+      });
       const renderLinkList = (links, title) => {
         const node = document.createElement('article');
         node.className = 'ui-block';

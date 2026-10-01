@@ -45,6 +45,15 @@ from myagent.knowledge.unified_retrieval import UnifiedKnowledgeService, Unified
 from myagent.logging import configure_logging
 from myagent.runtime import EventHub, PresentationStore
 from myagent.web import WebServer
+from myagent.execution import (
+    ArtifactPromoter,
+    DockerSandboxBackend,
+    ExecutionBroker,
+    ExecutionPolicy,
+    ExecutionToolAdapter,
+    ExecutionApprovalUI,
+    publish_to_event_hub,
+)
 from myagent.voice import (
     AudioInputDeviceController,
     NullSpeakerIdentifier,
@@ -256,6 +265,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--filesystem-approvals", type=Path, default=Path("data/agent/approvals.json"))
     parser.add_argument("--filesystem-trash", type=Path, default=Path("data/agent/trash"))
     parser.add_argument("--filesystem-audit", type=Path, default=Path("data/agent/filesystem_audit.jsonl"))
+    parser.add_argument("--execution-enabled", action="store_true", help="Enable isolated command execution tools.")
+    parser.add_argument("--execution-image", default="python:3.12-slim")
+    parser.add_argument("--execution-approvals", type=Path, default=Path("data/agent/execution_approvals.json"))
+    parser.add_argument("--execution-pending", type=Path, default=Path("data/agent/execution_pending.json"))
     parser.add_argument(
         "--knowledge-enabled",
         action="store_true",
@@ -459,8 +472,11 @@ def main() -> None:
         publish_ui_block("ui_progress", payload)
 
     filesystem_approval_ui: FilesystemApprovalUI | None = None
+    execution_approval_ui: ExecutionApprovalUI | None = None
     knowledge_proposal_ui: KnowledgeProposalUI | None = None
     curated_knowledge_store: CuratedKnowledgeStore | None = None
+    filesystem_service: FileService | None = None
+    execution_readable_roots: tuple[tuple[str, str], ...] = ()
     mcp_clients: list[MCPStdioClient] = []
     task_manager: TaskManager | None = None
     if args.brain == "openclaw":
@@ -506,6 +522,9 @@ def main() -> None:
                     for name, path in args.filesystem_read_root
                 },
             }
+            execution_readable_roots = tuple(
+                (name, str(path)) for name, path in args.filesystem_read_root
+            )
             filesystem_resolver = PathResolver(filesystem_roots)
             filesystem_approvals = ApprovalManager(args.filesystem_approvals)
             filesystem_approval_ui = FilesystemApprovalUI(
@@ -517,9 +536,7 @@ def main() -> None:
                 filesystem_resolver,
                 working_root=WorkingRoot("workspace"),
             )
-            capability_adapters.append(
-                FileToolAdapter(
-                    FileService(
+            filesystem_service = FileService(
                         filesystem_resolver,
                         filesystem_policy,
                         approval_manager=filesystem_approvals,
@@ -528,12 +545,44 @@ def main() -> None:
                         trash_path=args.filesystem_trash,
                         approval_notifier=filesystem_approval_ui.publish_request,
                     )
-                )
-            )
+            capability_adapters.append(FileToolAdapter(filesystem_service))
             logger.info(
                 "filesystem_capabilities_enabled working_root=%s",
                 args.filesystem_working_root,
             )
+        if args.execution_enabled:
+            execution_approvals = ApprovalManager(args.execution_approvals)
+            execution_approval_ui = ExecutionApprovalUI(
+                execution_approvals,
+                session_id="cli",
+                publisher=publish_ui_block,
+            )
+            execution_broker = ExecutionBroker(
+                DockerSandboxBackend(image=args.execution_image),
+                ExecutionPolicy(),
+                approval_manager=execution_approvals,
+                session_id="cli",
+                pending_store=args.execution_pending,
+                event_publisher=publish_to_event_hub(event_hub) if args.web else None,
+                audit_log=AuditLog(args.filesystem_audit),
+                approval_notifier=execution_approval_ui.publish_request,
+                artifact_promoter=(
+                    ArtifactPromoter(
+                        filesystem_service,
+                        approval_manager=execution_approvals,
+                        session_id="cli",
+                        approval_notifier=execution_approval_ui.publish_request,
+                    )
+                    if filesystem_service is not None else None
+                ),
+            )
+            execution_approval_ui.execution_resumer = execution_broker.resume_promotion_by_approval
+            capability_adapters.append(ExecutionToolAdapter(
+                execution_broker,
+                working_root=str(args.filesystem_working_root) if filesystem_service is not None else None,
+                readable_roots=execution_readable_roots,
+            ))
+            logger.info("execution_capabilities_enabled image=%s", args.execution_image)
         if args.knowledge_curation_enabled:
             knowledge_proposals = KnowledgeProposalStore(
                 args.knowledge_proposals,
@@ -715,6 +764,11 @@ def main() -> None:
                 "filesystem.reject",
             }:
                 filesystem_approval_ui.handle_action(action_id, value)
+            if execution_approval_ui is not None and action_id in {
+                "execution.approve",
+                "execution.reject",
+            }:
+                execution_approval_ui.handle_action(action_id, value)
             if knowledge_proposal_ui is not None and action_id in {
                 "knowledge.approve",
                 "knowledge.reject",

@@ -53,6 +53,9 @@ Start the assistant:
 ```
 
 `./start` 會同時啟動 Agent 與文件 watcher；Agent 結束時會一併停止 watcher。
+啟動完成後會自動在系統預設瀏覽器開啟本機 Web UI；可用
+`MYAGENT_BROWSER_APP="Google Chrome" ./start` 指定 macOS 瀏覽器，或用
+`MYAGENT_OPEN_BROWSER=0 ./start` 關閉自動開啟。
 若只需要手動 indexing，可直接使用 `uv run myagent-documents index`。
 
 The example configuration uses microphone device `3`, `wake.toml`, Qwen3-ASR,

@@ -69,6 +69,27 @@ class FileService:
         self._emit(FilesystemMutationEvent(FilesystemMutationType.MODIFIED, root, resolved.path, resolved.relative_path))
         return self._write_result(resolved)
 
+    def write_bytes(
+        self,
+        root: str,
+        path: str,
+        data: bytes,
+        *,
+        expected_sha256: str | None = None,
+    ) -> dict[str, Any]:
+        """Write trusted artifact bytes through the normal write policy."""
+        resolved = self.resolver.resolve(root, path)
+        self.policy.require_allowed(root, "write", target=resolved)
+        if resolved.path.exists() and expected_sha256 is None:
+            raise ValueError("expected_sha256 is required when overwriting a file.")
+        self._check_expected_hash(resolved, expected_sha256)
+        self._atomic_write(resolved, data)
+        self._emit(FilesystemMutationEvent(
+            FilesystemMutationType.MODIFIED if expected_sha256 else FilesystemMutationType.CREATED,
+            root, resolved.path, resolved.relative_path,
+        ))
+        return self._write_result(resolved)
+
     def replace_text(
         self,
         root: str,
