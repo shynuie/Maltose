@@ -7,7 +7,7 @@ min_peak = 6000
 max_gain = 4.0
 
 [wake.alibaba]
-model_dir = "models/alibaba-kws-maiyatang-real-tts1000-raw-clean35-speed-cp650"
+model_dir = "models/alibaba-kws-maiyatang-real-tts1000-raw-clean35-speed-cp998"
 python = "/private/tmp/myagent-kws310/bin/python"
 
 [wake.sherpa_onnx]
