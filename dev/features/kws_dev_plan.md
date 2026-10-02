@@ -632,3 +632,17 @@ uv run --no-sync myagent-kws-replay \
 - 2026-10-01：已將 checkpoint 0098 複製至本地 `models/alibaba-kws-maiyatang-normalized12000-cp98/`，`model.txt` SHA-256 為 `f6932d3823042c496d124a22456916e47f941af5673bd8c06e0d90e111b0ba`；`wake.toml` 已切換至 0098 並重新開啟 `normalize_audio = true`、`target_peak = 12000`。本地 Alibaba worker health check 通過。
 - 2026-10-01：以目前 validation loss 最低的 checkpoint 0330（`loss_val=0.0640`）建立本地模型 `models/alibaba-kws-maiyatang-real-tts1000-raw-clean35-speed-cp330/`，`model.txt` SHA-256 為 `3cd59e0b445b11377735f462e0d5d739ac4af326faa7ff677a6ea9ee783d786b`；`wake.toml` 已切換至该模型，worker health check 通過（`kws_state=0`、`buffered_bytes=0`），等待實機測試。
 - 2026-10-01：開始新的 raw-data augmentation 實驗：不再使用 normalized-12000 dataset，改用未 normalize 的 147 筆 real+TTS positive manifest。訓練時以官方 base／finetune sampling 實現約 35% clean（base stream 使用合法靜音 fixture）與 65% 動態 augmentation（noise、interference、echo）；新增動態 speed perturbation `0.85~1.15`，並使用獨立 work dir `work-3ch-split4-real-tts1000-raw-clean35-speed`，避免覆蓋既有 checkpoint。
+
+## 階段性結案（2026-10-02）
+
+本階段 KWS 改進先告一段落，暫不再調整 KWS 前處理、VAD/KWS 順序或多 input 同時監聽。
+
+- 最終採用模型：Alibaba KWS checkpoint `0998`，本地目錄為 `models/alibaba-kws-maiyatang-real-tts1000-raw-clean35-speed-cp998/`。
+- 本地 `wake.toml` 已固定指向 checkpoint 0998，並已完成 worker health check：`healthy=true`、`kws_state=0`、`buffered_bytes=0`。
+- 官方固定 evaluator 結果：far positive `26/30=86.7%`、normal positive `27/30=90.0%`、ordinary negative false positive `0/10`。
+- checkpoint 0998 與 validation loss 最低的 checkpoint 0650 在目前測試集上表現一致；0998 的 `loss_val=0.0582`，作為目前本地測試模型。
+- 完成 1000 epoch raw-data augmentation 訓練。訓練結束時自動 ROC 排序挑選流程出現空結果的 `IndexError`，但 1000 個 `.pth` checkpoint 與推理格式模型已產生；該問題不影響已選定的 0998。
+- 實際部署仍採用本地 Python 3.10 KWS worker，主 agent 透過 IPC 傳送 PCM；模型推理不需對外連線，完整模型目錄需與 runtime 支援檔一起部署。
+- 目前維持既有流程：KWS → VAD → STT。暫不將 VAD 放到 KWS 前，也暫不加入多 device 同時監聽。
+
+後續若重新開啟 KWS 工作，優先處理固定 evaluator／ROC 排序流程與資料／模型版本追蹤，再進行新模型訓練；不直接覆蓋目前 0998 的本地部署。
