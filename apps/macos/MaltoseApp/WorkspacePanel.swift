@@ -15,6 +15,12 @@ struct WorkspacePanel: Identifiable {
                                     markdownDocumentModel: MarkdownDocumentModel? = nil) -> NSView {
         let view: NSView
         switch kind {
+        case .chart:
+            let hostingView = NSHostingView(rootView: CSVLineChartPanelView(model: CSVLineChartModel()))
+            hostingView.wantsLayer = true
+            hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+            hostingView.layer?.isOpaque = false
+            view = hostingView
         case .conversationHistory:
             let model = conversationHistoryModel ?? ConversationHistoryModel()
             let hostingView = NSHostingView(rootView: ConversationHistoryPanelView(model: model))
@@ -44,6 +50,7 @@ struct WorkspacePanel: Identifiable {
         (view as? NSHostingView<AgentIdentityPanelView>)?.sizingOptions = []
         (view as? NSHostingView<ConversationHistoryPanelView>)?.sizingOptions = []
         (view as? NSHostingView<MarkdownDocumentPanelView>)?.sizingOptions = []
+        (view as? NSHostingView<CSVLineChartPanelView>)?.sizingOptions = []
         (view as? NSHostingView<WorkspaceSampleContent>)?.sizingOptions = []
         return view
     }
@@ -101,22 +108,6 @@ private struct WorkspaceSampleContent: View {
                             .onTapGesture { selected.toggle() }.accessibilityLabel(selected ? "輸出已選取" : "輸出")
                     }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            case .chart:
-                Canvas { context, size in
-                    for row in 0...4 {
-                        let y = size.height * CGFloat(row) / 4
-                        var line = Path(); line.move(to: CGPoint(x: 0, y: y)); line.addLine(to: CGPoint(x: size.width, y: y))
-                        context.stroke(line, with: .color(.white.opacity(0.07)), lineWidth: 1)
-                    }
-                    var curve = Path()
-                    for i in 0...100 {
-                        let t = CGFloat(i) / 100
-                        let point = CGPoint(x: t * size.width, y: size.height * (0.55 - 0.20 * sin(t * 9) - 0.12 * t))
-                        if i == 0 { curve.move(to: point) } else { curve.addLine(to: point) }
-                    }
-                    context.stroke(curve, with: .color(Color(red: 0.38, green: 0.80, blue: 0.82)), lineWidth: 2)
-                }.accessibilityLabel("示意曲線圖，無外部資料")
-                HStack { Text("00:00"); Spacer(); Text("06:00"); Spacer(); Text("12:00") }.font(.caption).foregroundStyle(.secondary)
             case .table:
                 ScrollView {
                     VStack(spacing: 0) {
@@ -131,7 +122,7 @@ private struct WorkspaceSampleContent: View {
                         }
                     }
                 }
-            case .conversationHistory, .document, .agentCoreTest, .agentIdentity:
+            case .chart, .conversationHistory, .document, .agentCoreTest, .agentIdentity:
                 EmptyView()
             }
         }

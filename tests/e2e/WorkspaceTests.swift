@@ -315,6 +315,35 @@ final class WorkspaceLayoutTests: XCTestCase {
         }
     }
 
+    func testCSVLineChartParserKeepsSeriesAndRowNotesIncludingQuotedCommas() throws {
+        let data = try CSVLineChartParser.parse(#"""
+        time,latency,throughput,note
+        09:00,12.5,34,"warmup, then steady"
+        09:10,15.0,,"note with ""quotes"""
+        """#)
+
+        XCTAssertEqual(data.xTitle, "time")
+        XCTAssertEqual(data.seriesNames, ["latency", "throughput"])
+        XCTAssertEqual(data.rows.count, 2)
+        XCTAssertEqual(data.rows[0].xLabel, "09:00")
+        XCTAssertEqual(data.rows[0].values[0], 12.5)
+        XCTAssertEqual(data.rows[0].values[1], 34)
+        XCTAssertEqual(data.rows[0].note, "warmup, then steady")
+        XCTAssertEqual(data.rows[1].values[1], nil)
+        XCTAssertEqual(data.rows[1].note, "note with \"quotes\"")
+    }
+
+    @MainActor func testChartAgentCanConfigureAreaFillBetweenNamedSeries() {
+        let model = CSVLineChartModel()
+        model.configureAgentBands([
+            CSVLineChartBandRequest(firstSeriesName: "工作量", secondSeriesName: "完成率", opacity: 1.5),
+            CSVLineChartBandRequest(firstSeriesName: "unknown", secondSeriesName: "完成率"),
+            CSVLineChartBandRequest(firstSeriesName: "工作量", secondSeriesName: "工作量")
+        ])
+
+        XCTAssertEqual(model.filledBands, [CSVLineChartBand(firstSeries: 0, secondSeries: 1): 1])
+    }
+
     @MainActor func testConversationSessionSelectionIsLimitedToFocusedPanelAndPersistsAsCurrent() {
         let model = ConversationHistoryModel()
         let firstSession = model.sessions[0]
