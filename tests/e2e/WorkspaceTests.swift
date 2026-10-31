@@ -223,9 +223,56 @@ final class WorkspaceLayoutTests: XCTestCase {
     func testGlobalScrollRoutingConsumesOnlyGridEvents() {
         XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: false, controlPressed: false, deltaY: -4), .scroll(-4))
         XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: false, controlPressed: true, deltaY: 4), .zoom(4))
+        XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: false,
+                                                    isInsideScrollablePanel: true, controlPressed: false, deltaY: -4), .passThrough)
+        XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: false,
+                                                    isInsideScrollablePanel: true, controlPressed: true, deltaY: 4), .zoom(4))
         XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: false, isCovered: false, controlPressed: true, deltaY: 4), .passThrough)
         XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: true, controlPressed: false, deltaY: 4), .passThrough)
         XCTAssertEqual(WorkspaceScrollAction.route(mode: .focused, isInsideGrid: true, isCovered: false, controlPressed: true, deltaY: 4), .passThrough)
+    }
+
+    func testConversationHistoryTextSizingUsesFortyAndTwentyCharacterTargets() {
+        let focused = ConversationHistoryLayout(width: 1400, focused: true)
+        XCTAssertTrue(focused.showsText)
+        XCTAssertEqual(focused.fontSize, 16)
+        XCTAssertEqual(focused.contentWidth, 640)
+
+        let globalLarge = ConversationHistoryLayout(width: 800, focused: false)
+        XCTAssertTrue(globalLarge.showsText)
+        XCTAssertEqual(globalLarge.fontSize, 18)
+        XCTAssertEqual(globalLarge.contentWidth, 360)
+
+        let globalCompact = ConversationHistoryLayout(width: 280, focused: false)
+        XCTAssertTrue(globalCompact.showsText)
+        XCTAssertEqual(globalCompact.fontSize, 14)
+        XCTAssertEqual(globalCompact.contentWidth, 280)
+
+        XCTAssertFalse(ConversationHistoryLayout(width: 199, focused: false).showsText)
+        XCTAssertTrue(ConversationHistoryLayout(width: 199, focused: true).showsText)
+    }
+
+    @MainActor func testConversationSessionSelectionIsLimitedToFocusedPanelAndPersistsAsCurrent() {
+        let model = ConversationHistoryModel()
+        let firstSession = model.sessions[0]
+        let secondSession = model.sessions[1]
+        XCTAssertEqual(firstSession.id, "workspace-layout")
+
+        model.selectSession(secondSession)
+        XCTAssertEqual(model.currentSessionID, firstSession.id)
+
+        model.configure(mode: .focused)
+        model.selectSession(secondSession)
+        XCTAssertEqual(model.currentSessionID, secondSession.id)
+
+        model.configure(mode: .grid)
+        XCTAssertEqual(model.currentSession?.title, secondSession.title)
+        model.selectSession(firstSession)
+        XCTAssertEqual(model.currentSessionID, secondSession.id)
+
+        model.configure(mode: .sidebar)
+        XCTAssertTrue(model.usesWideLayout)
+        XCTAssertFalse(model.allowsSessionSelection)
     }
 
     func testWheelNormalizationAndGestureModifierRemainStableThroughMomentum() {

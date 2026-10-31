@@ -223,7 +223,8 @@ import SwiftUI
                     panel.frame = parent.convert(transitionStartFrame, from: self)
                 }
                 panel.configure(preview: isPreview, primary: !globalMode && !isPreview, global: globalMode,
-                                selected: state.selectedIDs.contains(id))
+                                selected: state.selectedIDs.contains(id),
+                                conversationMode: id == state.primaryID ? state.mode : (globalMode ? .grid : .sidebar))
                 let frame: NSRect
                 if globalMode { frame = grid.frames[index] }
                 else if !isPreview { frame = mainFrame }
@@ -360,6 +361,9 @@ import SwiftUI
         let action = WorkspaceScrollAction.route(mode: state.mode,
                                                  isInsideGrid: globalScroll.frame.contains(point),
                                                  isCovered: tipsDropdown.frame.contains(point) || settingsPlaceholder.frame.contains(point),
+                                                 isInsideScrollablePanel: panel(at: event).flatMap { panel in
+                                                     manager?.catalog.first(where: { $0.id == panel.surfaceID })?.kind == .conversationHistory
+                                                 } ?? false,
                                                  controlPressed: useControl, deltaY: delta)
         switch action {
         case .passThrough: return false

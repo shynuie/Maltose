@@ -3,7 +3,7 @@ import SwiftUI
 
 /// UI-only model. Content has no dependency on the Host or an Agent document.
 struct WorkspacePanel: Identifiable {
-    enum Kind { case canvas, notes, chart, table, agentIdentity, agentCoreTest }
+    enum Kind { case canvas, notes, chart, table, conversationHistory, agentIdentity, agentCoreTest }
     let id: String
     let title: String
     let kind: Kind
@@ -11,9 +11,16 @@ struct WorkspacePanel: Identifiable {
     var globalGridRowSpan: Int { kind == .agentIdentity ? 2 : 1 }
     var supportsFocusedMode: Bool { kind != .agentIdentity }
 
-    @MainActor func makeContentView() -> NSView {
+    @MainActor func makeContentView(conversationHistoryModel: ConversationHistoryModel? = nil) -> NSView {
         let view: NSView
         switch kind {
+        case .conversationHistory:
+            let model = conversationHistoryModel ?? ConversationHistoryModel()
+            let hostingView = NSHostingView(rootView: ConversationHistoryPanelView(model: model))
+            hostingView.wantsLayer = true
+            hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+            hostingView.layer?.isOpaque = false
+            view = hostingView
         case .agentIdentity:
             let hostingView = NSHostingView(rootView: AgentIdentityPanelView())
             hostingView.wantsLayer = true
@@ -27,12 +34,14 @@ struct WorkspacePanel: Identifiable {
         }
         (view as? NSHostingView<AgentCoreAnimationTestView>)?.sizingOptions = []
         (view as? NSHostingView<AgentIdentityPanelView>)?.sizingOptions = []
+        (view as? NSHostingView<ConversationHistoryPanelView>)?.sizingOptions = []
         (view as? NSHostingView<WorkspaceSampleContent>)?.sizingOptions = []
         return view
     }
 
     static let samples: [WorkspacePanel] = [
         .init(id: "agent-identity", title: "形象", kind: .agentIdentity),
+        .init(id: "chat", title: "聊天", kind: .conversationHistory),
         .init(id: "canvas", title: "畫布", kind: .canvas),
         .init(id: "notes", title: "筆記", kind: .notes),
         .init(id: "chart", title: "圖表", kind: .chart),
@@ -112,7 +121,7 @@ private struct WorkspaceSampleContent: View {
                         }
                     }
                 }
-            case .agentCoreTest, .agentIdentity:
+            case .conversationHistory, .agentCoreTest, .agentIdentity:
                 EmptyView()
             }
         }

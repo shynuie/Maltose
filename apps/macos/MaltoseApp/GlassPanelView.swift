@@ -10,6 +10,7 @@ extension NSPasteboard.PasteboardType {
     private static let selectedGlassTint = NSColor(calibratedWhite: 0.90, alpha: 0.05)
     let surfaceID: String
     let contentView: NSView
+    let conversationHistoryModel: ConversationHistoryModel?
     weak var manager: WorkspaceWindowManager?
     private let glass: NSView
     private let glassContents = NSView()
@@ -29,7 +30,9 @@ extension NSPasteboard.PasteboardType {
     init(panel: WorkspacePanel, manager: WorkspaceWindowManager? = nil) {
         self.surfaceID = panel.id
         self.manager = manager
-        self.contentView = panel.makeContentView()
+        let historyModel = panel.kind == .conversationHistory ? ConversationHistoryModel() : nil
+        self.conversationHistoryModel = historyModel
+        self.contentView = panel.makeContentView(conversationHistoryModel: historyModel)
         if #available(macOS 26.0, *) {
             let effect = NSGlassEffectView()
             effect.style = .clear
@@ -67,11 +70,13 @@ extension NSPasteboard.PasteboardType {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func configure(preview: Bool, primary: Bool, global: Bool = false, selected: Bool = false) {
+    func configure(preview: Bool, primary: Bool, global: Bool = false, selected: Bool = false,
+                   conversationMode: WorkspaceMode = .grid) {
         isPreview = preview
         isPrimary = primary
         isGlobal = global
         isSelected = selected
+        conversationHistoryModel?.configure(mode: conversationMode)
         if #available(macOS 26.0, *), let effect = glass as? NSGlassEffectView {
             effect.tintColor = selected ? Self.selectedGlassTint : Self.glassTint
         } else if let effect = glass as? NSVisualEffectView {

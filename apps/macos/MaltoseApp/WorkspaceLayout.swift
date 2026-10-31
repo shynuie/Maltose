@@ -251,10 +251,46 @@ enum WorkspaceScrollAction: Equatable {
     case scroll(CGFloat)
     case zoom(CGFloat)
 
-    static func route(mode: WorkspaceMode, isInsideGrid: Bool, isCovered: Bool, controlPressed: Bool, deltaY: CGFloat) -> WorkspaceScrollAction {
+    static func route(mode: WorkspaceMode, isInsideGrid: Bool, isCovered: Bool,
+                      isInsideScrollablePanel: Bool = false, controlPressed: Bool, deltaY: CGFloat) -> WorkspaceScrollAction {
         guard mode == .grid, isInsideGrid, !isCovered, deltaY != 0 else { return .passThrough }
+        if isInsideScrollablePanel && !controlPressed { return .passThrough }
         return controlPressed ? .zoom(deltaY) : .scroll(deltaY)
     }
+}
+
+struct ConversationHistoryLayout {
+    static let focusedFontSize: CGFloat = 16
+    static let focusedCharactersPerLine: CGFloat = 40
+    static let globalCharactersPerLine: CGFloat = 20
+    static let minimumGlobalFontSize: CGFloat = 10
+    static let maximumGlobalFontSize: CGFloat = 18
+
+    let width: CGFloat
+    let focused: Bool
+
+    init(width: CGFloat, focused: Bool) {
+        self.width = max(0, width)
+        self.focused = focused
+    }
+
+    var showsText: Bool {
+        focused || width >= Self.minimumGlobalFontSize * Self.globalCharactersPerLine
+    }
+
+    var fontSize: CGFloat {
+        guard !focused else { return Self.focusedFontSize }
+        return min(Self.maximumGlobalFontSize,
+                   max(Self.minimumGlobalFontSize, width / Self.globalCharactersPerLine))
+    }
+
+    var contentWidth: CGFloat {
+        let target = fontSize * (focused ? Self.focusedCharactersPerLine : Self.globalCharactersPerLine)
+        return min(width, target)
+    }
+
+    var verticalPadding: CGFloat { focused ? 24 : 8 }
+    var rowSpacing: CGFloat { focused ? 18 : 6 }
 }
 
 struct WorkspaceWheelGesture {
