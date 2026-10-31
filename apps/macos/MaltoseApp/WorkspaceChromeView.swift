@@ -2,7 +2,9 @@ import SwiftUI
 
 @MainActor final class WorkspaceChromeModel: ObservableObject {
     var onPresentationChange: (() -> Void)?
+    var onTestCommand: (() -> Void)?
     @Published var panelCount = 0
+    @Published var status = "就緒"
     @Published var tipsExpanded = false { didSet { if oldValue != tipsExpanded { onPresentationChange?() } } }
     @Published var settingsPresented = false { didSet { if oldValue != settingsPresented { onPresentationChange?() } } }
     @Published var draft = ""
@@ -10,7 +12,7 @@ import SwiftUI
     func submitDraft() {
         guard draft.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "test" else { return }
         draft = ""
-        AgentIdentityAnimationModel.shared.runStateTest()
+        onTestCommand?()
     }
 
     func closeOverlays() {
@@ -28,7 +30,7 @@ struct WorkspaceTopChrome: View {
                 .shadow(color: .cyan.opacity(0.35), radius: 8)
             Text("MALTOSE").font(.system(size: 11, weight: .semibold, design: .monospaced)).tracking(2)
             Text("工作空間").font(.system(size: 13, weight: .medium))
-            Text("· 就緒").font(.system(size: 12)).foregroundStyle(.white.opacity(0.54))
+            Text("· \(model.status)").font(.system(size: 12)).foregroundStyle(.white.opacity(0.54))
             Spacer(minLength: 8)
             Text("\(model.panelCount) 個面板").font(.system(size: 11, design: .monospaced)).foregroundStyle(.white.opacity(0.52))
             Button {
@@ -104,6 +106,7 @@ struct WorkspaceTipsDropdown: View {
             }
             VStack(alignment: .leading, spacing: 10) {
                 tip("Ctrl + 滾輪", "縮放所有面板；一般滾動瀏覽整個網格。")
+                tip("拖曳空白處", "框選多個面板；按住 Command 可加入既有選取。")
                 tip("雙擊玻璃邊框", "放大或還原面板，回到全局模式時會保留網格位置。")
                 tip("拖曳玻璃邊框", "把面板移至另一個螢幕的窗口。")
             }

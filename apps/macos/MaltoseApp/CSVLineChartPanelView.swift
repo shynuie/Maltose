@@ -157,8 +157,10 @@ enum CSVLineChartParser {
     @Published private(set) var data: CSVLineChartData
     @Published private(set) var sourceName = "內建範例"
     @Published private(set) var errorMessage: String?
-    @Published var visibleSeries: Set<Int>
+    @Published private(set) var visibleSeries: Set<Int>
     @Published private(set) var filledBands: [CSVLineChartBand: Double] = [:]
+    @Published private(set) var xZoom: CGFloat = 1
+    @Published private(set) var xPan: Double = 0
 
     init() {
         let sample = """
@@ -179,6 +181,15 @@ enum CSVLineChartParser {
     func toggleSeries(_ index: Int) {
         if visibleSeries.contains(index) { visibleSeries.remove(index) }
         else { visibleSeries.insert(index) }
+    }
+
+    func configureAgentVisibleSeries(_ names: [String]) {
+        visibleSeries = Set(data.seriesNames.indices.filter { names.contains(data.seriesNames[$0]) })
+    }
+
+    func setXAxisViewport(zoom: CGFloat, pan: Double) {
+        xZoom = min(8, max(1, zoom))
+        xPan = pan.isFinite ? pan : 0
     }
 
     /// Called by the future agent adapter when it creates or updates a chart.
@@ -218,6 +229,15 @@ enum CSVLineChartParser {
             errorMessage = error.localizedDescription
         }
     }
+
+    func loadCSV(contents: String, sourceName: String = "Agent CSV") throws {
+        data = try CSVLineChartParser.parse(contents)
+        self.sourceName = sourceName
+        visibleSeries = Set(data.seriesNames.indices)
+        filledBands = [:]
+        setXAxisViewport(zoom: 1, pan: 0)
+        errorMessage = nil
+    }
 }
 
 private struct ChartHover: Equatable {
@@ -230,10 +250,11 @@ struct CSVLineChartPanelView: View {
     @ObservedObject var model: CSVLineChartModel
     @State private var hover: ChartHover?
     @State private var isDropTargeted = false
-    @State private var xZoom: CGFloat = 1
-    @State private var xPan: Double = 0
     @State private var zoomGestureStart: CGFloat?
     @State private var panGestureStart: Double?
+
+    private var xZoom: CGFloat { model.xZoom }
+    private var xPan: Double { model.xPan }
 
     private let colors: [Color] = [
         Color(red: 0.28, green: 0.73, blue: 0.89),
@@ -287,7 +308,7 @@ struct CSVLineChartPanelView: View {
                 Button { setZoom(xZoom * 1.25) } label: { Image(systemName: "plus.magnifyingglass") }
                     .buttonStyle(.plain).disabled(xZoom >= 7.99)
                     .accessibilityLabel("放大 X 軸")
-                Button("重設") { xZoom = 1; xPan = 0 }
+                Button("重設") { model.setXAxisViewport(zoom: 1, pan: 0) }
                     .buttonStyle(.plain).font(.system(size: 10)).disabled(xZoom <= 1.01 && abs(xPan) < 0.001)
             }
             .font(.system(size: 11))
@@ -303,7 +324,7 @@ struct CSVLineChartPanelView: View {
                     }
             }
             .frame(minHeight: 120)
-            .onChange(of: model.sourceName) { _, _ in xZoom = 1; xPan = 0; hover = nil }
+            .onChange(of: model.sourceName) { _, _ in hover = nil }
 
             if let error = model.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle")
@@ -436,7 +457,8 @@ struct CSVLineChartPanelView: View {
             .onChanged { value in
                 if panGestureStart == nil { panGestureStart = xPan }
                 let span = max(0.000001, fullXDomain.maximum - fullXDomain.minimum) / Double(xZoom)
-                xPan = (panGestureStart ?? xPan) - Double(value.translation.width / max(1, plot.width)) * span
+                model.setXAxisViewport(zoom: xZoom,
+                                       pan: (panGestureStart ?? xPan) - Double(value.translation.width / max(1, plot.width)) * span)
             }
             .onEnded { _ in panGestureStart = nil })
     }
@@ -541,7 +563,7 @@ struct CSVLineChartPanelView: View {
     }
 
     private func setZoom(_ zoom: CGFloat) {
-        xZoom = min(8, max(1, zoom))
+        model.setXAxisViewport(zoom: zoom, pan: xPan)
     }
 
     private func acceptDrop(_ providers: [NSItemProvider]) -> Bool {

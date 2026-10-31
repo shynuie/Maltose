@@ -1,14 +1,21 @@
 import AppKit
 import SwiftUI
 
+private struct AgentWorkspaceSnapshot {
+    let state: WorkspaceLayoutState
+    let zoom: CGFloat
+    let scrollOffset: CGFloat
+}
+
 @MainActor final class WorkspaceWindowManager {
-    let catalog: [WorkspacePanel]
+    private(set) var catalog: [WorkspacePanel]
     let automaticallyFullscreen: Bool
     private(set) var transitioningScreenID: String?
     private(set) var fullscreenFailures: Set<String> = []
     private var fullscreenAttempted: Set<String> = []
     private var fullscreenTask: Task<Void, Never>?
     private var coreAnimationTestWindowController: AgentCoreTestWindowController?
+    private var agentInteractionTestTask: Task<Void, Never>?
     private(set) var windows: [String: NSWindow] = [:]
     private(set) var roots: [String: WorkspaceRootView] = [:]
     private(set) var panels: [String: GlassPanelView] = [:]
@@ -141,6 +148,172 @@ import SwiftUI
         }
         coreAnimationTestWindowController?.present()
     }
+
+    /// Adds a new workspace panel instance and returns its stable identifier.
+    /// Identity and chat are singleton panel types; the animation playground is not a workspace panel.
+    @discardableResult func addPanel(kind: WorkspacePanel.Kind, to screenID: String? = nil) -> WorkspacePanel? {
+        guard kind != .agentCoreTest,
+              kind.allowsMultipleInstances || !catalog.contains(where: { $0.kind == kind }) else { return nil }
+        let id: String
+        switch kind {
+        case .agentIdentity: id = "agent-identity"
+        case .conversationHistory: id = "chat"
+        default: id = "\(kind.defaultInstanceTitle.lowercased())-\(UUID().uuidString.lowercased())"
+        }
+        let instanceNumber = catalog.filter { $0.kind == kind }.count + 1
+        let panel = WorkspacePanel(id: id, title: "\(kind.defaultInstanceTitle) \(instanceNumber)", kind: kind)
+        catalog.append(panel)
+        if let screenID, windows[screenID] != nil { assignments[id] = screenID }
+        synchronize()
+        return panel
+    }
+
+    /// Removes one panel instance. Singleton types may be closed and later recreated.
+    @discardableResult func closePanel(_ id: String) -> Bool {
+        guard catalog.contains(where: { $0.id == id }) else { return false }
+        if draggingIDs.contains(id) { endDrag() }
+        catalog.removeAll { $0.id == id }
+        synchronize()
+        return true
+    }
+
+    /// Exercises the same high-level workspace and panel APIs an agent will use.
+    /// Every temporary layout/model change is restored when the run finishes.
+    func runAgentInteractionTest() {
+        guard agentInteractionTestTask == nil, let activeRoot else { return }
+        let rootSnapshots = roots.mapValues {
+            AgentWorkspaceSnapshot(state: $0.state, zoom: $0.agentTestGridZoom,
+                                   scrollOffset: $0.globalScrollOffset)
+        }
+        let assignmentSnapshot = assignments
+        let selectedScreenID = activeRoot.screenID
+        let chatScreenID = assignmentSnapshot["chat"] ?? selectedScreenID
+        let chatModel = assignmentSnapshot["chat"] == selectedScreenID ? panels["chat"]?.conversationHistoryModel : nil
+        let originalSessionID = chatModel?.currentSessionID
+        let chartModel = assignmentSnapshot["chart"] == selectedScreenID ? panels["chart"]?.chartModel : nil
+        let originalSeries = chartModel.map { model in
+            model.visibleSeries.sorted().compactMap { model.data.seriesNames.indices.contains($0) ? model.data.seriesNames[$0] : nil }
+        } ?? []
+        let originalBands = chartModel.map { model in
+            model.filledBands.map { band, opacity in
+                CSVLineChartBandRequest(firstSeriesName: model.data.seriesNames[band.firstSeries],
+                                        secondSeriesName: model.data.seriesNames[band.secondSeries], opacity: opacity)
+            }
+        } ?? []
+        let originalChartZoom = chartModel?.xZoom ?? 1
+        let originalChartPan = chartModel?.xPan ?? 0
+        var addedPanelIDs: [String] = []
+
+        func status(_ value: String) {
+            for root in self.roots.values { root.setAgentTestStatus(value) }
+        }
+
+        AgentIdentityAnimationModel.shared.runStateTest()
+        agentInteractionTestTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                for id in addedPanelIDs.reversed() { _ = self.closePanel(id) }
+                self.assignments = assignmentSnapshot
+                self.synchronize()
+                for (screenID, snapshot) in rootSnapshots {
+                    self.roots[screenID]?.restoreAgentTestState(snapshot.state, zoom: snapshot.zoom,
+                                                                scrollOffset: snapshot.scrollOffset)
+                }
+                if let chatModel, let originalSessionID,
+                   let session = chatModel.sessions.first(where: { $0.id == originalSessionID }) {
+                    chatModel.configure(mode: .focused)
+                    chatModel.selectSession(session)
+                }
+                chatModel?.configure(mode: rootSnapshots[chatScreenID]?.state.mode ?? .grid)
+                chartModel?.configureAgentVisibleSeries(originalSeries)
+                chartModel?.configureAgentBands(originalBands)
+                chartModel?.setXAxisViewport(zoom: originalChartZoom, pan: originalChartPan)
+                status("測試完成")
+                self.agentInteractionTestTask = nil
+            }
+
+            let root = self.roots[selectedScreenID] ?? self.activeRoot
+            guard let root else { return }
+            let steps: [(String, @MainActor () -> Void)] = [
+                ("測試：檢視提示與設定", {
+                    root.setAgentTestOverlay(tips: true, settings: false)
+                }),
+                ("測試：調整全局排列比例", {
+                    root.setAgentTestOverlay(tips: false, settings: true)
+                    root.setGlobalZoom(0.28)
+                }),
+                ("測試：多選並重新排列面板", {
+                    root.setAgentTestOverlay(tips: false, settings: false)
+                    root.state.mode = .grid
+                    root.state.selectedIDs = Set(["chat", "chart"])
+                    let columns = root.globalGridGeometry.columns
+                    _ = root.state.repositionPanels(["chart"], to: WorkspaceGridPosition(row: 2, column: 0), columns: columns)
+                    root.arrange(animated: true)
+                }),
+                ("測試：新增多個面板並檢查單例限制", {
+                    root.setAgentTestMode(.grid)
+                    for kind in [WorkspacePanel.Kind.chart, .notes, .document, .table, .canvas] {
+                        if let panel = self.addPanel(kind: kind, to: selectedScreenID) {
+                            addedPanelIDs.append(panel.id)
+                        }
+                    }
+                    for kind in [WorkspacePanel.Kind.agentIdentity, .conversationHistory] {
+                        if let panel = self.addPanel(kind: kind, to: selectedScreenID) {
+                            addedPanelIDs.append(panel.id)
+                        }
+                    }
+                }),
+                ("測試：關閉新建的面板", {
+                    for id in addedPanelIDs.reversed() { _ = self.closePanel(id) }
+                    addedPanelIDs.removeAll()
+                }),
+                ("測試：切換聊天紀錄", {
+                    if assignmentSnapshot["chat"] == selectedScreenID { self.selectPanel("chat") }
+                    if let session = chatModel?.sessions.first(where: { $0.id != originalSessionID }) {
+                        chatModel?.selectSession(session)
+                    }
+                }),
+                ("測試：展開側欄檢視", {
+                    root.setAgentTestMode(.sidebar)
+                }),
+                ("測試：檢視 Markdown 面板", {
+                    if assignmentSnapshot["document"] == selectedScreenID { self.selectPanel("document") }
+                }),
+                ("測試：建立互動線圖", {
+                    if assignmentSnapshot["chart"] == selectedScreenID { self.selectPanel("chart") }
+                    if let chartModel {
+                        let names = chartModel.data.seriesNames
+                        chartModel.configureAgentVisibleSeries(Array(names.prefix(2)))
+                        if names.count > 1 {
+                            chartModel.configureAgentBands([
+                                CSVLineChartBandRequest(firstSeriesName: names[0], secondSeriesName: names[1], opacity: 0.2)
+                            ])
+                        }
+                        chartModel.setXAxisViewport(zoom: 1.8, pan: 0)
+                    }
+                }),
+                ("測試：切換資料與畫布面板", {
+                    if assignmentSnapshot["table"] == selectedScreenID { self.selectPanel("table") }
+                    if assignmentSnapshot["canvas"] == selectedScreenID { self.selectPanel("canvas") }
+                }),
+                ("測試：返回全局排列", {
+                    root.setAgentTestMode(.grid)
+                    root.setAgentTestOverlay(tips: false, settings: false)
+                })
+            ]
+
+            for (index, step) in steps.enumerated() {
+                guard !Task.isCancelled else { return }
+                status("\(index + 1)/\(steps.count) · \(step.0)")
+                step.1()
+                do { try await Task.sleep(for: .milliseconds(950)) }
+                catch { return }
+            }
+            status("測試：核心五種狀態（每種 3 秒）")
+            do { try await Task.sleep(for: .seconds(8)) }
+            catch { return }
+        }
+    }
     func restoreWindowFrame(_ screenID: String) {
         guard let screen = NSScreen.screens.first(where: { Self.screenID($0) == screenID }),
               let window = windows[screenID], !window.styleMask.contains(.fullScreen),
@@ -267,6 +440,8 @@ import SwiftUI
     }
     func stop() {
         fullscreenTask?.cancel()
+        agentInteractionTestTask?.cancel()
+        agentInteractionTestTask = nil
         transitioningScreenID = nil
         coreAnimationTestWindowController?.close()
         coreAnimationTestWindowController = nil

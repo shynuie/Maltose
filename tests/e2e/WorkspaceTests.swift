@@ -44,6 +44,22 @@ final class WorkspaceLayoutTests: XCTestCase {
         XCTAssertEqual(state.selectedIDs, ["b"])
     }
 
+    func testMarqueeSelectionUsesPanelIntersectionAndCommandAddsToSelection() {
+        var state = WorkspaceLayoutState(panelIDs: ["a", "b", "c"], primaryID: "c", selectedIDs: ["c"])
+        let frames = [
+            "a": CGRect(x: 0, y: 0, width: 40, height: 40),
+            "b": CGRect(x: 50, y: 0, width: 40, height: 40),
+            "c": CGRect(x: 100, y: 0, width: 40, height: 40)
+        ]
+
+        state.selectPanels(intersecting: CGRect(x: 35, y: 10, width: 25, height: 20), frames: frames)
+        XCTAssertEqual(state.selectedIDs, ["a", "b"])
+        XCTAssertEqual(state.primaryID, "a")
+
+        state.selectPanels(intersecting: CGRect(x: 95, y: 10, width: 20, height: 20), frames: frames, extending: true)
+        XCTAssertEqual(state.selectedIDs, ["a", "b", "c"])
+    }
+
     func testClickingWorkspaceSpaceClearsPanelSelectionWithoutChangingPrimaryMode() {
         var state = WorkspaceLayoutState(panelIDs: ["a", "b", "c"], primaryID: "b",
                                          selectedIDs: ["a", "b"], mode: .focused)
@@ -333,6 +349,17 @@ final class WorkspaceLayoutTests: XCTestCase {
         XCTAssertEqual(data.rows[1].note, "note with \"quotes\"")
     }
 
+    func testOnlyIdentityAndChatPanelKindsAreSingletons() {
+        XCTAssertFalse(WorkspacePanel.Kind.agentIdentity.allowsMultipleInstances)
+        XCTAssertFalse(WorkspacePanel.Kind.conversationHistory.allowsMultipleInstances)
+        XCTAssertFalse(WorkspacePanel.Kind.agentCoreTest.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.canvas.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.notes.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.chart.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.table.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.document.allowsMultipleInstances)
+    }
+
     @MainActor func testChartAgentCanConfigureAreaFillBetweenNamedSeries() {
         let model = CSVLineChartModel()
         model.configureAgentBands([
@@ -342,6 +369,18 @@ final class WorkspaceLayoutTests: XCTestCase {
         ])
 
         XCTAssertEqual(model.filledBands, [CSVLineChartBand(firstSeries: 0, secondSeries: 1): 1])
+    }
+
+    @MainActor func testSubmittingTestCommandInvokesAgentInteractionSimulation() {
+        let model = WorkspaceChromeModel()
+        var didRun = false
+        model.onTestCommand = { didRun = true }
+        model.draft = "test"
+
+        model.submitDraft()
+
+        XCTAssertTrue(didRun)
+        XCTAssertEqual(model.draft, "")
     }
 
     @MainActor func testConversationSessionSelectionIsLimitedToFocusedPanelAndPersistsAsCurrent() {

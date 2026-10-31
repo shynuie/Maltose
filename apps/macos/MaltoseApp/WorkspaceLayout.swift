@@ -54,6 +54,13 @@ struct WorkspaceLayoutState {
         selectedIDs.removeAll()
     }
 
+    mutating func selectPanels(intersecting rect: CGRect, frames: [String: CGRect], extending: Bool = false) {
+        let matches = Set(panelIDs.filter { frames[$0]?.intersects(rect) == true })
+        if extending { selectedIDs.formUnion(matches) }
+        else { selectedIDs = matches }
+        if let firstMatch = panelIDs.first(where: matches.contains) { primaryID = firstMatch }
+    }
+
     @discardableResult mutating func repositionPanels(_ ids: [String], to position: WorkspaceGridPosition,
                                                        columns: Int, identityID: String = "agent-identity") -> Bool {
         guard columns > 0, !ids.isEmpty, ids.allSatisfy(panelIDs.contains) else { return false }

@@ -15,6 +15,7 @@ import SwiftUI
     private let bottomChrome: NSHostingView<WorkspaceBottomChrome>
     private let tipsDropdown: NSHostingView<WorkspaceTipsDropdown>
     private let settingsPlaceholder: NSHostingView<WorkspaceSettingsPlaceholder>
+    private let selectionMarquee = SelectionMarqueeView()
     private var emptyView: NSView?
     private let backdrop = NSVisualEffectView()
     private let backgroundTint = NSView()
@@ -31,6 +32,10 @@ import SwiftUI
     private var isAdjustingScroll = false
     private var isAnimatingModeTransition = false
     private var wheelGesture = WorkspaceWheelGesture()
+    private var marqueeStart: CGPoint?
+    private var marqueeDidMove = false
+    private var marqueeExtending = false
+    private var marqueeBaseSelection: Set<String> = []
     private(set) var workspaceFrame = CGRect.zero
     private let chromeTopHeight: CGFloat = 66
     private let chromeBottomHeight: CGFloat = 78
@@ -42,6 +47,7 @@ import SwiftUI
     var bottomChromeFrame: CGRect { bottomChrome.frame }
     var chromeIsVisible: Bool { !topChrome.isHidden && !bottomChrome.isHidden }
     var globalScrollOffset: CGFloat { gridScrollOffset }
+    var agentTestGridZoom: CGFloat { gridZoom < 0 ? 0.5 : gridZoom }
     var globalGridGeometry: WorkspaceGeometry.GlobalGrid { makeGlobalGrid(viewport: globalScroll.contentView.bounds.size) }
 
     init(screenID: String, manager: WorkspaceWindowManager) {
@@ -55,6 +61,7 @@ import SwiftUI
         settingsPlaceholder = NSHostingView(rootView: WorkspaceSettingsPlaceholder())
         super.init(frame: .zero)
         chrome.onPresentationChange = { [weak self] in self?.arrange(animated: true) }
+        model.onTestCommand = { [weak manager] in manager?.runAgentInteractionTest() }
         autoresizingMask = [.width, .height]
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
@@ -86,9 +93,11 @@ import SwiftUI
         addSubview(bottomChrome)
         addSubview(tipsDropdown)
         addSubview(settingsPlaceholder)
+        selectionMarquee.isHidden = true
+        addSubview(selectionMarquee)
         NotificationCenter.default.addObserver(self, selector: #selector(globalClipDidScroll), name: NSView.boundsDidChangeNotification, object: globalScroll.contentView)
         registerForDraggedTypes([.maltosePanel])
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .leftMouseUp, .scrollWheel, .keyDown]) { [weak self] event in
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .leftMouseDragged, .leftMouseUp, .scrollWheel, .keyDown]) { [weak self] event in
             guard let self, event.window === self.window else { return event }
             if event.type == .keyDown, event.keyCode == 53, self.chrome.tipsExpanded {
                 self.chrome.tipsExpanded = false
@@ -98,7 +107,11 @@ import SwiftUI
                 self.closeChromeIfClickedOutside(event)
                 self.handlePanelMouseDown(event)
             }
-            if event.type == .leftMouseUp { self.handlePanelMouseUp(event) }
+            if event.type == .leftMouseDragged, self.updateSelectionMarquee(event) { return nil }
+            if event.type == .leftMouseUp {
+                if self.finishSelectionMarquee(event) { return nil }
+                self.handlePanelMouseUp(event)
+            }
             if event.type == .scrollWheel, self.routeGlobalScroll(event) { return nil }
             if event.type == .mouseMoved { self.pointerMoved() }
             return event
@@ -117,7 +130,10 @@ import SwiftUI
     override func mouseEntered(with event: NSEvent) { pointerMoved() }
     func windowDidMove(_ notification: Notification) { manager?.restoreWindowFrame(screenID) }
     func windowDidResize(_ notification: Notification) { manager?.restoreWindowFrame(screenID) }
-    func windowDidResignKey(_ notification: Notification) { cancelHover(collapse: true) }
+    func windowDidResignKey(_ notification: Notification) {
+        cancelHover(collapse: true)
+        cancelSelectionMarquee()
+    }
     func windowWillEnterFullScreen(_ notification: Notification) { fullScreenTransitioning = true }
     func windowDidEnterFullScreen(_ notification: Notification) { manager?.finishedFullscreen(screenID, succeeded: true) }
     func windowDidFailToEnterFullScreen(_ window: NSWindow) { manager?.finishedFullscreen(screenID, succeeded: false) }
@@ -250,7 +266,7 @@ import SwiftUI
             for case let panel as GlassPanelView in parent.subviews where !state.panelIDs.contains(panel.surfaceID) { panel.removeFromSuperview() }
         }
         let dropdownWidth = min(440, max(300, bounds.width - 40))
-        tipsDropdown.frame = NSRect(x: max(20, bounds.width - dropdownWidth - 24), y: chromeTopHeight + 8, width: dropdownWidth, height: 178)
+        tipsDropdown.frame = NSRect(x: max(20, bounds.width - dropdownWidth - 24), y: chromeTopHeight + 8, width: dropdownWidth, height: 206)
         settingsPlaceholder.frame = NSRect(x: max(20, (bounds.width - 360) / 2), y: max(centerFrame.minY, centerFrame.midY - 70), width: min(360, bounds.width - 40), height: 120)
         tipsDropdown.isHidden = !chrome.tipsExpanded
         settingsPlaceholder.isHidden = !chrome.settingsPresented
@@ -326,9 +342,15 @@ import SwiftUI
         if chrome.settingsPresented && settingsPlaceholder.frame.contains(point) { return }
         guard let panel = panel(at: event) else {
             pendingPanelSelection = nil
-            guard !state.selectedIDs.isEmpty else { return }
-            state.clearSelection()
-            arrange(animated: false)
+            if state.mode == .grid && globalScroll.frame.contains(point) {
+                marqueeStart = point
+                marqueeDidMove = false
+                marqueeExtending = event.modifierFlags.contains(.command)
+                marqueeBaseSelection = state.selectedIDs
+            } else if !state.selectedIDs.isEmpty {
+                state.clearSelection()
+                arrange(animated: false)
+            }
             return
         }
         let extending = event.modifierFlags.contains(.command)
@@ -348,6 +370,50 @@ import SwiftUI
     }
 
     func cancelPendingPanelSelection() { pendingPanelSelection = nil }
+
+    private func updateSelectionMarquee(_ event: NSEvent) -> Bool {
+        guard let start = marqueeStart else { return false }
+        let point = convert(event.locationInWindow, from: nil)
+        guard hypot(point.x - start.x, point.y - start.y) >= 4 else { return true }
+        marqueeDidMove = true
+        let dragRect = CGRect(x: min(start.x, point.x), y: min(start.y, point.y),
+                              width: max(1, abs(point.x - start.x)), height: max(1, abs(point.y - start.y)))
+        let selectionRect = dragRect.intersection(globalScroll.frame).intersection(workspaceFrame)
+        guard !selectionRect.isNull, !selectionRect.isEmpty else { return true }
+        selectionMarquee.frame = selectionRect
+        selectionMarquee.isHidden = false
+        selectionMarquee.needsDisplay = true
+        NSCursor.crosshair.set()
+
+        let panelFrames = Dictionary(uniqueKeysWithValues: state.panelIDs.compactMap { id -> (String, CGRect)? in
+            guard let panel = manager?.panels[id], panel.window === window, !panel.isHidden else { return nil }
+            return (id, panel.convert(panel.bounds, to: self))
+        })
+        state.selectedIDs = marqueeExtending ? marqueeBaseSelection : []
+        state.selectPanels(intersecting: selectionRect, frames: panelFrames, extending: marqueeExtending)
+        arrange(animated: false)
+        return true
+    }
+
+    private func finishSelectionMarquee(_ event: NSEvent) -> Bool {
+        guard marqueeStart != nil else { return false }
+        if marqueeDidMove {
+            _ = updateSelectionMarquee(event)
+        } else {
+            state.clearSelection()
+            arrange(animated: false)
+        }
+        cancelSelectionMarquee()
+        return true
+    }
+
+    private func cancelSelectionMarquee() {
+        marqueeStart = nil
+        marqueeDidMove = false
+        marqueeBaseSelection = []
+        selectionMarquee.isHidden = true
+        NSCursor.arrow.set()
+    }
 
     private func routeGlobalScroll(_ event: NSEvent) -> Bool {
         let point = convert(event.locationInWindow, from: nil)
@@ -440,6 +506,28 @@ import SwiftUI
         arrange(animated: false)
     }
 
+    func setAgentTestStatus(_ value: String) { chrome.status = value }
+
+    func setAgentTestMode(_ mode: WorkspaceMode) {
+        state.mode = mode
+        arrange(animated: true)
+    }
+
+    func setAgentTestOverlay(tips: Bool, settings: Bool) {
+        chrome.tipsExpanded = tips
+        chrome.settingsPresented = settings
+        arrange(animated: true)
+    }
+
+    func restoreAgentTestState(_ snapshot: WorkspaceLayoutState, zoom: CGFloat, scrollOffset: CGFloat) {
+        state = snapshot
+        gridZoom = zoom
+        gridScrollOffset = scrollOffset
+        chrome.closeOverlays()
+        arrange(animated: false)
+        setGridScrollOffset(scrollOffset, grid: makeGlobalGrid(viewport: globalScroll.contentView.bounds.size))
+    }
+
     func pointerMoved() {
         guard manager?.draggingID == nil else { return }
         let point = convert(window?.convertPoint(fromScreen: NSEvent.mouseLocation) ?? .zero, from: nil)
@@ -529,6 +617,23 @@ import SwiftUI
         eventMonitor = nil
         NotificationCenter.default.removeObserver(self)
     }
+}
+
+@MainActor private final class SelectionMarqueeView: NSView {
+    override var isFlipped: Bool { true }
+    override var isOpaque: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 0.5, dy: 0.5)
+        NSColor.systemCyan.withAlphaComponent(0.12).setFill()
+        NSBezierPath(rect: rect).fill()
+        NSColor.systemCyan.withAlphaComponent(0.78).setStroke()
+        let border = NSBezierPath(rect: rect)
+        border.lineWidth = 1
+        border.stroke()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 @MainActor private final class FlippedWorkspaceView: NSView {

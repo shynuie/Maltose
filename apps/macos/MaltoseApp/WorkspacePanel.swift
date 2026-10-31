@@ -3,7 +3,26 @@ import SwiftUI
 
 /// UI-only model. Content has no dependency on the Host or an Agent document.
 struct WorkspacePanel: Identifiable {
-    enum Kind { case canvas, notes, chart, table, conversationHistory, document, agentIdentity, agentCoreTest }
+    enum Kind: Equatable {
+        case canvas, notes, chart, table, conversationHistory, document, agentIdentity, agentCoreTest
+
+        var allowsMultipleInstances: Bool {
+            self != .agentIdentity && self != .conversationHistory && self != .agentCoreTest
+        }
+
+        var defaultInstanceTitle: String {
+            switch self {
+            case .canvas: "畫布"
+            case .notes: "筆記"
+            case .chart: "圖表"
+            case .table: "資料"
+            case .conversationHistory: "聊天"
+            case .document: "文檔"
+            case .agentIdentity: "形象"
+            case .agentCoreTest: "核心動畫測試"
+            }
+        }
+    }
     let id: String
     let title: String
     let kind: Kind
@@ -12,11 +31,12 @@ struct WorkspacePanel: Identifiable {
     var supportsFocusedMode: Bool { kind != .agentIdentity }
 
     @MainActor func makeContentView(conversationHistoryModel: ConversationHistoryModel? = nil,
-                                    markdownDocumentModel: MarkdownDocumentModel? = nil) -> NSView {
+                                    markdownDocumentModel: MarkdownDocumentModel? = nil,
+                                    chartModel: CSVLineChartModel? = nil) -> NSView {
         let view: NSView
         switch kind {
         case .chart:
-            let hostingView = NSHostingView(rootView: CSVLineChartPanelView(model: CSVLineChartModel()))
+            let hostingView = NSHostingView(rootView: CSVLineChartPanelView(model: chartModel ?? CSVLineChartModel()))
             hostingView.wantsLayer = true
             hostingView.layer?.backgroundColor = NSColor.clear.cgColor
             hostingView.layer?.isOpaque = false

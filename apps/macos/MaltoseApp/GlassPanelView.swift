@@ -12,6 +12,7 @@ extension NSPasteboard.PasteboardType {
     let contentView: NSView
     let conversationHistoryModel: ConversationHistoryModel?
     let markdownDocumentModel: MarkdownDocumentModel?
+    let chartModel: CSVLineChartModel?
     weak var manager: WorkspaceWindowManager?
     private let glass: NSView
     private let glassContents = NSView()
@@ -33,10 +34,13 @@ extension NSPasteboard.PasteboardType {
         self.manager = manager
         let historyModel = panel.kind == .conversationHistory ? ConversationHistoryModel() : nil
         let documentModel = panel.kind == .document ? MarkdownDocumentModel() : nil
+        let chartModel = panel.kind == .chart ? CSVLineChartModel() : nil
         self.conversationHistoryModel = historyModel
         self.markdownDocumentModel = documentModel
+        self.chartModel = chartModel
         self.contentView = panel.makeContentView(conversationHistoryModel: historyModel,
-                                                 markdownDocumentModel: documentModel)
+                                                 markdownDocumentModel: documentModel,
+                                                 chartModel: chartModel)
         if #available(macOS 26.0, *) {
             let effect = NSGlassEffectView()
             effect.style = .clear
