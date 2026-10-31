@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyAgent Architecture</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #10141d;
+      --panel: #171d29;
+      --panel-2: #20293a;
+      --text: #edf2f7;
+      --muted: #aeb9c8;
+      --line: #718096;
+      --blue: #65a9ff;
+      --green: #66d19e;
+      --orange: #ffbd70;
+      --purple: #bf9cff;
+      --red: #ff8e8e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 32px;
+      background: var(--bg); color: var(--text);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { max-width: 1220px; margin: auto; }
+    h1 { margin: 0 0 6px; font-size: 30px; }
+    h2 { margin: 34px 0 12px; font-size: 21px; }
+    p, li { color: var(--muted); }
+    .subtitle { margin-top: 0; }
+    .diagram {
+      overflow-x: auto; padding: 18px 0 4px;
+      border-top: 1px solid #2d3748;
+      border-bottom: 1px solid #2d3748;
+    }
+    svg { display: block; min-width: 980px; width: 100%; height: auto; }
+    .node { fill: var(--panel-2); stroke: var(--line); stroke-width: 1.5; }
+    .node-blue { stroke: var(--blue); }
+    .node-green { stroke: var(--green); }
+    .node-orange { stroke: var(--orange); }
+    .node-purple { stroke: var(--purple); }
+    .node-red { stroke: var(--red); }
+    .label { fill: var(--text); font-weight: 600; font-size: 15px; text-anchor: middle; }
+    .small { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+    .arrow { stroke: var(--line); stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .dashed { stroke-dasharray: 6 5; }
+    .lane { fill: #141a24; stroke: #2d3748; stroke-width: 1; }
+    .lane-title { fill: var(--muted); font-size: 13px; font-weight: 600; }
+    code { color: var(--orange); }
+    .legend { display: flex; flex-wrap: wrap; gap: 16px; color: var(--muted); }
+    .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 2px solid currentColor; vertical-align: -1px; }
+    .legend .planner { color: var(--blue); }
+    .legend .worker { color: var(--green); }
+    .legend .data { color: var(--purple); }
+    .legend .external { color: var(--orange); }
+    .columns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .card { background: var(--panel); border: 1px solid #2d3748; padding: 16px; }
+    .card h3 { margin: 0 0 6px; font-size: 16px; }
+    .card p { margin: 0; }
+    @media (max-width: 760px) {
+      body { padding: 20px 14px; }
+      .columns { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>MyAgent Architecture</h1>
+  <p class="subtitle">從使用者命令、語音處理、TaskBrain 規劃，到 worker 執行與語音回覆。</p>
+
+  <h2>目前有幾個 Planner、Worker？</h2>
+  <div class="columns">
+    <section class="card">
+      <h3>Planner：1 個</h3>
+      <p><code>TaskBrain</code> 內的 LLM tool loop。它決定直接回答、呼叫工具、建立 task plan，或建立 schedule。</p>
+    </section>
+    <section class="card">
+      <h3>Worker：3 類</h3>
+      <p><code>codex_readonly</code>、可選的 <code>web_research</code>、<code>assistant_message</code>。它們由 TaskManager 的 bounded pool 執行。</p>
+    </section>
+    <section class="card">
+      <h3>Scheduler：1 個</h3>
+      <p>TaskManager 啟動一條 scheduler thread，每 0.5 秒檢查 SQLite 中到期的排程。</p>
+    </section>
+  </div>
+
+  <h2>元件總覽</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 1160 430" role="img" aria-label="MyAgent component architecture">
+      <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#718096"/></marker></defs>
+      <rect class="lane" x="20" y="20" width="1120" height="105" rx="10"/>
+      <text class="lane-title" x="40" y="45">Voice I/O</text>
+      <rect class="node node-blue" x="55" y="62" width="145" height="42" rx="8"/><text class="label" x="127" y="88">Microphone / VAD</text>
+      <rect class="node node-blue" x="245" y="62" width="125" height="42" rx="8"/><text class="label" x="307" y="88">Wake word</text>
+      <rect class="node node-blue" x="415" y="62" width="125" height="42" rx="8"/><text class="label" x="477" y="88">STT</text>
+      <rect class="node node-blue" x="585" y="62" width="145" height="42" rx="8"/><text class="label" x="657" y="88">Speaker ID</text>
+      <rect class="node node-blue" x="775" y="62" width="145" height="42" rx="8"/><text class="label" x="847" y="88">VoiceAgent</text>
+      <rect class="node node-blue" x="965" y="62" width="125" height="42" rx="8"/><text class="label" x="1027" y="88">TTS / say</text>
+      <path class="arrow" d="M200 83 H245 M370 83 H415 M540 83 H585 M730 83 H775 M920 83 H965"/>
+
+      <rect class="lane" x="20" y="145" width="1120" height="105" rx="10"/>
+      <text class="lane-title" x="40" y="170">Reasoning and planning</text>
+      <rect class="node node-blue" x="155" y="187" width="180" height="42" rx="8"/><text class="label" x="245" y="213">TaskBrain</text><text class="small" x="245" y="230">one planner / tool loop</text>
+      <rect class="node node-blue" x="490" y="187" width="210" height="42" rx="8"/><text class="label" x="595" y="213">OpenAI-compatible LLM</text>
+      <rect class="node node-purple" x="855" y="187" width="180" height="42" rx="8"/><text class="label" x="945" y="213">ToolRegistry</text>
+      <path class="arrow" d="M335 208 H490 M700 208 H855"/>
+      <path class="arrow dashed" d="M855 225 C700 265 495 265 335 225"/>
+
+      <rect class="lane" x="20" y="270" width="1120" height="135" rx="10"/>
+      <text class="lane-title" x="40" y="295">Execution and persistence</text>
+      <rect class="node node-green" x="75" y="320" width="180" height="48" rx="8"/><text class="label" x="165" y="342">TaskManager</text><text class="small" x="165" y="359">bounded worker pool</text>
+      <rect class="node node-green" x="315" y="320" width="145" height="48" rx="8"/><text class="label" x="387" y="342">Codex worker</text><text class="small" x="387" y="359">read-only</text>
+      <rect class="node node-green" x="520" y="320" width="145" height="48" rx="8"/><text class="label" x="592" y="342">Web research</text><text class="small" x="592" y="359">optional</text>
+      <rect class="node node-green" x="725" y="320" width="170" height="48" rx="8"/><text class="label" x="810" y="342">Assistant message</text><text class="small" x="810" y="359">exact spoken text</text>
+      <rect class="node node-purple" x="955" y="320" width="145" height="48" rx="8"/><text class="label" x="1027" y="342">SQLite</text><text class="small" x="1027" y="359">tasks / schedules</text>
+      <path class="arrow" d="M245 344 H315 M245 344 H520 M245 344 H725 M895 344 H955"/>
+      <path class="arrow dashed" d="M945 229 C850 275 700 300 165 320"/>
+    </svg>
+  </div>
+  <div class="legend">
+    <span class="planner">Planner / model flow</span>
+    <span class="worker">Worker execution</span>
+    <span class="data">Persistent or registered capability</span>
+  </div>
+
+  <h2>使用者下命令後的完整流程</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 1160 690" role="img" aria-label="Complete user command flow">
+      <defs><marker id="arrow2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#718096"/></marker></defs>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 38 V78"/>
+      <rect class="node node-blue" x="405" y="8" width="350" height="42" rx="8"/><text class="label" x="580" y="34">1. 使用者說話</text>
+      <rect class="node node-blue" x="405" y="80" width="350" height="48" rx="8"/><text class="label" x="580" y="103">2. Wake word / VAD</text><text class="small" x="580" y="120">抓取一段完整 utterance</text>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 128 V160"/>
+      <rect class="node node-blue" x="405" y="162" width="350" height="48" rx="8"/><text class="label" x="580" y="185">3. STT + Speaker ID</text><text class="small" x="580" y="202">平行執行，產生 transcript + user_id</text>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 210 V242"/>
+      <rect class="node node-blue" x="405" y="244" width="350" height="48" rx="8"/><text class="label" x="580" y="267">4. VoiceAgent → TaskBrain</text><text class="small" x="580" y="284">建立 TurnContext</text>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 292 V324"/>
+      <rect class="node node-purple" x="405" y="326" width="350" height="48" rx="8"/><text class="label" x="580" y="349">5. LLM 判斷意圖</text><text class="small" x="580" y="366">直接回答、查資料、建 Task、建 Schedule</text>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 374 V406"/>
+      <rect class="node node-orange" x="95" y="408" width="280" height="60" rx="8"/><text class="label" x="235" y="433">A. 直接回答</text><text class="small" x="235" y="452">回到 VoiceAgent → TTS</text>
+      <rect class="node node-green" x="440" y="408" width="280" height="60" rx="8"/><text class="label" x="580" y="433">B. 建立普通 Task</text><text class="small" x="580" y="452">TaskManager → worker → notification</text>
+      <rect class="node node-green" x="785" y="408" width="280" height="60" rx="8"/><text class="label" x="925" y="433">C. 建立 Schedule</text><text class="small" x="925" y="452">SQLite → scheduler → ordinary Task</text>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 374 C580 392 235 390 235 408"/>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 374 V408"/>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 374 C580 392 925 390 925 408"/>
+      <path class="arrow" marker-end="url(#arrow2)" d="M235 468 C235 520 580 515 580 548"/>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 468 V548"/>
+      <path class="arrow" marker-end="url(#arrow2)" d="M925 468 C925 520 580 515 580 548"/>
+      <rect class="node node-blue" x="405" y="550" width="350" height="48" rx="8"/><text class="label" x="580" y="573">6. Safe TTS boundary</text><text class="small" x="580" y="590">不打斷正在說話的內容</text>
+      <path class="arrow" marker-end="url(#arrow2)" d="M580 598 V630"/>
+      <rect class="node node-blue" x="405" y="632" width="350" height="42" rx="8"/><text class="label" x="580" y="658">7. TTS 播放回覆或通知</text>
+    </svg>
+  </div>
+
+  <h2>目前的核心限制</h2>
+  <ul>
+    <li>一個 TaskBrain planner，透過 tool call 建立普通 Task 或 Schedule；沒有多 planner 協作。</li>
+    <li>Schedule 的 completed 代表「已觸發並建立 Task」，底層 Task 仍有自己的 succeeded／failed 狀態。</li>
+    <li>排程通知在安全的 TTS 邊界播報，不會中斷正在進行的語音。</li>
+    <li>SQLite 狀態可保留，但 process restart 後的執行中 Task recovery 與通知 replay 尚未完成。</li>
+  </ul>
+</main>
+</body>
+</html>

@@ -1,0 +1,23 @@
+[wake]
+enabled = true
+provider = "alibaba-modelscope"
+normalize_audio = false
+target_peak = 12000
+min_peak = 6000
+max_gain = 4.0
+
+[wake.alibaba]
+model_dir = "models/alibaba-kws-maiyatang-real-tts1000-raw-clean35-speed-cp998"
+python = "/private/tmp/myagent-kws310/bin/python"
+
+[wake.sherpa_onnx]
+tokens = "models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/tokens.txt"
+encoder = "models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/encoder-epoch-13-avg-2-chunk-8-left-64.int8.onnx"
+decoder = "models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/decoder-epoch-13-avg-2-chunk-8-left-64.onnx"
+joiner = "models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/joiner-epoch-13-avg-2-chunk-8-left-64.int8.onnx"
+keywords_file = "models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/myagent-keywords.txt"
+keywords_threshold = 0.15
+keywords_score = 1.0
+num_trailing_blanks = 1
+num_threads = 1
+provider = "cpu"

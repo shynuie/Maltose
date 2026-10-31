@@ -1,0 +1,32 @@
+__pycache__/
+.venv/
+recordings/
+models
+tools/location_helper.app/
+
+# Python
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environment
+.env
+.env.*
+myagent.toml
+training_server
+data/
+documents/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Local audio outputs
+*.aiff
+*.wav
+*.mp3

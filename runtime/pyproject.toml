@@ -1,0 +1,71 @@
+[project]
+name = "myagent"
+version = "0.1.0"
+description = "Early-stage personal assistant project."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "faster-whisper>=1.1.1",
+    "sounddevice>=0.5.0",
+    "webrtcvad-wheels>=2.0.14",
+]
+
+[project.optional-dependencies]
+wake = [
+    "pypinyin>=0.55.0",
+    "sentencepiece>=0.2.0",
+    "sherpa-onnx",
+    "sherpa-onnx-core==1.13.8",
+]
+funasr = [
+    "funasr>=1.3.0",
+    "kaldi-native-fbank>=1.21.0",
+    "torch>=2.6.0",
+    "torchaudio>=2.6.0",
+    "transformers==4.57.6",
+]
+qwen-asr = [
+    "qwen-asr>=0.0.6",
+    "transformers==4.57.6",
+]
+embeddings = [
+    "sentence-transformers>=3.4.0",
+    "torch>=2.6.0",
+    "transformers>=4.51.0",
+]
+vector-memory = [
+    "fonttools>=4.50.0",
+    "lancedb>=0.20.0",
+    "pypdf>=5.0.0",
+    "sentence-transformers>=3.4.0",
+    "torch>=2.6.0",
+    "transformers>=4.51.0",
+]
+speaker = [
+    "speechbrain>=1.0.0",
+    "torch>=2.6.0",
+    "torchaudio>=2.6.0",
+]
+
+[project.scripts]
+myagent = "myagent.agent.cli:main"
+myagent-run = "myagent.agent.cli:main"
+myagent-listen = "myagent.voice.listen_cli:main"
+myagent-stt = "myagent.voice.stt_cli:main"
+myagent-tts = "myagent.voice.cli:main"
+myagent-voice-loop = "myagent.voice.loop_cli:main"
+myagent-wake-test = "myagent.voice.wake_cli:main"
+myagent-wake-monitor = "myagent.voice.wake_monitor_cli:main"
+myagent-kws-record = "myagent.voice.kws_record_cli:main"
+myagent-kws-manifest = "myagent.voice.kws_manifest_cli:main"
+myagent-kws-replay = "myagent.voice.kws_replay_cli:main"
+myagent-kws-mix = "myagent.voice.kws_mix_cli:main"
+myagent-vad-replay = "myagent.voice.vad_replay_cli:main"
+myagent-speaker-enroll = "myagent.voice.speaker_enroll_interactive:main"
+myagent-speaker-enroll-files = "myagent.voice.speaker_enroll_cli:main"
+myagent-speaker-test = "myagent.voice.speaker_test_cli:main"
+myagent-documents = "myagent.knowledge.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

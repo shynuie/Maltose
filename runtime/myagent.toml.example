@@ -1,0 +1,78 @@
+# Copy this file to myagent.toml and adjust paths/device settings.
+
+[agent]
+brain = "taskbrain"
+timeout = 10.0
+# Omit device to follow macOS's current system input device.
+# device = "3"
+continuous = true
+output_dir = "recordings"
+
+[voice]
+stt_provider = "qwen3-asr-0.6b"
+language = "zh"
+stt_device = "cpu"
+normalize_stt_audio = true
+stt_target_peak = 12000
+stt_min_peak = 6000
+stt_max_gain = 4.0
+interruptible_tts = true
+
+[vad]
+aggressiveness = 2
+frame_ms = 20
+start_trigger_ms = 160
+end_silence_ms = 700
+pre_roll_ms = 300
+
+[environment]
+location = ""
+location_helper = "tools/location_helper.app/Contents/MacOS/location_helper"
+external_ip_url = "https://api.ipify.org?format=json"
+timeout = 5.0
+
+[wake]
+config = "wake.toml"
+ack = "我在"
+ack_delay = 0.8
+buffer_ms = 1000
+
+[taskbrain]
+url = "https://api.openai.com/v1/chat/completions"
+model = "gpt-5.6-luna"
+reasoning_effort = "none"
+timeout = 120.0
+memory_backend = "lancedb"
+memory = "data/memory/memory.lancedb"
+user_id = "user-001"
+embedding = "qwen3-embedding-0.6b"
+embedding_device = "cpu"
+speaker_recognition = "speechbrain"
+speaker_profiles = "data/speaker/speaker_profiles.sqlite3"
+speaker_model_dir = "models/speechbrain-ecapa"
+speaker_threshold = 0.35
+search = "brave"
+search_timeout = 10.0
+tasks = "data/tasks/tasks.sqlite3"
+max_workers = 2
+codex_cwd = "."
+codex_timeout = 300.0
+mcp_timeout = 15.0
+# mcp_command = ["npx -y your-mcp-server"]
+
+[knowledge]
+enabled = false
+documents_root = "documents"
+metadata = "data/knowledge/metadata.sqlite3"
+vectors = "data/knowledge/vectors.lancedb"
+queue = "data/knowledge/indexing_queue.sqlite3"
+embedding = "none"
+embedding_device = "cpu"
+watcher_poll_interval = 1.0
+indexing_max_attempts = 3
+
+[openclaw]
+url = "http://127.0.0.1:18789/v1/chat/completions"
+model = "openclaw/default"
+session = "myagent-voice"
+timeout = 120.0
