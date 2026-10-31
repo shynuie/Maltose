@@ -256,7 +256,7 @@ private struct AgentWorkspaceSnapshot {
                 }),
                 ("測試：新增多個面板並檢查單例限制", {
                     root.setAgentTestMode(.grid)
-                    for kind in [WorkspacePanel.Kind.chart, .notes, .document, .imageGallery, .table, .canvas] {
+                    for kind in [WorkspacePanel.Kind.chart, .notes, .document, .imageGallery, .browser, .table, .canvas] {
                         if let panel = self.addPanel(kind: kind, to: selectedScreenID) {
                             addedPanelIDs.append(panel.id)
                         }
@@ -266,6 +266,26 @@ private struct AgentWorkspaceSnapshot {
                             addedPanelIDs.append(panel.id)
                         }
                     }
+                }),
+                ("測試：網頁面板開啟離線測試頁", {
+                    guard let browserID = addedPanelIDs.first(where: { id in
+                        self.catalog.first(where: { $0.id == id })?.kind == .browser
+                    }) else { return }
+                    self.selectPanel(browserID)
+                    self.panels[browserID]?.browserModel?.simulateTestPage()
+                }),
+                ("測試：建立並編輯流程圖", {
+                    guard let canvasID = addedPanelIDs.first(where: { id in
+                        self.catalog.first(where: { $0.id == id })?.kind == .canvas
+                    }), let model = self.panels[canvasID]?.flowchartModel else { return }
+                    let stepID = model.addNode(.process, at: FlowchartPoint(x: -80, y: 250))
+                    model.updateText("檢查流程條件", for: stepID)
+                    _ = model.connect(from: "flow-start", to: stepID)
+                    model.selectNode(stepID)
+                    model.moveNodes([stepID], by: CGSize(width: 28, height: 16))
+                    model.setZoom(1.1)
+                    model.pan(by: CGSize(width: 12, height: -8))
+                    model.deleteSelection()
                 }),
                 ("測試：關閉新建的面板", {
                     for id in addedPanelIDs.reversed() { _ = self.closePanel(id) }

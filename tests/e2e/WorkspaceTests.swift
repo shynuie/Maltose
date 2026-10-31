@@ -367,6 +367,7 @@ final class WorkspaceLayoutTests: XCTestCase {
         XCTAssertTrue(WorkspacePanel.Kind.table.allowsMultipleInstances)
         XCTAssertTrue(WorkspacePanel.Kind.document.allowsMultipleInstances)
         XCTAssertTrue(WorkspacePanel.Kind.imageGallery.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.browser.allowsMultipleInstances)
     }
 
     @MainActor func testImageGalleryStartsWithEmptyPreviousSlotAndSixSamples() {
@@ -395,6 +396,84 @@ final class WorkspaceLayoutTests: XCTestCase {
         XCTAssertNil(model.nextIndex)
     }
 
+    @MainActor func testFlowchartSupportsEditingConnectingMovingAndDeletingNodes() {
+        let model = FlowchartCanvasModel()
+        XCTAssertEqual(model.nodes.count, 6)
+        XCTAssertEqual(model.connections.count, 6)
+
+        let first = model.addNode(.process, at: FlowchartPoint(x: 0, y: 220))
+        let second = model.addNode(.decision, at: FlowchartPoint(x: 230, y: 220))
+        model.updateText("讀取輸入", for: first)
+        XCTAssertEqual(model.nodes.first(where: { $0.id == first })?.text, "讀取輸入")
+        XCTAssertTrue(model.connect(from: first, to: second, label: "有效"))
+        XCTAssertFalse(model.connect(from: first, to: second), "Duplicate edges should be ignored")
+        XCTAssertFalse(model.connect(from: first, to: first), "Self-connections should be ignored")
+
+        let originalPosition = model.nodes.first(where: { $0.id == first })!.position
+        model.selectNode(first)
+        model.selectNode(second, extending: true)
+        XCTAssertEqual(model.selectedNodeIDs, [first, second])
+        model.moveNodes(model.selectedNodeIDs, by: CGSize(width: 20, height: -10))
+        XCTAssertEqual(model.nodes.first(where: { $0.id == first })?.position,
+                       FlowchartPoint(x: originalPosition.x + 20, y: originalPosition.y - 10))
+
+        model.deleteSelection()
+        XCTAssertFalse(model.nodes.contains(where: { $0.id == first || $0.id == second }))
+        XCTAssertFalse(model.connections.contains(where: { $0.fromNodeID == first || $0.toNodeID == first || $0.fromNodeID == second || $0.toNodeID == second }))
+        XCTAssertTrue(model.selectedNodeIDs.isEmpty)
+    }
+
+    @MainActor func testFlowchartViewportIsBoundedAndResettable() {
+        let model = FlowchartCanvasModel(document: FlowchartDocument(nodes: [], connections: []))
+        XCTAssertTrue(model.nodes.isEmpty)
+        XCTAssertTrue(model.connections.isEmpty)
+        model.setZoom(10)
+        XCTAssertEqual(model.zoom, 2.5)
+        model.setZoom(0)
+        XCTAssertEqual(model.zoom, 0.35)
+        model.pan(by: CGSize(width: 45, height: -12))
+        XCTAssertEqual(model.panOffset, CGSize(width: 45, height: -12))
+        model.resetViewport()
+        XCTAssertEqual(model.zoom, 0.72)
+        XCTAssertEqual(model.panOffset, .zero)
+    }
+
+    @MainActor func testFlowchartFilesRoundTripAndTrackUnsavedChanges() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("maltose-flowchart-\(UUID().uuidString).maltoseflow.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let model = FlowchartCanvasModel()
+        XCTAssertTrue(model.isDirty, "The built-in example should be offered for saving")
+        let firstNode = try XCTUnwrap(model.nodes.first)
+        model.updateText("更新後的流程起點", for: firstNode.id)
+        try model.save(to: url)
+        XCTAssertFalse(model.isDirty)
+
+        let loaded = FlowchartCanvasModel(document: FlowchartDocument(nodes: [], connections: []))
+        try loaded.load(from: url)
+        XCTAssertEqual(loaded.documentTitle, model.documentTitle)
+        XCTAssertEqual(loaded.document, model.document)
+        XCTAssertFalse(loaded.isDirty)
+
+        loaded.updateText("未儲存修改", for: firstNode.id)
+        XCTAssertTrue(loaded.isDirty)
+        loaded.newDocument()
+        XCTAssertTrue(loaded.nodes.isEmpty)
+        XCTAssertNil(loaded.fileURL)
+        XCTAssertFalse(loaded.isDirty)
+    }
+
+    @MainActor func testFlowchartFileRejectsUnrecognizedJSON() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("maltose-flowchart-invalid-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("{}".utf8).write(to: url)
+        let model = FlowchartCanvasModel(document: FlowchartDocument(nodes: [], connections: []))
+        XCTAssertThrowsError(try model.load(from: url))
+        XCTAssertTrue(model.nodes.isEmpty, "A failed open should leave the current document untouched")
+    }
+
     @MainActor func testImageGalleryAcceptsWebImageURLsAndRejectsUnsupportedSchemes() {
         let model = ImageGalleryModel(images: [])
         XCTAssertTrue(model.addRemoteImage("https://example.com/image.png"))
@@ -402,6 +481,28 @@ final class WorkspaceLayoutTests: XCTestCase {
         XCTAssertFalse(model.addRemoteImage("not a url"))
         XCTAssertEqual(model.images.count, 1)
         XCTAssertEqual(model.selectedIndex, 0)
+    }
+
+    @MainActor func testBrowserAddressAcceptsWebURLsDomainsAndSearchesButRejectsOtherSchemes() throws {
+        XCTAssertEqual(BrowserPanelModel.destination(for: "https://example.com/news")?.absoluteString,
+                       "https://example.com/news")
+        XCTAssertEqual(BrowserPanelModel.destination(for: "example.com/news")?.absoluteString,
+                       "https://example.com/news")
+        let search = try XCTUnwrap(BrowserPanelModel.destination(for: "最新科技新聞"))
+        XCTAssertEqual(search.host, "duckduckgo.com")
+        XCTAssertEqual(URLComponents(url: search, resolvingAgainstBaseURL: false)?.queryItems?.first?.value,
+                       "最新科技新聞")
+        XCTAssertNil(BrowserPanelModel.destination(for: "file:///etc/passwd"))
+        XCTAssertNil(BrowserPanelModel.destination(for: ""))
+    }
+
+    func testPreviewIncludesYouTubeAndGoogleNewsBrowserPanels() {
+        let browsers = WorkspacePanel.samples.filter { $0.kind == .browser }
+        XCTAssertEqual(browsers.map(\.id), ["browser-youtube", "browser-news"])
+        XCTAssertEqual(browsers[0].initialBrowserAddress,
+                       "https://www.youtube.com/watch?v=Z2Z9V-4DMGw&list=RDGMEMhCgTQvcskbGUxqI4Sn2QYwVMZ2Z9V-4DMGw&start_radio=1")
+        XCTAssertEqual(browsers[1].initialBrowserAddress,
+                       "https://news.google.com/home?hl=zh-TW&gl=TW&ceid=TW:zh-Hant")
     }
 
     @MainActor func testChartAgentCanConfigureAreaFillBetweenNamedSeries() {
