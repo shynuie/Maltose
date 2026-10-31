@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.voice import (
+from maltose.voice import (
     GainWakeWordDetector,
     SmoothRMSGainWakeWordDetector,
     UtteranceSegmenter,
@@ -11,8 +11,8 @@ from myagent.voice import (
     normalize_pcm_peak,
     normalize_utterance_peak,
 )
-from myagent.voice.listening import KWSFrameAccumulator, Utterance, write_utterance_wav
-from myagent.voice.wake import WakeWordGate, WakeWordHit, load_wake_word_config
+from maltose.voice.listening import KWSFrameAccumulator, Utterance, write_utterance_wav
+from maltose.voice.wake import WakeWordGate, WakeWordHit, load_wake_word_config
 
 
 class FakeDetector:

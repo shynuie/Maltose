@@ -5,10 +5,10 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from myagent.knowledge.indexer import IndexResult
-from myagent.knowledge.models import ScannedFile
-from myagent.knowledge.queue import InMemoryIndexingQueue
-from myagent.knowledge.worker import IndexingWorker
+from maltose.knowledge.indexer import IndexResult
+from maltose.knowledge.models import ScannedFile
+from maltose.knowledge.queue import InMemoryIndexingQueue
+from maltose.knowledge.worker import IndexingWorker
 
 
 class KnowledgeWorkerFreshnessTests(unittest.TestCase):

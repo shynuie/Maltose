@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.execution.backend import MountSpec
-from myagent.execution.docker_backend import DockerSandboxBackend
-from myagent.execution.models import ExecutionLimits, ExecutionRequest
+from maltose.execution.backend import MountSpec
+from maltose.execution.docker_backend import DockerSandboxBackend
+from maltose.execution.models import ExecutionLimits, ExecutionRequest
 
 
 @unittest.skipUnless(

@@ -5,8 +5,8 @@ import wave
 from collections import deque
 from pathlib import Path
 
-from myagent.voice.listening import Utterance, write_utterance_wav
-from myagent.voice.wake import create_wake_word_detector, load_wake_word_config
+from maltose.voice.listening import Utterance, write_utterance_wav
+from maltose.voice.wake import create_wake_word_detector, load_wake_word_config
 
 
 def build_parser() -> argparse.ArgumentParser:

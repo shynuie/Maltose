@@ -5,10 +5,10 @@ import time
 import unittest
 from typing import Iterator
 
-from myagent.agent import AgentConfig, VoiceAgent
-from myagent.agent.agent import AgentState
-from myagent.runtime import EventHub
-from myagent.voice import ListeningEvent, STTResult, TTSRequest, VADSettings
+from maltose.agent import AgentConfig, VoiceAgent
+from maltose.agent.agent import AgentState
+from maltose.runtime import EventHub
+from maltose.voice import ListeningEvent, STTResult, TTSRequest, VADSettings
 
 
 class QuietSTT:

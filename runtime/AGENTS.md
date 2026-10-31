@@ -1,14 +1,14 @@
-# MyAgent Repository Instructions
+# Maltose Repository Instructions
 
 ## Project Context
 
-MyAgent is a local voice assistant with wake-word detection, speech
+Maltose is a local voice assistant with wake-word detection, speech
 recognition, speaker identity, TaskBrain orchestration, Memory, and an
 optional Document Knowledge Base (KDB).
 
 ## Repository Boundaries
 
-- `myagent/`: production Python package. Runtime code belongs here.
+- `maltose/`: production Python package. Runtime code belongs here.
 - `dev/`: development-only plans, architecture decisions, progress notes,
   development agents, and developer tools. Start with [dev/README.md](dev/README.md)
   and [dev/major_plan.md](dev/major_plan.md).

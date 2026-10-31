@@ -1,5 +1,5 @@
 [project]
-name = "myagent"
+name = "maltose"
 version = "0.1.0"
 description = "Early-stage personal assistant project."
 readme = "README.md"
@@ -48,23 +48,23 @@ speaker = [
 ]
 
 [project.scripts]
-myagent = "myagent.agent.cli:main"
-myagent-run = "myagent.agent.cli:main"
-myagent-listen = "myagent.voice.listen_cli:main"
-myagent-stt = "myagent.voice.stt_cli:main"
-myagent-tts = "myagent.voice.cli:main"
-myagent-voice-loop = "myagent.voice.loop_cli:main"
-myagent-wake-test = "myagent.voice.wake_cli:main"
-myagent-wake-monitor = "myagent.voice.wake_monitor_cli:main"
-myagent-kws-record = "myagent.voice.kws_record_cli:main"
-myagent-kws-manifest = "myagent.voice.kws_manifest_cli:main"
-myagent-kws-replay = "myagent.voice.kws_replay_cli:main"
-myagent-kws-mix = "myagent.voice.kws_mix_cli:main"
-myagent-vad-replay = "myagent.voice.vad_replay_cli:main"
-myagent-speaker-enroll = "myagent.voice.speaker_enroll_interactive:main"
-myagent-speaker-enroll-files = "myagent.voice.speaker_enroll_cli:main"
-myagent-speaker-test = "myagent.voice.speaker_test_cli:main"
-myagent-documents = "myagent.knowledge.cli:main"
+maltose = "maltose.agent.cli:main"
+maltose-run = "maltose.agent.cli:main"
+maltose-listen = "maltose.voice.listen_cli:main"
+maltose-stt = "maltose.voice.stt_cli:main"
+maltose-tts = "maltose.voice.cli:main"
+maltose-voice-loop = "maltose.voice.loop_cli:main"
+maltose-wake-test = "maltose.voice.wake_cli:main"
+maltose-wake-monitor = "maltose.voice.wake_monitor_cli:main"
+maltose-kws-record = "maltose.voice.kws_record_cli:main"
+maltose-kws-manifest = "maltose.voice.kws_manifest_cli:main"
+maltose-kws-replay = "maltose.voice.kws_replay_cli:main"
+maltose-kws-mix = "maltose.voice.kws_mix_cli:main"
+maltose-vad-replay = "maltose.voice.vad_replay_cli:main"
+maltose-speaker-enroll = "maltose.voice.speaker_enroll_interactive:main"
+maltose-speaker-enroll-files = "maltose.voice.speaker_enroll_cli:main"
+maltose-speaker-test = "maltose.voice.speaker_test_cli:main"
+maltose-documents = "maltose.knowledge.cli:main"
 
 [build-system]
 requires = ["hatchling"]

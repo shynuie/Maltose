@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.execution.backend import BackendCapabilities, MountSpec
-from myagent.execution.broker import ExecutionApprovalRequired, ExecutionBroker
-from myagent.execution.models import ExecutionRequest, ExecutionResult, NetworkPolicy
-from myagent.execution.policy import ExecutionPolicy
-from myagent.filesystem.approval import ApprovalManager
+from maltose.execution.backend import BackendCapabilities, MountSpec
+from maltose.execution.broker import ExecutionApprovalRequired, ExecutionBroker
+from maltose.execution.models import ExecutionRequest, ExecutionResult, NetworkPolicy
+from maltose.execution.policy import ExecutionPolicy
+from maltose.filesystem.approval import ApprovalManager
 
 
 class FakeBackend:

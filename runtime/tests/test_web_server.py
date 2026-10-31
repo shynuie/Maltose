@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import unittest
 from urllib.request import Request, urlopen
 
-from myagent.runtime import EventHub
-from myagent.web import WebServer
+from maltose.runtime import EventHub
+from maltose.web import WebServer
 
 
 class WebServerTest(unittest.TestCase):
@@ -30,7 +31,7 @@ class WebServerTest(unittest.TestCase):
 
     def test_serves_index_and_state(self) -> None:
         with urlopen(self.base_url + "/") as response:
-            self.assertIn("MyAgent", response.read().decode("utf-8"))
+            self.assertIn("Maltose", response.read().decode("utf-8"))
         with urlopen(self.base_url + "/api/state") as response:
             self.assertEqual(json.loads(response.read()), {"state": "thinking"})
 
@@ -55,6 +56,16 @@ class WebServerTest(unittest.TestCase):
         with urlopen(request) as response:
             self.assertEqual(response.status, 202)
         self.assertEqual(self.actions, [("confirm", {"job": 1})])
+
+    def test_peer_reset_is_logged_without_server_traceback(self) -> None:
+        with self.assertLogs('maltose.web.server', level=logging.DEBUG) as captured:
+            try:
+                raise ConnectionResetError(54, 'Connection reset by peer')
+            except ConnectionResetError:
+                self.server._server.handle_error(None, ('127.0.0.1', 58078))
+        self.assertEqual(len(captured.records), 1)
+        self.assertIn('web_client_disconnected', captured.records[0].getMessage())
+        self.assertFalse(captured.records[0].exc_info)
 
     def test_sse_stream_delivers_event(self) -> None:
         result: list[bytes] = []

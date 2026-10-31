@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.filesystem.config import FilesystemConfig
+from maltose.filesystem.config import FilesystemConfig
 
 
 class FilesystemConfigTests(unittest.TestCase):

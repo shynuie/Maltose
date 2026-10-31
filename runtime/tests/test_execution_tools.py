@@ -4,8 +4,8 @@ import unittest
 import tempfile
 from unittest.mock import Mock
 
-from myagent.execution.models import ExecutionProfile, ExecutionResult
-from myagent.execution.tools import ExecutionToolAdapter
+from maltose.execution.models import ExecutionProfile, ExecutionResult
+from maltose.execution.tools import ExecutionToolAdapter
 
 
 class ExecutionToolTests(unittest.TestCase):

@@ -4,7 +4,7 @@ import argparse
 import wave
 from pathlib import Path
 
-from myagent.voice.wake import create_wake_word_detector, load_wake_word_config
+from maltose.voice.wake import create_wake_word_detector, load_wake_word_config
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.filesystem.approval import ApprovalManager
-from myagent.filesystem.ui import FilesystemApprovalUI
+from maltose.filesystem.approval import ApprovalManager
+from maltose.filesystem.ui import FilesystemApprovalUI
 
 
 class FilesystemApprovalUITests(unittest.TestCase):

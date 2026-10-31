@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import unittest
 
-from myagent.runtime import EventHub
+from maltose.runtime import EventHub
 
 
 class EventHubTest(unittest.TestCase):

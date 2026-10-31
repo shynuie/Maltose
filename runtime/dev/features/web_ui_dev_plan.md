@@ -103,3 +103,6 @@ Web / Voice / CLI input
 ## 下一步
 
 將 Web input 接入 Agent Runtime，先定義統一的 text command queue，再讓 VoiceAgent 和 Web UI 共用 session 與狀態事件。
+
+
+原生 Maltose 整合另見 [maltose_ui_dev_plan.md](maltose_ui_dev_plan.md)；保留現有 Web UI，不以 Web 開關限制 runtime 事件。

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.watcher import (
+from maltose.knowledge.watcher import (
     DocumentWatchEventType,
     PollingDocumentWatcher,
 )

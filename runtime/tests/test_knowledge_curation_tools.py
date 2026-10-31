@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.curation import CuratedKnowledgeStore, KnowledgeProposalStore, KnowledgeSourcePolicy
-from myagent.knowledge.curation_tools import KnowledgeCurationToolAdapter
-from myagent.knowledge.curation_ui import KnowledgeProposalUI
+from maltose.knowledge.curation import CuratedKnowledgeStore, KnowledgeProposalStore, KnowledgeSourcePolicy
+from maltose.knowledge.curation_tools import KnowledgeCurationToolAdapter
+from maltose.knowledge.curation_ui import KnowledgeProposalUI
 
 
 class KnowledgeCurationToolsTests(unittest.TestCase):

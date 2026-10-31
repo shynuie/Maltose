@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.event_dispatcher import DocumentEventAction, DocumentEventDispatcher
-from myagent.knowledge.models import ScannedFile
-from myagent.knowledge.queue import InMemoryIndexingQueue
-from myagent.knowledge.repositories.metadata import MetadataRepository
-from myagent.knowledge.watcher import DocumentWatchEvent, DocumentWatchEventType
+from maltose.knowledge.event_dispatcher import DocumentEventAction, DocumentEventDispatcher
+from maltose.knowledge.models import ScannedFile
+from maltose.knowledge.queue import InMemoryIndexingQueue
+from maltose.knowledge.repositories.metadata import MetadataRepository
+from maltose.knowledge.watcher import DocumentWatchEvent, DocumentWatchEventType
 
 
 class FakeVectors:

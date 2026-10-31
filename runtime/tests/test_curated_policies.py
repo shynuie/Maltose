@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from myagent.knowledge.curation import CuratedKnowledgeStore, KnowledgeProposal, KnowledgeProposalStore
+from maltose.knowledge.curation import CuratedKnowledgeStore, KnowledgeProposal, KnowledgeProposalStore
 
 
 class CuratedPolicyTests(unittest.TestCase):

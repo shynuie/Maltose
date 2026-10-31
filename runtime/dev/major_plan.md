@@ -1,4 +1,4 @@
-# MyAgent Major Development Plan
+# Maltose Major Development Plan
 
 > 這是全專案層級的 roadmap。各 feature 的詳細需求、架構、測試與進度，請以 `dev/features/` 下的 feature plan 為準。
 
@@ -17,6 +17,8 @@ MyAgent 是一個以語音互動為主的個人 Agent，核心開發方向如下
 3. Document Knowledge Base：以原始文件為 source of truth，提供可追蹤、可修復的文件檢索能力。
 4. 可觀測與可恢復的 background services：長時間運作時能看見狀態，重啟後不遺失重要工作。
 
+現行產品整合見 [Maltose 產品整合](features/maltose_unification_dev_plan.md)，保留本頁既有語音、文件與隔離工作。
+
 ## Feature Roadmap
 
 | Feature | 狀態 | 詳細計畫 | 下一個主要里程碑 |
@@ -25,6 +27,7 @@ MyAgent 是一個以語音互動為主的個人 Agent，核心開發方向如下
 | Voice interaction loop | `in_progress` | [voice_dev_plan.md](features/voice_dev_plan.md) | TTS audio render/play pipeline |
 | KWS sensitivity and audio front-end | `in_progress` | [kws_dev_plan.md](features/kws_dev_plan.md) | dataset、offline replay、AGC/NS evaluation |
 | TaskBrain / Memory | `in_progress` | 待建立獨立 feature plan | 整理 Memory、tools 與 session 的長期邊界 |
+| Maltose native UI integration | `in_progress` | [maltose_ui_dev_plan.md](features/maltose_ui_dev_plan.md) | runtime events、Awareness、批准配對與獨立 uv sidecar |
 | Web UI / Agent Runtime | `in_progress` | [web_ui_dev_plan.md](features/web_ui_dev_plan.md) | runtime events、local Web UI、统一输入边界 |
 | Filesystem Sandbox | `done` | [filesystem_sandbox_dev_plan.md](features/filesystem_sandbox_dev_plan.md) | PathResolver、policy、approval、KDB bridge 與受控 file tools |
 | Command Execution Sandbox | `in_progress` | [command_execution_sandbox_dev_plan.md](features/command_execution_sandbox_dev_plan.md) | restricted network backend、跨平台 hardening 與 package-install smoke test |

@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.execution.artifacts import ArtifactPromoter
-from myagent.execution.models import OutputArtifact
-from myagent.filesystem.paths import FilesystemRoot, PathResolver
-from myagent.filesystem.policy import PolicyEngine, WorkingRoot
-from myagent.filesystem.service import FileService
+from maltose.execution.artifacts import ArtifactPromoter
+from maltose.execution.models import OutputArtifact
+from maltose.filesystem.paths import FilesystemRoot, PathResolver
+from maltose.filesystem.policy import PolicyEngine, WorkingRoot
+from maltose.filesystem.service import FileService
 
 
 class ExecutionArtifactPolicyTests(unittest.TestCase):

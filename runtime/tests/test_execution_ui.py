@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.execution.ui import ExecutionApprovalUI
-from myagent.filesystem.approval import ApprovalManager
+from maltose.execution.ui import ExecutionApprovalUI
+from maltose.filesystem.approval import ApprovalManager
 
 
 class ExecutionApprovalUITests(unittest.TestCase):

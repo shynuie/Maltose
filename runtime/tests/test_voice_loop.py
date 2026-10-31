@@ -1,6 +1,6 @@
 import unittest
 
-from myagent.voice.loop_cli import build_parser
+from maltose.voice.loop_cli import build_parser
 
 
 class VoiceLoopCLITest(unittest.TestCase):

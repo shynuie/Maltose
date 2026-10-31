@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 import unittest
 
-from myagent.voice import MacOSAudioPlayer, MacOSSayAudioRenderer, MacOSSayTTS, TTSRequest
+from maltose.voice import MacOSAudioPlayer, MacOSSayAudioRenderer, MacOSSayTTS, TTSRequest
 
 
 class MacOSSayTTSTest(unittest.TestCase):
@@ -10,8 +10,8 @@ class MacOSSayTTSTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cannot be empty"):
             MacOSSayTTS().synthesize(TTSRequest(text=" "))
 
-    @patch("myagent.voice.tts.platform.system", return_value="Darwin")
-    @patch("myagent.voice.tts.subprocess.Popen")
+    @patch("maltose.voice.tts.platform.system", return_value="Darwin")
+    @patch("maltose.voice.tts.subprocess.Popen")
     def test_builds_say_command(self, popen, _system) -> None:
         process = MagicMock()
         process.wait.return_value = 0
@@ -30,8 +30,8 @@ class MacOSSayTTSTest(unittest.TestCase):
             ["say", "-v", "Samantha", "-r", "180", "-o", "hello.aiff", "hello"],
         )
 
-    @patch("myagent.voice.tts.platform.system", return_value="Darwin")
-    @patch("myagent.voice.tts.subprocess.Popen")
+    @patch("maltose.voice.tts.platform.system", return_value="Darwin")
+    @patch("maltose.voice.tts.subprocess.Popen")
     def test_stop_terminates_the_active_speech(self, popen, _system) -> None:
         process = MagicMock()
         process.wait.side_effect = lambda: 0
@@ -46,10 +46,10 @@ class MacOSSayTTSTest(unittest.TestCase):
         process.terminate.assert_called_once_with()
         self.assertFalse(speaker.stop())
 
-    @patch("myagent.voice.tts.platform.system", return_value="Darwin")
-    @patch("myagent.voice.tts.subprocess.Popen")
-    @patch("myagent.voice.tts.os.close")
-    @patch("myagent.voice.tts.tempfile.mkstemp", return_value=(3, "/tmp/myagent-tts.aiff"))
+    @patch("maltose.voice.tts.platform.system", return_value="Darwin")
+    @patch("maltose.voice.tts.subprocess.Popen")
+    @patch("maltose.voice.tts.os.close")
+    @patch("maltose.voice.tts.tempfile.mkstemp", return_value=(3, "/tmp/maltose-tts.aiff"))
     def test_renderer_creates_owned_audio_artifact(self, mkstemp, close, popen, _system) -> None:
         process = MagicMock()
         process.wait.return_value = 0
@@ -57,15 +57,15 @@ class MacOSSayTTSTest(unittest.TestCase):
         popen.return_value = process
         rendered = MacOSSayAudioRenderer().render(TTSRequest(text="hello", rate=180))
 
-        self.assertEqual(rendered.path, Path("/tmp/myagent-tts.aiff"))
+        self.assertEqual(rendered.path, Path("/tmp/maltose-tts.aiff"))
         self.assertTrue(rendered.cleanup_after_use)
         popen.assert_called_once_with(
-            ["say", "-r", "180", "-o", "/tmp/myagent-tts.aiff", "hello"],
+            ["say", "-r", "180", "-o", "/tmp/maltose-tts.aiff", "hello"],
         )
         rendered.cleanup()
 
-    @patch("myagent.voice.tts.platform.system", return_value="Darwin")
-    @patch("myagent.voice.tts.subprocess.Popen")
+    @patch("maltose.voice.tts.platform.system", return_value="Darwin")
+    @patch("maltose.voice.tts.subprocess.Popen")
     def test_audio_player_uses_afplay_and_can_stop(self, popen, _system) -> None:
         process = MagicMock()
         process.wait.side_effect = lambda: 0
@@ -78,7 +78,7 @@ class MacOSSayTTSTest(unittest.TestCase):
         popen.assert_called_once_with(["afplay", "hello.aiff"])
 
     def test_renderer_rejects_non_macos(self) -> None:
-        with patch("myagent.voice.tts.platform.system", return_value="Linux"):
+        with patch("maltose.voice.tts.platform.system", return_value="Linux"):
             with self.assertRaisesRegex(RuntimeError, "only works on macOS"):
                 MacOSSayAudioRenderer().render(TTSRequest(text="hello"))
 

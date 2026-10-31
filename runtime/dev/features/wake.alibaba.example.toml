@@ -7,4 +7,4 @@ fallback_config = "../../wake.toml"
 [wake.alibaba]
 # ModelScope cache path after downloading the model.
 model_dir = "/Users/Marvin/.cache/modelscope/models/damo--speech_dfsmn_kws_char_farfield_16k_nihaomiya/snapshots/master"
-python = "/private/tmp/myagent-kws310/bin/python"
+python = "../../.venvs/kws310/bin/python"

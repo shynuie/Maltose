@@ -11,6 +11,11 @@ if [[ -f .env ]]; then
   set +a
 fi
 
+if [[ ${MALTOSE_BRAIN+x} == x ]]; then export MYAGENT_BRAIN="$MALTOSE_BRAIN"; fi
+if [[ ${MALTOSE_WEB_URL+x} == x ]]; then export MYAGENT_WEB_URL="$MALTOSE_WEB_URL"; fi
+if [[ ${MALTOSE_WEB_STARTUP_TIMEOUT+x} == x ]]; then export MYAGENT_WEB_STARTUP_TIMEOUT="$MALTOSE_WEB_STARTUP_TIMEOUT"; fi
+if [[ ${MALTOSE_OPEN_BROWSER+x} == x ]]; then export MYAGENT_OPEN_BROWSER="$MALTOSE_OPEN_BROWSER"; fi
+if [[ ${MALTOSE_BROWSER_APP+x} == x ]]; then export MYAGENT_BROWSER_APP="$MALTOSE_BROWSER_APP"; fi
 EXTRAS=(--extra wake --extra qwen-asr --extra vector-memory --extra speaker)
 DEFAULT_BRAIN="${MYAGENT_BRAIN:-taskbrain}"
 WATCHER_PID=""
@@ -38,22 +43,22 @@ cleanup() {
 
 trap cleanup EXIT
 
-uv run "${EXTRAS[@]}" myagent-documents watch >"$KNOWLEDGE_LOG_FILE" 2>&1 &
+uv run "${EXTRAS[@]}" maltose-documents watch >"$KNOWLEDGE_LOG_FILE" 2>&1 &
 WATCHER_PID=$!
 
 # Start the local UI by default; additional arguments still pass through to
-# myagent, so callers can override the normal runtime configuration.
-uv run "${EXTRAS[@]}" myagent --web --brain "$DEFAULT_BRAIN" "$@" &
+# maltose, so callers can override the normal runtime configuration.
+uv run "${EXTRAS[@]}" maltose --web --brain "$DEFAULT_BRAIN" "$@" &
 AGENT_PID=$!
 
 wait_for_web_ui() {
   local deadline=$((SECONDS + WEB_STARTUP_TIMEOUT))
   while (( SECONDS < deadline )); do
+    if ! kill -0 "$AGENT_PID" 2>/dev/null; then
+      return 2
+    fi
     if curl --silent --fail --max-time 1 "$WEB_URL" >/dev/null 2>&1; then
       return 0
-    fi
-    if ! kill -0 "$AGENT_PID" 2>/dev/null; then
-      return 1
     fi
     sleep 0.25
   done
@@ -64,8 +69,15 @@ open_web_ui() {
   if [[ "${MYAGENT_OPEN_BROWSER:-1}" == "0" ]]; then
     return 0
   fi
-  if ! wait_for_web_ui; then
-    printf 'MyAgent UI did not become ready at %s\n' "$WEB_URL" >&2
+  if wait_for_web_ui; then
+    :
+  else
+    local startup_status=$?
+    if [[ "$startup_status" == "2" ]]; then
+      printf 'Maltose 已在 UI 就緒前結束，請查看上方啟動錯誤。\n' >&2
+    else
+      printf 'Maltose UI did not become ready at %s\n' "$WEB_URL" >&2
+    fi
     return 0
   fi
 
@@ -88,7 +100,7 @@ open_web_ui() {
       start "" "$WEB_URL"
       ;;
     *)
-      printf 'MyAgent UI is ready at %s\n' "$WEB_URL"
+      printf 'Maltose UI is ready at %s\n' "$WEB_URL"
       ;;
   esac
 }

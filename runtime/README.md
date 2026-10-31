@@ -1,4 +1,4 @@
-# MyAgent
+# Maltose
 
 Architecture overview: open [ARCHITECTURE.html](ARCHITECTURE.html) for a
 standalone visual flow diagram, or read [ARCHITECTURE.md](ARCHITECTURE.md) for
@@ -12,12 +12,12 @@ segments. The model stream is read in the background while TTS speaks the
 already completed segment. Endpoints must support OpenAI-compatible `stream:
 true` SSE output.
 
-MyAgent is a local voice assistant with wake-word detection, speech recognition,
+Maltose is a local voice assistant with wake-word detection, speech recognition,
 TaskBrain orchestration, user-scoped memory, web search, and optional MCP tools.
 
 ## Status
 
-The main runtime configuration lives in `myagent.toml`. CLI flags remain
+The main runtime configuration lives in `maltose.toml`. CLI flags remain
 available as temporary overrides.
 
 Development planning and architecture progress are centralized under
@@ -36,7 +36,7 @@ uv sync --extra wake --extra qwen-asr --extra vector-memory --extra speaker
 Create the unified configuration:
 
 ```sh
-cp myagent.toml.example myagent.toml
+cp maltose.toml.example maltose.toml
 ```
 
 Put API credentials in `.env`:
@@ -56,11 +56,11 @@ Start the assistant:
 啟動完成後會自動在系統預設瀏覽器開啟本機 Web UI；可用
 `MYAGENT_BROWSER_APP="Google Chrome" ./start` 指定 macOS 瀏覽器，或用
 `MYAGENT_OPEN_BROWSER=0 ./start` 關閉自動開啟。
-若只需要手動 indexing，可直接使用 `uv run myagent-documents index`。
+若只需要手動 indexing，可直接使用 `uv run maltose-documents index`。
 
 The example configuration uses microphone device `3`, `wake.toml`, Qwen3-ASR,
 LanceDB memory, Brave search, and the `default` user. Change these values in
-`myagent.toml`; the file is ignored by Git because it may contain local paths
+`maltose.toml`; the file is ignored by Git because it may contain local paths
 or credentials.
 
 Use another configuration file when needed:
@@ -80,13 +80,13 @@ uv sync
 Speak text with the macOS local TTS provider:
 
 ```sh
-uv run myagent-tts "Hello from MyAgent"
+uv run maltose-tts "Hello from Maltose"
 ```
 
 Write audio to a file:
 
 ```sh
-uv run myagent-tts "Hello from MyAgent" --output hello.aiff
+uv run maltose-tts "Hello from Maltose" --output hello.aiff
 ```
 
 ## STT
@@ -94,19 +94,19 @@ uv run myagent-tts "Hello from MyAgent" --output hello.aiff
 Transcribe an audio file locally with faster-whisper:
 
 ```sh
-uv run myagent-stt --file input.wav
+uv run maltose-stt --file input.wav
 ```
 
 The default STT language hint is Mandarin Chinese:
 
 ```sh
-uv run myagent-stt --file input.wav --language zh
+uv run maltose-stt --file input.wav --language zh
 ```
 
 The default provider is local Qwen3-ASR-0.6B. Fun-ASR-Nano and faster-whisper remain available for comparison:
 
 ```sh
-uv run --extra funasr myagent-stt --provider fun-asr-nano --file input.wav --language zh
+uv run --extra funasr maltose-stt --provider fun-asr-nano --file input.wav --language zh
 ```
 
 Fun-ASR-Nano is currently experimental. It runs locally on Apple Silicon CPU, but needs a larger model download and may retain or misrecognize part of the wake word.
@@ -116,7 +116,7 @@ MPS can be selected for testing with `--stt-device mps`, but CPU is currently th
 Qwen3-ASR-0.6B is also available as a local provider:
 
 ```sh
-uv run --extra qwen-asr myagent-stt --provider qwen3-asr-0.6b --file input.wav --language zh
+uv run --extra qwen-asr maltose-stt --provider qwen3-asr-0.6b --file input.wav --language zh
 ```
 
 ## OpenClaw Brain
@@ -124,7 +124,7 @@ uv run --extra qwen-asr myagent-stt --provider qwen3-asr-0.6b --file input.wav -
 Run the voice agent with OpenClaw as the reasoning backend:
 
 ```sh
-uv run --extra qwen-asr myagent \
+uv run --extra qwen-asr maltose \
   --brain openclaw \
   --wake-config wake.toml \
   --device 3
@@ -134,7 +134,7 @@ The OpenClaw Gateway must be running on `127.0.0.1:18789`, with its OpenAI-compa
 
 ## Local TaskBrain
 
-TaskBrain keeps orchestration, tools, and memory in MyAgent. The default model
+TaskBrain keeps orchestration, tools, and memory in Maltose. The default model
 backend is the OpenAI API; any OpenAI-compatible local endpoint can still be
 selected with `--taskbrain-url`.
 
@@ -147,7 +147,7 @@ process and is sent only to the configured model endpoint.
 The default memory backend is LanceDB. The first built-in tools are
 `remember`, `recall`, and `return_to_standby`; custom tools can be registered through `ToolRegistry`.
 MCP servers and Skills are exposed through capability adapters. Add stdio MCP
-servers in `myagent.toml`:
+servers in `maltose.toml`:
 
 ```toml
 [taskbrain]
@@ -205,15 +205,15 @@ uv sync --extra wake --extra qwen-asr --extra vector-memory --extra speaker
 Index, list, and search documents with the dedicated CLI:
 
 ```sh
-uv run myagent-documents index
-uv run myagent-documents index --force
-uv run myagent-documents repair
-uv run myagent-documents repair --prune-orphans
-uv run myagent-documents queue
-uv run myagent-documents queue --status failed
-uv run myagent-documents list
-uv run myagent-documents search "我的碩士論文"
-uv run myagent-documents watch
+uv run maltose-documents index
+uv run maltose-documents index --force
+uv run maltose-documents repair
+uv run maltose-documents repair --prune-orphans
+uv run maltose-documents queue
+uv run maltose-documents queue --status failed
+uv run maltose-documents list
+uv run maltose-documents search "我的碩士論文"
+uv run maltose-documents watch
 ```
 
 `watch` 會在目前 process 中持續監控 `documents/`，自動處理新增、修改、移動與刪除。可用 `--poll-interval` 調整掃描間隔，使用 `--max-attempts` 設定單一文件的 indexing retry 次數；indexing queue 儲存在 SQLite，重啟後可恢復未完成的 queue job。
@@ -256,7 +256,7 @@ uv sync --extra speaker
 Enroll one user with several short, clean WAV recordings:
 
 ```sh
-uv run --extra speaker myagent-speaker-enroll --user-id marvin
+uv run --extra speaker maltose-speaker-enroll --user-id marvin
 ```
 
 The interactive enrollment flow presents eight fixed Mandarin prompts one at a
@@ -268,12 +268,12 @@ explicit confirmation. New users receive stable sequential IDs such as
 `user-001`; display names remain profile data rather than system IDs. If a
 voice cannot be matched, the runtime marks the turn as `unknown` and does not
 read personal memory, profiles, tasks, or schedules. The fixed-file batch utility remains available as
-`myagent-speaker-enroll-files`.
+`maltose-speaker-enroll-files`.
 
 Enable recognition in the main agent:
 
 ```sh
-uv run --extra speaker myagent --brain taskbrain \
+uv run --extra speaker maltose --brain taskbrain \
   --speaker-recognition speechbrain \
   --speaker-profiles data/speaker/speaker_profiles.sqlite3
 ```
@@ -281,7 +281,7 @@ uv run --extra speaker myagent --brain taskbrain \
 To test the current profiles interactively without starting the full agent:
 
 ```sh
-uv run --extra speaker myagent-speaker-test
+uv run --extra speaker maltose-speaker-test
 ```
 
 Speak one utterance at a time. The CLI automatically detects speech boundaries
@@ -291,7 +291,7 @@ status. Use `Ctrl-C` to stop.
 The current starting threshold is `0.35`; calibrate it using recordings from the real
 microphone and room. Recognition compares against each enrolled sample and
 uses the highest similarity score. Speaker recognition is an identity hint, not a secure
-authentication mechanism, and raw enrollment audio is not stored by MyAgent. Recognition
+authentication mechanism, and raw enrollment audio is not stored by Maltose. Recognition
 runs in a single background worker so it does not block STT or the LLM. The runtime keeps
 a `current_user` snapshot with hysteresis: scores below `0.20` become `unknown`, scores
 from `0.20` up to `0.35` keep the previous user but are marked `ambiguous`, and scores
@@ -304,25 +304,25 @@ not calibrated statistical probabilities.
 Listen from the microphone and save each detected utterance:
 
 ```sh
-uv run myagent-listen
+uv run maltose-listen
 ```
 
 List available audio devices:
 
 ```sh
-uv run myagent-listen --list-devices
+uv run maltose-listen --list-devices
 ```
 
 Optionally transcribe each utterance after it is saved:
 
 ```sh
-uv run myagent-listen --transcribe
+uv run maltose-listen --transcribe
 ```
 
 Runtime output uses timestamped logs:
 
 ```text
-2026-09-19 16:20:34 INFO myagent.voice.listen_cli - speech_started
+2026-09-19 16:20:34 INFO maltose.voice.listen_cli - speech_started
 ```
 
 ## Voice Loop
@@ -330,14 +330,14 @@ Runtime output uses timestamped logs:
 Run a minimal local listen-transcribe-speak loop:
 
 ```sh
-uv run myagent-voice-loop --device 4 --max-turns 1
+uv run maltose-voice-loop --device 4 --max-turns 1
 ```
 
 The first voice loop replies by echoing the transcript through local TTS.
 
 ## Main Voice Agent
 
-Run the main agent with `myagent.toml`. It remains alive until `Ctrl+C`:
+Run the main agent with `maltose.toml`. It remains alive until `Ctrl+C`:
 
 ```sh
 ./start
@@ -347,14 +347,14 @@ For a one-off override, pass a CLI flag. CLI values take precedence over the
 configuration file:
 
 ```sh
-./start --config myagent.toml --device 3 --wake-config wake.toml
+./start --config maltose.toml --device 3 --wake-config wake.toml
 ```
 
 Enable wake word gating with a sherpa-onnx KWS config. This is already enabled
-by the example `myagent.toml`; the standalone override is:
+by the example `maltose.toml`; the standalone override is:
 
 ```sh
-uv run myagent --wake-config wake.toml
+uv run maltose --wake-config wake.toml
 ```
 
 ### macOS Location Helper
@@ -367,7 +367,7 @@ Build the optional native Core Location helper once:
 
 The first time `get_location` is requested, macOS may ask for Location
 Services permission. The helper returns latitude, longitude, accuracy, and a
-timestamp. Configure its path in `myagent.toml`:
+timestamp. Configure its path in `maltose.toml`:
 
 ```toml
 [environment]
@@ -427,12 +427,12 @@ with `cancel_schedule`.
 Speak a short acknowledgement after wake detection:
 
 ```sh
-uv run --extra wake myagent --wake-config wake.toml --device 3 --wake-ack 我在 --wake-ack-delay 0.8
+uv run --extra wake maltose --wake-config wake.toml --device 3 --wake-ack 我在 --wake-ack-delay 0.8
 ```
 
-With `--wake-ack`, MyAgent waits briefly for follow-up speech after the wake word.
+With `--wake-ack`, Maltose waits briefly for follow-up speech after the wake word.
 If speech starts before the delay expires, it processes the command directly; otherwise it says the acknowledgement.
-For one-shot commands, MyAgent keeps `--wake-buffer-ms 1000` of audio before wake detection and prepends it when follow-up speech starts.
+For one-shot commands, Maltose keeps `--wake-buffer-ms 1000` of audio before wake detection and prepends it when follow-up speech starts.
 
 Wake word detection also applies conservative frame-level peak normalization before sherpa-onnx KWS by default.
 Configure it in `wake.toml` with `normalize_audio`, `target_peak`, `min_peak`, and `max_gain`.
@@ -444,13 +444,13 @@ Disable it with `--no-normalize-stt-audio`.
 Monitor wake word detection and input volume live:
 
 ```sh
-uv run --extra wake myagent-wake-monitor --wake-config wake.toml --device 3
+uv run --extra wake maltose-wake-monitor --wake-config wake.toml --device 3
 ```
 
 Test the two-stage wake listening flow:
 
 ```sh
-uv run --extra wake myagent-listen --wake-config wake.toml --device 3 --max-utterances 1 --transcribe
+uv run --extra wake maltose-listen --wake-config wake.toml --device 3 --max-utterances 1 --transcribe
 ```
 
 Example `wake.toml`:
@@ -479,3 +479,14 @@ Generate it from raw keywords with the model's matching `tokens.txt` and token t
 
 - Keep the README lightweight until the core design is decided.
 - Add setup, usage, and architecture notes only after they match the actual implementation.
+
+
+### Alibaba KWS 持久環境
+
+Alibaba KWS 使用獨立 Python 3.10，主 Agent 維持 Python 3.12。環境放在 `.venvs/kws310`，不能放在會被清理的 `/tmp`。若環境遺失，在專案目錄重建：
+
+```sh
+uv run --no-sync python dev/tools/setup_kws_runtime.py
+```
+
+`wake.toml` 的 `[wake.alibaba]` 使用 `python = ".venvs/kws310/bin/python"`。相對 interpreter 路徑以 config 所在位置解讀；裸 `python3.10` 保留 PATH 查找。重建工具只同步獨立 KWS 環境，使用鎖定版本及雜湊，不修改主環境或模型；本機已在 macOS arm64／Python 3.10.19 驗證。初始化可等候 60 秒，後續 IPC 請求仍限制 20 秒。實測與限制見 [KWS 開發紀錄](dev/features/kws_dev_plan.md)。

@@ -4,6 +4,8 @@
 
 ## 文件入口
 
+- [Maltose 產品整合](features/maltose_unification_dev_plan.md)：現行原生 App、主 Agent 與 Codex 的整合工作。
+
 - [Major Plan](major_plan.md)：全專案 roadmap、優先級與 feature 狀態。
 - [KDB Feature Plan](features/kdb_dev_plan.md)：Document Knowledge Base 的詳細規格與進度。
 - [Development Agents](agents/README.md)：只服務於開發流程的 Agent 定義與角色規則。

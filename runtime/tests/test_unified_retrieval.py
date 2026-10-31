@@ -4,14 +4,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.curation import CuratedKnowledgeStore, KnowledgeProposalStore
-from myagent.knowledge.models import ScannedFile
-from myagent.knowledge.repositories import MetadataRepository
-from myagent.knowledge.retrieval import DocumentKnowledgeService
-from myagent.knowledge.scanner import DocumentScanner
-from myagent.knowledge.source_reader import SourceReader
-from myagent.knowledge.parsers import ParserRegistry, TextParser
-from myagent.knowledge.unified_retrieval import UnifiedKnowledgeService
+from maltose.knowledge.curation import CuratedKnowledgeStore, KnowledgeProposalStore
+from maltose.knowledge.models import ScannedFile
+from maltose.knowledge.repositories import MetadataRepository
+from maltose.knowledge.retrieval import DocumentKnowledgeService
+from maltose.knowledge.scanner import DocumentScanner
+from maltose.knowledge.source_reader import SourceReader
+from maltose.knowledge.parsers import ParserRegistry, TextParser
+from maltose.knowledge.unified_retrieval import UnifiedKnowledgeService
 
 
 class FakeEmbedder:

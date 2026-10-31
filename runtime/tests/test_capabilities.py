@@ -2,12 +2,12 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from myagent.agent.capabilities import (
+from maltose.agent.capabilities import (
     MCPToolAdapter,
     SkillManifestLoader,
     StaticSkillAdapter,
 )
-from myagent.agent.taskbrain import ToolRegistry
+from maltose.agent.taskbrain import ToolRegistry
 
 
 class FakeMCPClient:
@@ -33,7 +33,7 @@ class CapabilityAdapterTest(unittest.TestCase):
             {"greet": lambda args: f"hello {args['name']}"},
         )
         registry = ToolRegistry()
-        from myagent.agent.capabilities import register_capability_adapter
+        from maltose.agent.capabilities import register_capability_adapter
 
         register_capability_adapter(registry, adapter, prefix="skill_")
         self.assertEqual(registry.execute("skill_greet", {"name": "Marvin"}), "hello Marvin")
@@ -42,7 +42,7 @@ class CapabilityAdapterTest(unittest.TestCase):
         client = FakeMCPClient()
         adapter = MCPToolAdapter(client)
         registry = ToolRegistry()
-        from myagent.agent.capabilities import register_capability_adapter
+        from maltose.agent.capabilities import register_capability_adapter
 
         register_capability_adapter(registry, adapter, prefix="mcp_")
         self.assertEqual(registry.execute("mcp_calendar_create", {"title": "Demo"}), {"ok": True})
@@ -60,7 +60,7 @@ class CapabilityAdapterTest(unittest.TestCase):
                 {"demo_echo": lambda args: args["text"]},
             )
             registry = ToolRegistry()
-            from myagent.agent.capabilities import register_capability_adapter
+            from maltose.agent.capabilities import register_capability_adapter
 
             register_capability_adapter(registry, adapter)
             self.assertEqual(registry.execute("demo_echo", {"text": "ok"}), "ok")

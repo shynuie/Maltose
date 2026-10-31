@@ -5,13 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.embeddings import EmbeddingProvider
-from myagent.knowledge.models import DocumentLocation
-from myagent.knowledge.parsers import MarkdownParser, ParserRegistry, TextParser
-from myagent.knowledge.repositories import MetadataRepository
-from myagent.knowledge.retrieval import DocumentKnowledgeService
-from myagent.knowledge.scanner import DocumentScanner
-from myagent.knowledge.source_reader import SourceReader
+from maltose.knowledge.embeddings import EmbeddingProvider
+from maltose.knowledge.models import DocumentLocation
+from maltose.knowledge.parsers import MarkdownParser, ParserRegistry, TextParser
+from maltose.knowledge.repositories import MetadataRepository
+from maltose.knowledge.retrieval import DocumentKnowledgeService
+from maltose.knowledge.scanner import DocumentScanner
+from maltose.knowledge.source_reader import SourceReader
 
 
 class FakeEmbedder:

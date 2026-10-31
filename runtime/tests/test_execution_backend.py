@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.execution.backend import BackendCapabilities, MountSpec
+from maltose.execution.backend import BackendCapabilities, MountSpec
 
 
 class ExecutionBackendBoundaryTests(unittest.TestCase):

@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from myagent.agent import BraveSearchProvider, SearchResult, WebResearchWorker
+from maltose.agent import BraveSearchProvider, SearchResult, WebResearchWorker
 
 
 class SearchProviderTest(unittest.TestCase):
@@ -11,7 +11,7 @@ class SearchProviderTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "BRAVE_SEARCH_API_KEY"):
                 BraveSearchProvider()
 
-    @patch("myagent.agent.search.urllib.request.urlopen")
+    @patch("maltose.agent.search.urllib.request.urlopen")
     def test_parses_brave_results_and_bounds_snippets(self, urlopen) -> None:
         response = urlopen.return_value.__enter__.return_value
         response.read.return_value = json.dumps(

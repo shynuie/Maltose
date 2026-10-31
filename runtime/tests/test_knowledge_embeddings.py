@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from myagent.knowledge.embeddings import LazyEmbeddingProvider
+from maltose.knowledge.embeddings import LazyEmbeddingProvider
 
 
 class FakeProvider:

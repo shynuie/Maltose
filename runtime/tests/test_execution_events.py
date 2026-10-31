@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from myagent.execution.events import ExecutionEvent, ExecutionEventType, publish_to_event_hub
-from myagent.runtime import EventHub
+from maltose.execution.events import ExecutionEvent, ExecutionEventType, publish_to_event_hub
+from maltose.runtime import EventHub
 
 
 class ExecutionEventTests(unittest.TestCase):

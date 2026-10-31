@@ -49,7 +49,7 @@ Agent -> ExecutionPolicy -> Approval/UI -> ExecutionBroker
 
 ### Phase 0 - Architecture & Boundary
 
-狀態：`in_progress`
+狀態：`done`
 
 - [x] 定義 `ExecutionRequest`、profiles、approval scope、result 與 audit schema。
 - [x] 固定 execution sandbox 與 FileService 的責任邊界。
@@ -59,12 +59,12 @@ Agent -> ExecutionPolicy -> Approval/UI -> ExecutionBroker
 
 ### Phase 1 - Disposable Workspace Backend
 
-狀態：`in_progress`
+狀態：`done`
 
 - [x] 實作 Docker backend command boundary，支援 read-only image、working-root mount、temporary writable storage。
 - [x] 實作 argv-only execution，禁止未明確要求的 shell composition。
 - [x] 實作 timeout、memory、PID 與 stdout/stderr limit enforcement hooks。
-- [ ] 完成跨 Docker storage driver 的 writable-layer disk quota enforcement；当前仅对 tmpfs 与 output 做 quota，unsupported driver 不伪造保证。
+- [x] 完成跨 Docker storage driver 的 writable-layer disk quota enforcement；支援的 driver 使用 `--storage-opt`，unsupported driver 明確暴露 capability 並不偽造保證。
 - [x] 實作 process-group cleanup hook；session recovery 與 daemon-level validation 待 integration phase。
 
 ### Phase 2 - Dependencies & Network
@@ -79,7 +79,7 @@ Agent -> ExecutionPolicy -> Approval/UI -> ExecutionBroker
 
 ### Phase 3 - Artifact Promotion & Runtime Integration
 
-狀態：`in_progress`
+狀態：`done`
 
 - [x] 將 output manifest、hash、size 與 destination policy 接入 FileService。
 - [x] 高風險 output promotion 使用 scoped approval；不得由 sandbox 直接寫 protected roots。
@@ -99,7 +99,7 @@ Agent -> ExecutionPolicy -> Approval/UI -> ExecutionBroker
 
 ### Phase 4 - Hardening & Platform Backends
 
-狀態：`in_progress`
+狀態：`done`
 
 - [x] 完成第一輪 Docker command/mount/network/credential fail-closed review。
 - [x] Docker backend 執行前驗證 daemon 可用性；不可用時不退回 host shell。
@@ -108,23 +108,23 @@ Agent -> ExecutionPolicy -> Approval/UI -> ExecutionBroker
 - [x] Docker execution 禁止 runtime image pull，避免 sandbox 外部出現隱含 network side effect。
 - [x] 批量 artifact promotion 在任何寫入前完成 source hash 與 destination preflight。
 - [x] 完成 container escape、symlink 與 resource exhaustion integration review。
-- [ ] 在 Linux 評估 Landlock / namespaces / seccomp 的額外限制。
-- [ ] 在 macOS 評估 App Sandbox helper 或 Virtualization.framework backend。
+- [x] 在 Linux 評估 Landlock / namespaces / seccomp 的額外限制；結論記錄於 ADR-002，Docker backend 不冒充未驗證的平台能力。
+- [x] 在 macOS 評估 App Sandbox helper 或 Virtualization.framework backend；結論記錄於 ADR-002，保留為後續獨立 backend 而不降低目前 Docker 隔離邊界。
 - [x] 明確記錄 backend 不可用時的 fail-closed 行為；不得自動退回 unrestricted host shell。
 
 ## 驗收標準
 
-- [ ] Agent 可以在 sandbox 內執行 Python、測試、編譯與 package install。
-- [ ] 執行程式無法讀寫未掛載的 protected roots、credentials、KDB state 或主機其他目錄。
-- [ ] working root 可依 profile 讀寫，但 command execution 不會取得整個 repository / home directory。
-- [ ] readable roots 對 sandbox 是 read-only；readable-only source 不會因 command execution 變成可刪除。
-- [ ] 所有 subprocess 都受 timeout、resource limit 與 process-tree cleanup 約束。
+- [x] Agent 可以在 sandbox 內執行 Python、測試、編譯與 package install。
+- [x] 執行程式無法讀寫未掛載的 protected roots、credentials、KDB state 或主機其他目錄。
+- [x] working root 可依 profile 讀寫，但 command execution 不會取得整個 repository / home directory。
+- [x] readable roots 對 sandbox 是 read-only；readable-only source 不會因 command execution 變成可刪除。
+- [x] 所有 subprocess 都受 timeout、resource limit 與 process-tree cleanup 約束。
 - [ ] network 預設 deny；restricted network 只允許 exact allowlist，且 approval 與 audit 可追蹤。
-- [ ] package install 寫入 sandbox environment，不污染 host Python/npm environment。
-- [ ] output 只有在 ArtifactPromoter + FileService 通過後才能寫回 working root。
-- [ ] backend 初始化失敗、approval timeout 或 policy 不明時 fail closed。
-- [ ] 不存在可由 Agent 直接取得的 host shell fallback。
-- [ ] security regression、integration tests、runtime smoke tests 通過。
+- [x] package install 寫入 sandbox environment，不污染 host Python/npm environment。
+- [x] output 只有在 ArtifactPromoter + FileService 通過後才能寫回 working root。
+- [x] backend 初始化失敗、approval timeout 或 policy 不明時 fail closed。
+- [x] 不存在可由 Agent 直接取得的 host shell fallback。
+- [x] security regression、integration tests、runtime smoke tests 通過。
 
 ## 測試策略
 
@@ -161,8 +161,9 @@ Agent -> ExecutionPolicy -> Approval/UI -> ExecutionBroker
   - [x] 驗證 readable roots 的 command mount 永遠是 read-only。
   - [x] 驗證未請求 readable root 不會出現在 execution mounts。
   - [x] 將 restricted-network 與 disk-quota backend capability 明確化；不支援時由 broker 提前拒絕。
+  - [x] 修正 Docker daemon storage-driver preflight parsing，讓支援 quota 的 storage driver 能正確啟用 writable-layer quota。
 - [x] 驗證 approval UI 可觸發 pending promotion resume。
-- 驗證：37 個 execution model/backend/broker/artifact/runtime/UI/tool/integration tests 通過；5 個 Docker integration tests 在 Docker Desktop 上通過；`py_compile` 與 `git diff --check` 通過。完整 unittest 仍有既有 optional-dependency/port sandbox failures。
-- 結果：Phase 0 control-plane boundary 已完成；Docker offline workspace backend 已通過真实 container security regression；Phase 1/2/3 持續 hardening。
-- 阻塞：restricted network proxy、跨 storage driver disk quota、Linux Landlock 與 macOS VM/App Sandbox 仍需各自 backend/runtime。
-- 下一步：完成 symlink/resource exhaustion integration review，並處理跨平台 backend 的明確 scope。
+- 驗證：40 個 execution model/backend/broker/artifact/runtime/UI/tool/integration tests 通過；5 個 Docker integration tests 在 Docker Desktop 上通過；approved bridge package-install smoke test 通過；`py_compile` 與 `git diff --check` 通過。完整 unittest 仍有既有 optional-dependency/port sandbox failures。
+- 結果：Phase 0/1 control-plane 與 disposable Docker workspace backend 已完成；Phase 3 artifact/runtime integration 已完成；Phase 2 僅剩 restricted allowlist proxy。
+- 阻塞：restricted network proxy；目前沒有可用的強制 allowlist proxy runtime，Docker `bridge` 不能安全地宣稱 exact-domain isolation。
+- 下一步：需要可用的 restricted-network proxy runtime，才能完成最後的 exact-domain network isolation 驗收。

@@ -6,9 +6,9 @@ import wave
 from collections import deque
 from pathlib import Path
 
-from myagent.voice import normalize_utterance_peak
-from myagent.voice.listening import Utterance, write_utterance_wav
-from myagent.voice.wake import create_wake_word_detector, load_wake_word_config
+from maltose.voice import normalize_utterance_peak
+from maltose.voice.listening import Utterance, write_utterance_wav
+from maltose.voice.wake import create_wake_word_detector, load_wake_word_config
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,7 +148,7 @@ def _transcribe(wav_path: Path, model: str, language: str) -> str:
         [
             "uv",
             "run",
-            "myagent-stt",
+            "maltose-stt",
             "--file",
             str(wav_path),
             "--model",

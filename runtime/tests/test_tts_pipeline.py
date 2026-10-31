@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.agent import AgentConfig, EchoBrain, VoiceAgent
-from myagent.voice import RenderedAudio, TTSRequest
+from maltose.agent import AgentConfig, EchoBrain, VoiceAgent
+from maltose.voice import RenderedAudio, TTSRequest
 
 
 class PreRenderedSpeaker:

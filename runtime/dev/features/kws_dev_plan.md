@@ -646,3 +646,17 @@ uv run --no-sync myagent-kws-replay \
 - 目前維持既有流程：KWS → VAD → STT。暫不將 VAD 放到 KWS 前，也暫不加入多 device 同時監聽。
 
 後續若重新開啟 KWS 工作，優先處理固定 evaluator／ROC 排序流程與資料／模型版本追蹤，再進行新模型訓練；不直接覆蓋目前 0998 的本地部署。
+
+
+## 2026-10-29：持久 KWS runtime 與啟動復原
+
+使用者 `./start --maltose` 在 UI 初始化之前停止，根因是 wake.toml 仍指向已遺失的 `/private/tmp/myagent-kws310/bin/python`。
+
+- 已將隔離環境重建至 `.venvs/kws310`（Python 3.10.19），wake.toml 改為相對該 config 的持久路徑；原模型、normalization、threshold 不變。
+- 新增 `dev/tools/setup_kws_runtime.py` 與 `dev/tools/kws-runtime/requirements.in`／含 SHA-256 的 requirements.txt，66 個套件鎖定，與主 Python 3.12／uv.lock 分離。
+- 保留 venv/bin/python symlink 路徑，避免誤跑 base interpreter；找不到 interpreter 時提供重建命令，CLI 明確顯示 KWS 啟動錯誤。
+- 初始化獨立容許 60 秒，PCM／health 回應上限維持 20 秒；失敗會關閉並回收子程序與 pipes。start 會保留 Agent 退出碼並指出啟動失敗。
+- 真正既有模型 READY 最終實測 3.75 秒；health、1 秒合成靜音、reset、shutdown 通過；未開麥克風或讀私人錄音。
+- 38 項相關回歸通過，含 7 個新 startup 案例。完整 MyAgent 281：273 通過、3 個已由 HEAD 重現的原有失敗、5 skipped；git diff --check 通過。
+
+需要重建時：`uv run --no-sync python dev/tools/setup_kws_runtime.py`。完整證據：`/Users/Marvin/Workspace/Maltose_UI/docs/verification/kws-startup-fix-report.md`。下一步由使用者重試 `./start --maltose`，驗收實際麥克風、正式模型與 UI 批准流程；不能把本次靜音測試視為真人喚醒率驗收。

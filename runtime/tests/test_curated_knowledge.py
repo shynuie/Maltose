@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.curation import CuratedKnowledgeStore, KnowledgeProposalStore
+from maltose.knowledge.curation import CuratedKnowledgeStore, KnowledgeProposalStore
 
 
 class CuratedKnowledgeStoreTests(unittest.TestCase):

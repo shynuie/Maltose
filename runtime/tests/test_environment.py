@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from myagent.agent.environment import EnvironmentTools
+from maltose.agent.environment import EnvironmentTools
 
 
 class EnvironmentToolsTest(unittest.TestCase):
@@ -21,7 +21,7 @@ class EnvironmentToolsTest(unittest.TestCase):
             {"location": "Taipei", "source": "configured"},
         )
 
-    @patch("myagent.agent.environment.urllib.request.urlopen")
+    @patch("maltose.agent.environment.urllib.request.urlopen")
     def test_ip_addresses_validate_external_response(self, urlopen) -> None:
         response = urlopen.return_value.__enter__.return_value
         response.read.return_value = json.dumps({"ip": "203.0.113.10"}).encode()
@@ -32,7 +32,7 @@ class EnvironmentToolsTest(unittest.TestCase):
         self.assertEqual(result["external_ip"], "203.0.113.10")
         self.assertIn("internal_ips", result)
 
-    @patch("myagent.agent.environment.urllib.request.urlopen")
+    @patch("maltose.agent.environment.urllib.request.urlopen")
     def test_ip_addresses_keep_internal_result_when_external_lookup_fails(self, urlopen) -> None:
         urlopen.side_effect = TimeoutError("TLS handshake timed out")
 

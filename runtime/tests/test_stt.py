@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import tempfile
 import unittest
 
-from myagent.voice import (
+from maltose.voice import (
     FasterWhisperSTT,
     FunASRNanoSTT,
     Qwen3ASRSTT,

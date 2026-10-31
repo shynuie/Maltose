@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.curation import CurationAuditLog
+from maltose.knowledge.curation import CurationAuditLog
 
 
 class CurationAuditPolicyTests(unittest.TestCase):

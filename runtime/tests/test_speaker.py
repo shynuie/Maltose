@@ -6,7 +6,7 @@ import unittest
 from array import array
 from pathlib import Path
 
-from myagent.voice import (
+from maltose.voice import (
     ProfileSpeakerIdentifier,
     SpeakerIdentityManager,
     SpeakerProfileStore,

@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.agent.taskbrain import MemoryStore, TaskBrain
-from myagent.knowledge.ingestion import DocumentIngestionService
-from myagent.knowledge.retrieval import DocumentKnowledgeService
-from myagent.knowledge.tools import DocumentToolAdapter
+from maltose.agent.taskbrain import MemoryStore, TaskBrain
+from maltose.knowledge.ingestion import DocumentIngestionService
+from maltose.knowledge.retrieval import DocumentKnowledgeService
+from maltose.knowledge.tools import DocumentToolAdapter
 
 
 class RecordingModel:
@@ -69,7 +69,7 @@ class KnowledgeTaskBrainIntegrationTests(unittest.TestCase):
                 model,
                 memory=MemoryStore(Path(directory) / "memory.json"),
             )
-            from myagent.agent.brain import TurnContext
+            from maltose.agent.brain import TurnContext
 
             brain.process(
                 "查詢文件",

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Iterator
 from unittest.mock import patch
 
-from myagent.agent import (
+from maltose.agent import (
     AgentConfig,
     AgentState,
     EchoBrain,
@@ -24,10 +24,10 @@ from myagent.agent import (
     TaskManager,
     TaskStore,
 )
-from myagent.agent.agent import PendingTurn
-from myagent.agent.cli import build_parser
-from myagent.agent.config import load_cli_defaults
-from myagent.voice import (
+from maltose.agent.agent import PendingTurn
+from maltose.agent.cli import build_parser
+from maltose.agent.config import load_cli_defaults
+from maltose.voice import (
     ListeningEvent,
     NullSpeakerIdentifier,
     SpeakerResult,
@@ -87,7 +87,7 @@ class EchoBrainTest(unittest.TestCase):
 
 
 class OpenClawBrainTest(unittest.TestCase):
-    @patch("myagent.agent.brain.urllib.request.urlopen")
+    @patch("maltose.agent.brain.urllib.request.urlopen")
     def test_sends_openai_compatible_request(self, urlopen) -> None:
         response = urlopen.return_value.__enter__.return_value
         response.read.return_value = json.dumps(
@@ -142,7 +142,7 @@ class TaskBrainTest(unittest.TestCase):
             ["根据目前结果，暂时没有更多资料。"],
         )
 
-    @patch("myagent.agent.taskbrain.urllib.request.urlopen")
+    @patch("maltose.agent.taskbrain.urllib.request.urlopen")
     def test_openai_model_disables_reasoning_for_chat_tools(self, urlopen) -> None:
         response = urlopen.return_value.__enter__.return_value
         response.read.return_value = json.dumps(
@@ -253,7 +253,7 @@ class TaskBrainTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             memory = MemoryStore(Path(tmpdir) / "memory.json")
             brain = TaskBrain(FakeModel(), memory=memory)
-            self.assertEqual(brain.process("請記住我喜歡綠茶"), "我記住了。")
+            self.assertEqual(brain.process("請記住我喜歡綠茶", TurnContext(user_id="default", speaker_status="identified")), "我記住了。")
             self.assertEqual(memory.search("綠茶")[0]["text"], "喜歡綠茶")
 
     def test_short_term_session_context_is_reused_and_cleared(self) -> None:
@@ -349,6 +349,8 @@ class TaskBrainTest(unittest.TestCase):
             profile = UserProfileStore(Path(tmpdir) / "memory.lancedb")
             profile.set_profile(display_name="Marvin")
             brain = TaskBrain(NoopModel(), profile=profile)
+            self.assertTrue(brain.tools.execute("get_user_profile", {})["requires_speaker_identification"])
+            brain.process("已驗證使用者", TurnContext(user_id="default", speaker_status="identified"))
             self.assertEqual(brain.tools.execute("get_user_profile", {}), {
                 "id": "default",
                 "display_name": "Marvin",
@@ -362,6 +364,8 @@ class TaskBrainTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             task_manager = TaskManager(TaskStore(Path(tmpdir) / "tasks.sqlite3"))
             brain = TaskBrain(NoopModel(), task_manager=task_manager)
+            self.assertTrue(brain.tools.execute("list_tasks", {})["requires_speaker_identification"])
+            brain.process("已驗證使用者", TurnContext(user_id="default", speaker_status="identified"))
             result = brain.tools.execute(
                 "create_task_plan",
                 {
@@ -1053,7 +1057,7 @@ class VoiceAgentTest(unittest.TestCase):
 class AgentCLITest(unittest.TestCase):
     def test_loads_unified_toml_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "myagent.toml"
+            path = Path(tmpdir) / "maltose.toml"
             path.write_text(
                 """[agent]\nbrain = \"taskbrain\"\ndevice = \"3\"\n\n[voice]\nnormalize_stt_audio = false\n\n[taskbrain]\nmemory_backend = \"lancedb\"\nmcp_command = [\"python server.py\"]\n""",
                 encoding="utf-8",

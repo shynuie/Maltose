@@ -3,7 +3,7 @@ import unittest
 import wave
 from pathlib import Path
 
-from myagent.voice.kws_record_cli import append_metadata, next_recording_path, write_pcm_wav
+from maltose.voice.kws_record_cli import append_metadata, next_recording_path, write_pcm_wav
 
 
 class KWSRecordTest(unittest.TestCase):

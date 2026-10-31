@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.change_detection import DocumentChangeDetector
-from myagent.knowledge.config import KnowledgeConfig
-from myagent.knowledge.repositories import MetadataRepository
-from myagent.knowledge.scanner import DocumentScanner
+from maltose.knowledge.change_detection import DocumentChangeDetector
+from maltose.knowledge.config import KnowledgeConfig
+from maltose.knowledge.repositories import MetadataRepository
+from maltose.knowledge.scanner import DocumentScanner
 
 
 class KnowledgeChangeDetectionTests(unittest.TestCase):

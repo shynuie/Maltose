@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from myagent.agent import (
+from maltose.agent import (
     AssistantMessageWorker,
     CodexReadOnlyWorker,
     FunctionTaskWorker,
@@ -133,7 +133,7 @@ class TaskManagerTest(unittest.TestCase):
             manager.shutdown()
             store.close()
 
-    @patch("myagent.agent.tasks.subprocess.run")
+    @patch("maltose.agent.tasks.subprocess.run")
     def test_codex_worker_uses_read_only_sandbox(self, run) -> None:
         run.return_value.returncode = 0
         run.return_value.stdout = "stdout result"

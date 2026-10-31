@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.filesystem.paths import FilesystemRoot, PathResolver
-from myagent.filesystem.policy import PolicyEngine
-from myagent.filesystem.service import FileService
-from myagent.filesystem.tools import FileToolAdapter
+from maltose.filesystem.paths import FilesystemRoot, PathResolver
+from maltose.filesystem.policy import PolicyEngine
+from maltose.filesystem.service import FileService
+from maltose.filesystem.tools import FileToolAdapter
 
 
 class FileServiceTests(unittest.TestCase):

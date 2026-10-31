@@ -4,14 +4,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.execution.artifacts import ArtifactPromoter, ArtifactPromotionApprovalRequired
-from myagent.execution.backend import BackendCapabilities
-from myagent.execution.broker import ExecutionBroker
-from myagent.execution.models import ExecutionRequest, ExecutionResult, OutputArtifact
-from myagent.filesystem.approval import ApprovalManager
-from myagent.filesystem.paths import FilesystemRoot, PathResolver
-from myagent.filesystem.policy import PolicyEngine, WorkingRoot
-from myagent.filesystem.service import FileService
+from maltose.execution.artifacts import ArtifactPromoter, ArtifactPromotionApprovalRequired
+from maltose.execution.backend import BackendCapabilities
+from maltose.execution.broker import ExecutionBroker
+from maltose.execution.models import ExecutionRequest, ExecutionResult, OutputArtifact
+from maltose.filesystem.approval import ApprovalManager
+from maltose.filesystem.paths import FilesystemRoot, PathResolver
+from maltose.filesystem.policy import PolicyEngine, WorkingRoot
+from maltose.filesystem.service import FileService
 
 
 class PromotionBackend:

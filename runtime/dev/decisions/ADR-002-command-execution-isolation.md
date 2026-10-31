@@ -1,6 +1,6 @@
 # ADR-002: Isolate Command Execution from the Host Filesystem
 
-- 狀態：`proposed`
+- 狀態：`accepted`
 - 日期：2026-10-01
 - 相關 feature：[Command Execution Sandbox](../features/command_execution_sandbox_dev_plan.md)
 
@@ -16,6 +16,15 @@ command execution 透過獨立的 `ExecutionBroker` 與 `SandboxBackend` 執行�
 只將 working root 以可寫 mount 暴露；readable roots 以唯讀 mount 或 input copy 暴露；protected roots、credentials、host sockets 與 KDB state 不暴露。sandbox output 必須經 `ArtifactPromoter` 與既有 `FileService` 才能寫回真實 working root。
 
 第一個 backend 以 rootless container 為優先候選；backend 不可用時 fail closed，不退回 unrestricted host shell。macOS VM / App Sandbox helper 與 Linux Landlock 等能力保留在 backend interface / hardening phase 評估。
+
+目前可用 backend 為 Docker。Docker Desktop 上採用 `overlay2` 時，writable-layer
+quota 會明確標示為 unsupported；`tmpfs`、memory、PID、timeout 與 output quota
+仍然啟用。restricted allowlist network 在沒有 proxy backend 時明確 fail closed，
+不以 `bridge` 假裝 exact-domain isolation。
+
+Linux Landlock、額外 namespace/seccomp profile 與 macOS
+Virtualization.framework/App Sandbox 屬於替代 backend 的平台實作，不會在 Docker
+backend 中以不可驗證的 flags 冒充支援。
 
 ## Alternatives Considered
 

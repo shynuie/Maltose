@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import unittest
 
-from myagent.execution.models import (
+from maltose.execution.models import (
     ExecutionLimits,
     ExecutionProfile,
     ExecutionRequest,
     NetworkPolicy,
     OutputArtifact,
 )
-from myagent.execution.policy import ExecutionPolicy
+from maltose.execution.policy import ExecutionPolicy
 
 
 class ExecutionModelTests(unittest.TestCase):

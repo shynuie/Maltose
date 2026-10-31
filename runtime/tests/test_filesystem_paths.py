@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.filesystem.paths import PathResolver
+from maltose.filesystem.paths import PathResolver
 
 
 class PathResolverTests(unittest.TestCase):

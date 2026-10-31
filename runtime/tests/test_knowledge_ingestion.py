@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.indexer import IndexResult
-from myagent.knowledge.ingestion import DocumentIngestionService
-from myagent.knowledge.scanner import DocumentScanner
+from maltose.knowledge.indexer import IndexResult
+from maltose.knowledge.ingestion import DocumentIngestionService
+from maltose.knowledge.scanner import DocumentScanner
 
 
 class FakeIndexer:

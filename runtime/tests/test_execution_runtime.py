@@ -4,12 +4,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.execution.backend import BackendCapabilities
-from myagent.execution.broker import ExecutionBroker
-from myagent.execution.events import ExecutionEventType
-from myagent.execution.metrics import ExecutionRuntimeMetrics
-from myagent.execution.models import ExecutionRequest, ExecutionResult
-from myagent.filesystem.approval import AuditLog
+from maltose.execution.backend import BackendCapabilities
+from maltose.execution.broker import ExecutionBroker
+from maltose.execution.events import ExecutionEventType
+from maltose.execution.metrics import ExecutionRuntimeMetrics
+from maltose.execution.models import ExecutionRequest, ExecutionResult
+from maltose.filesystem.approval import AuditLog
 
 
 class RuntimeBackend:

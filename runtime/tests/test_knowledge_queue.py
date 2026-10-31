@@ -5,9 +5,9 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from myagent.knowledge.indexer import IndexResult
-from myagent.knowledge.models import ScannedFile
-from myagent.knowledge.queue import IndexJobStatus, InMemoryIndexingQueue
+from maltose.knowledge.indexer import IndexResult
+from maltose.knowledge.models import ScannedFile
+from maltose.knowledge.queue import IndexJobStatus, InMemoryIndexingQueue
 
 
 def make_scanned_file(path: Path) -> ScannedFile:

@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.filesystem.approval import ApprovalManager, AuditLog
-from myagent.filesystem.paths import FilesystemRoot, PathResolver
-from myagent.filesystem.policy import ApprovalRequired, PolicyEngine, WorkingRoot
-from myagent.filesystem.service import FileService
+from maltose.filesystem.approval import ApprovalManager, AuditLog
+from maltose.filesystem.paths import FilesystemRoot, PathResolver
+from maltose.filesystem.policy import ApprovalRequired, PolicyEngine, WorkingRoot
+from maltose.filesystem.service import FileService
 
 
 class FilesystemApprovalTests(unittest.TestCase):

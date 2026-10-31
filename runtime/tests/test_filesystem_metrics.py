@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.filesystem.events import FilesystemMutationEvent, FilesystemMutationType
-from myagent.filesystem.metrics import FilesystemRuntimeMetrics
-from myagent.knowledge.mutation import DocumentMutationCoordinator
+from maltose.filesystem.events import FilesystemMutationEvent, FilesystemMutationType
+from maltose.filesystem.metrics import FilesystemRuntimeMetrics
+from maltose.knowledge.mutation import DocumentMutationCoordinator
 
 
 class FilesystemMetricsTests(unittest.TestCase):

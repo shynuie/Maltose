@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.chunker import DocumentChunker
-from myagent.knowledge.indexer import DocumentIndexer
-from myagent.knowledge.parsers import MarkdownParser, ParserRegistry, TextParser
-from myagent.knowledge.repositories import MetadataRepository
-from myagent.knowledge.scanner import DocumentScanner
+from maltose.knowledge.chunker import DocumentChunker
+from maltose.knowledge.indexer import DocumentIndexer
+from maltose.knowledge.parsers import MarkdownParser, ParserRegistry, TextParser
+from maltose.knowledge.repositories import MetadataRepository
+from maltose.knowledge.scanner import DocumentScanner
 
 
 class FakeSummarizer:

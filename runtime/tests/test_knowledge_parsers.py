@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.parsers import MarkdownParser, ParserRegistry, TextParser
+from maltose.knowledge.parsers import MarkdownParser, ParserRegistry, TextParser
 
 
 class KnowledgeParserTests(unittest.TestCase):

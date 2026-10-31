@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from myagent.agent.taskbrain import TaskBrain
-from myagent.runtime import PresentationStore
+from maltose.agent.taskbrain import TaskBrain
+from maltose.runtime import PresentationStore
 
 
 class UIToolTest(unittest.TestCase):

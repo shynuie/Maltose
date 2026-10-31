@@ -5,10 +5,10 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from myagent.knowledge.models import ScannedFile
-from myagent.knowledge.repair import find_orphan_vector_ids, find_repair_candidates
-from myagent.knowledge.repositories.metadata import MetadataRepository
-from myagent.knowledge.scanner import DocumentScanner
+from maltose.knowledge.models import ScannedFile
+from maltose.knowledge.repair import find_orphan_vector_ids, find_repair_candidates
+from maltose.knowledge.repositories.metadata import MetadataRepository
+from maltose.knowledge.scanner import DocumentScanner
 
 
 class KnowledgeRepairTests(unittest.TestCase):

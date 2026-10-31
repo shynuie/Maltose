@@ -4,8 +4,8 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from myagent.knowledge.models import DocumentChunk
-from myagent.knowledge.repositories.lancedb import LanceVectorRepository
+from maltose.knowledge.models import DocumentChunk
+from maltose.knowledge.repositories.lancedb import LanceVectorRepository
 
 
 class KnowledgeVectorRepositoryTests(unittest.TestCase):

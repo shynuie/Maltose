@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.chunker import DocumentChunker
-from myagent.knowledge.models import ParsedDocument, ParsedPage, ParsedSection
+from maltose.knowledge.chunker import DocumentChunker
+from maltose.knowledge.models import ParsedDocument, ParsedPage, ParsedSection
 
 
 class KnowledgeChunkerTests(unittest.TestCase):

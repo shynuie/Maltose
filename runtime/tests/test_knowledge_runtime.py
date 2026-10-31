@@ -5,13 +5,13 @@ import time
 import unittest
 from pathlib import Path
 
-from myagent.knowledge.event_dispatcher import DocumentEventDispatcher
-from myagent.knowledge.queue import InMemoryIndexingQueue, IndexJobStatus
-from myagent.knowledge.repositories.metadata import MetadataRepository
-from myagent.knowledge.runtime import KnowledgeRuntime
-from myagent.knowledge.scanner import DocumentScanner
-from myagent.knowledge.watcher import PollingDocumentWatcher
-from myagent.knowledge.worker import IndexingWorker
+from maltose.knowledge.event_dispatcher import DocumentEventDispatcher
+from maltose.knowledge.queue import InMemoryIndexingQueue, IndexJobStatus
+from maltose.knowledge.repositories.metadata import MetadataRepository
+from maltose.knowledge.runtime import KnowledgeRuntime
+from maltose.knowledge.scanner import DocumentScanner
+from maltose.knowledge.watcher import PollingDocumentWatcher
+from maltose.knowledge.worker import IndexingWorker
 from tests.test_knowledge_worker import FakeIndexer
 from tests.test_knowledge_event_dispatcher import FakeVectors
 

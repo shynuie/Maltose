@@ -30,3 +30,10 @@ documents/
 *.aiff
 *.wav
 *.mp3
+
+# Persistent isolated runtimes (never place them under /tmp)
+.venvs/
+
+# Unified product local configuration
+maltose.toml
+wake.toml

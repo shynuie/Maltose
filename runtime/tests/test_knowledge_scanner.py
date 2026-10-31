@@ -5,8 +5,8 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from myagent.knowledge.repositories import MetadataRepository
-from myagent.knowledge.scanner import DocumentScanner
+from maltose.knowledge.repositories import MetadataRepository
+from maltose.knowledge.scanner import DocumentScanner
 
 
 class KnowledgeScannerTests(unittest.TestCase):

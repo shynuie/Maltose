@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from myagent.filesystem.events import FilesystemMutationEvent, FilesystemMutationType
-from myagent.knowledge.mutation import DocumentMutationCoordinator
-from myagent.knowledge.queue import SQLiteIndexingQueue
-from myagent.knowledge.models import ScannedFile
+from maltose.filesystem.events import FilesystemMutationEvent, FilesystemMutationType
+from maltose.knowledge.mutation import DocumentMutationCoordinator
+from maltose.knowledge.queue import SQLiteIndexingQueue
+from maltose.knowledge.models import ScannedFile
 from datetime import datetime, timezone
 
 

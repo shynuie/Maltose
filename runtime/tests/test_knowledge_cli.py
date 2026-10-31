@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from myagent.knowledge.cli import build_parser
+from maltose.knowledge.cli import build_parser
 
 
 class KnowledgeCliParserTests(unittest.TestCase):

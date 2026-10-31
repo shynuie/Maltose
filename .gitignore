@@ -7,3 +7,17 @@ __pycache__/
 *.egg-info/
 dist/
 .DS_Store
+
+# Maltose runtime: local state and environments are never source artifacts
+.env
+.env.*
+runtime/.venvs/
+runtime/maltose.toml
+runtime/myagent.toml
+runtime/training_server
+runtime/data/
+runtime/documents/
+runtime/models/
+runtime/recordings/
+# Migrated local wake settings; use example files for new installations
+/runtime/wake.toml

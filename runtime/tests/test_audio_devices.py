@@ -5,8 +5,8 @@ import types
 import unittest
 from unittest.mock import patch
 
-from myagent.agent.taskbrain import TaskBrain, ToolRegistry
-from myagent.voice.devices import AudioInputDeviceController, AudioInputDeviceError
+from maltose.agent.taskbrain import TaskBrain, ToolRegistry
+from maltose.voice.devices import AudioInputDeviceController, AudioInputDeviceError
 
 
 class AudioDeviceControllerTests(unittest.TestCase):
