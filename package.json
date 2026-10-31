@@ -1,1 +1,0 @@
-{"name":"maltose-ui-host","version":"0.3.0","private":true,"type":"module","workspaces":["packages/renderer","packages/sdk-typescript"],"scripts":{"build":"npm run build -w @maltose/renderer && tsc -p packages/sdk-typescript/tsconfig.json","test":"vitest run"},"devDependencies":{"vitest":"3.2.4","typescript":"5.8.3","ajv":"8.17.1","ajv-formats":"3.0.1"}}

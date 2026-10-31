@@ -1,84 +1,36 @@
-# Maltose UI Host 0.4.0（MUP v0.3）
+# Maltose UI — 面板工作空間原型
 
-macOS 原生、本機優先的多代理互動工作區。Swift 6 / SwiftUI / AppKit 管理表面與授權；離線 React / Zod / ECharts 呈現封閉式文件；P0 Agent UI Awareness 提供授權後的 focus、selection、viewport 與有證據的 reference candidates。
+目前專注於 UI：窗口、Glass 外框、Content 容器與面板排列。不接 Agent、不啟動 Host、不讀取資料庫或 Keychain、不建立 WebSocket listener。舊版基準保存在 Git 歷史 commit `8a73e7c`，目前工作樹已移除舊執行邏輯。
 
-目前支援 macOS 14+（本次實測 macOS 26.2 arm64、Xcode 26.6、Swift 6.3.3）。完整測試結果與已知限制見 [完成報告](docs/verification/report.md)。
-
-## 直接連接 MyAgent
-
-開啟 app，在 `/Users/Marvin/Workspace/MyAgent` 執行 `./start --maltose`，再於原生 UI 核對代碼、按「允許並記住」。系統會探索當下的 port、安裝已驗證的工具到獨立 uv 環境，並自動登錄工具；不需要複製憑證。此功能需要 uv 與本機 Python 3.12。
-
-UI 可顯示真實模型推論／工具／播報狀態與對話；每回合 MyAgent 自動取得已授權的 focus、selection、viewport。既有說話者身分規則與跨代理 ACL 仍然有效。操作與故障排除見 [接入說明](docs/agent-integration.md)，最新實測見 [接入驗證報告](docs/verification/agent-integration-report.md)。
-
-## 建置與執行
-
-需 Xcode command line tools、Node.js 22+、Python 3.11+。首次取得依賴需要網路；封裝完成後啟動不需網路。
+## 試用
 
 ```sh
-npm ci --cache .cache/npm
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements-dev.lock
-./scripts/bundle-renderer.sh
-./scripts/swift-test.sh
-swift run --skip-build MaltoseApp
+./scripts/package-workspace-preview.sh
+open 'dist/Maltose Workspace Preview.app'
 ```
 
-若開發環境有沙箱，本機 listener、WKWebView 與 GUI 測試可能需要由環境核准；Host 本身不要求螢幕錄製或 Accessibility 權限。Swift 測試腳本將快取限定於專案內。
+需要 Xcode command line tools。macOS 26+ 使用系統 `NSGlassEffectView` Liquid Glass；macOS 14–25 使用 `NSVisualEffectView` 降級材質。純 UI 封裝不需要安裝 Node、Python 或其他依賴。
 
-封裝本機 app：
+啟動後會自動要求進入原生全螢幕，與窗口綠色按鈕使用同一個 AppKit 功能。多螢幕依序進入，避免動畫相互干擾。無法進入或離開全螢幕時，使用填滿螢幕的半透明黑色背景。系統若未啟用各螢幕獨立 Spaces，僅主要窗口進入原生全螢幕，其他窗口以輔助窗口呈現。
+
+可使用 `open -n 'dist/Maltose Workspace Preview.app' --args --windowed` 直接試用半透明黑色背景。
+
+## 面板操作
+
+- 拖曳 Glass 外框移動面板，可移至另一螢幕的窗口。
+- 點擊面板會高光該面板；點擊工作區空白處會取消選取。按住 `⌘` 逐一點擊可多選，再拖曳其中一個已選面板即可整批移到另一窗口。
+- 雙擊 Glass 在等大排列與主面板間切換；主面板保留較窄的外框。
+- 主面板模式中，在左緣停住滑鼠 1 秒展開縮圖側欄；離開即收起。
+- 一般面板／主面板內容隨尺寸重新排列，縮圖保持完整畫面比例。
+- `⌘1` 或 Esc 返回等大排列；`⌃⌘F` 切換原生全螢幕，離開時使用半透明黑色背景。
+
+示範內容只有原生畫布、可編輯筆記、曲線圖與資料表；所有狀態僅在記憶體中，重新啟動即重設。
+
+## UI 驗證
 
 ```sh
-./scripts/package.sh
-open 'dist/Maltose UI Host.app'
+./scripts/swift-test.sh --filter WorkspaceLayoutTests
+MALTOSE_GUI_TESTS=1 ./scripts/swift-test.sh --filter Workspace
 ```
 
-產物為本機 ad-hoc 簽章，尚未公證。原生 app 自動選用空閒 port。多個程序不可同時操作同一個 database；headless Host 保留可明確指定的 port。
-
-## 兩代理示範
-
-1. 啟動 Host。在「代理存取」分別建立 `agent.investment` 與 `agent.maltose`，憑證存入 Keychain；一次性顯示的 token 交給各自 SDK。輪替使舊 token 失效。
-2. 執行 `.venv/bin/python examples/two-agents/demo.py`，依提示貼上兩個 token；使用 getpass 輸入，不把憑證放進 shell history。
-3. 投資代理建立合成市場圖表並持續更新 120 秒。滾輪縮放、右上框選工具選取區間；Investment context 可讀到區間，Maltose 預設不可見。
-4. 在「跨代理分享」指定 `market-demo` → `agent.maltose`，套用摘要授權。文件／選取內容／viewport 必須各別勾選；摘要不包含這些資訊。
-5. 按「獨立視窗」，再關閉該視窗以回附 Workspace，選取、zoom 與 stream 保留。
-6. 撤銷分享：排隊事件與舊訂閱立即失效。SDK 重連時重新訂閱並讀取完整 snapshot。重新啟動 Host 後，文件與視窗配置還原，focus／selection 不還原；資料來源需重新註冊，離線 stream 顯示過期。
-
-單代理文字範例：`.venv/bin/python examples/hello-world/main.py`。無 GUI 的相同核心：
-
-```sh
-.build/debug/MaltoseHost --state /tmp/maltose-demo.sqlite --port 8765
-```
-
-`MaltoseHost --register agent.example` / `--revoke agent.example` 是本機使用者命令；register 只於終端一次性輸出新憑證。沒有遠端註冊／授權命令。
-
-## 測試
-
-```sh
-npm test
-./scripts/bundle-renderer.sh
-./scripts/swift-test.sh
-MALTOSE_GUI_TESTS=1 ./scripts/swift-test.sh --filter WKRendererTests
-.venv/bin/python -m pytest tests/protocol tests/integration tests/security -q
-./scripts/package.sh
-```
-
-Swift 互通測試使用 `.venv/bin/python` 與 PATH 上的 Node，先執行 renderer/SDK build。GUI 測試預設會明確 skip；只有設定 MALTOSE_GUI_TESTS=1 且實際通過才算 GUI 已驗證。CI 使用 macOS runner；本次有另外實際執行 GUI 測試，證據見 docs/verification。
-
-## 目錄
-
-```text
-apps/macos/MaltoseApp/         SwiftUI shell / AppKit windows / restricted WK bridge
-apps/headless/                同一 Host 核心的 CLI
-native/                       Swift actor、Protocol、Transport、ACL、SQLite、Awareness、Data
-packages/mup-protocol/         JSON Schema 2020-12 / golden fixtures
-packages/renderer/             React + TypeScript + Zod + ECharts / Vite offline build
-packages/sdk-python/           async WebSocket / validation / reconnect / resync
-packages/sdk-typescript/       WebSocket / validation / reconnect
-examples/                     hello-world / market-dashboard / awareness-demo / two-agents
-tests/                        native / protocol / integration / security / e2e
-plans/                        全部開發計畫與里程碑狀態
-docs/                         architecture / decisions / mup-spec / ui-awareness / security / verification
-scripts/                      schema generation / build / verify / packaging
-```
-
-協定與權限見 [MUP](docs/mup-spec/README.md)、[Awareness](docs/ui-awareness/README.md)、[安全](docs/security/README.md) 與 [架構決策](docs/decisions/001-architecture.md)。UI 不接受任意 agent-generated JavaScript、Swift、shell 或 HTML。
+GUI 測試需可存取 macOS WindowServer，會暫時建立窗口與全螢幕 Space。規格與待確認項目見 [計劃](plans/glass-workspace.md)，驗證範圍見 [報告](docs/verification/glass-workspace-report.md)。
