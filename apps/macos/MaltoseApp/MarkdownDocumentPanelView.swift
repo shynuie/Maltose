@@ -7,7 +7,7 @@ struct MarkdownDocumentBlock: Identifiable {
         case paragraph(String)
         case bullet(String)
         case quote(String)
-        case code(String)
+        case code(language: String?, source: String)
         case table([[String]])
         case image(alt: String, source: String)
         case divider
@@ -52,6 +52,7 @@ enum MarkdownDocumentParser {
             if line.isEmpty { index += 1; continue }
 
             if line.hasPrefix("```") {
+                let language = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 index += 1
                 var codeLines: [String] = []
                 while index < lines.count && !lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
@@ -59,7 +60,8 @@ enum MarkdownDocumentParser {
                     index += 1
                 }
                 if index < lines.count { index += 1 }
-                append(.code(codeLines.joined(separator: "\n")))
+                append(.code(language: language.isEmpty ? nil : language,
+                             source: codeLines.joined(separator: "\n")))
                 continue
             }
 
@@ -238,16 +240,25 @@ private struct MarkdownDocumentBlockView: View {
                     .foregroundStyle(.white.opacity(0.72))
             }
             .fixedSize(horizontal: false, vertical: true)
-        case let .code(value):
-            ScrollView(.horizontal) {
-                Text(value).font(.system(size: max(11, fontSize * 0.84), design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
+        case let .code(language, value):
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text(language?.uppercased() ?? "CODE")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .tracking(1).foregroundStyle(.white.opacity(0.45))
+                    Spacer()
+                }
+                .padding(.horizontal, 14).padding(.top, 12)
+                ScrollView(.horizontal) {
+                    Text(value).font(.system(size: max(11, fontSize * 0.84), design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                }
             }
             .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 12))
         case let .table(rows):
-            MarkdownTable(rows: rows, fontSize: fontSize)
+            MarkdownTable(rows: rows, fontSize: fontSize, maxWidth: width)
         case let .image(alt, source):
             BundledMarkdownImage(alt: alt, source: source, maxWidth: width)
         case .divider:
@@ -265,39 +276,64 @@ private struct MarkdownDocumentBlockView: View {
     }
 }
 
-private struct InlineMarkdownText: View {
+struct InlineMarkdownText: View {
     let source: String
+    @State private var hasPointingHandCursor = false
 
     init(_ source: String) { self.source = source }
 
+    private var renderedMarkdown: AttributedString {
+        (try? AttributedString(markdown: source)) ?? AttributedString(source)
+    }
+
+    private var containsLink: Bool {
+        renderedMarkdown.runs.contains { $0.link != nil }
+    }
+
     var body: some View {
-        Text((try? AttributedString(markdown: source)) ?? AttributedString(source))
+        Text(renderedMarkdown)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
             .tint(.cyan)
+            .onHover { hovering in
+                guard containsLink, hovering != hasPointingHandCursor else { return }
+                hasPointingHandCursor = hovering
+                if hovering { NSCursor.pointingHand.push() }
+                else { NSCursor.pop() }
+            }
+            .onDisappear {
+                if hasPointingHandCursor {
+                    NSCursor.pop()
+                    hasPointingHandCursor = false
+                }
+            }
     }
 }
 
 private struct MarkdownTable: View {
     let rows: [[String]]
     let fontSize: CGFloat
+    let maxWidth: CGFloat
+
+    private var columnCount: Int { max(1, rows.map(\.count).max() ?? 1) }
+    private var columnWidth: CGFloat { min(260, max(1, maxWidth) / CGFloat(columnCount)) }
 
     var body: some View {
-        ScrollView(.horizontal) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
-                    HStack(alignment: .top, spacing: 0) {
-                        ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
-                            InlineMarkdownText(cell)
-                                .font(.system(size: fontSize * 0.86, weight: rowIndex == 0 ? .semibold : .regular))
-                                .frame(minWidth: 120, maxWidth: 260, alignment: .leading)
-                                .padding(.horizontal, 12).padding(.vertical, 10)
-                        }
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                HStack(alignment: .top, spacing: 0) {
+                    ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                        InlineMarkdownText(cell)
+                            .font(.system(size: fontSize * 0.86, weight: rowIndex == 0 ? .semibold : .regular))
+                            .padding(.horizontal, 12).padding(.vertical, 10)
+                            .frame(width: columnWidth, alignment: .leading)
                     }
-                    Rectangle().fill(.white.opacity(0.10)).frame(height: 1)
                 }
+                Rectangle().fill(.white.opacity(0.10)).frame(height: 1)
             }
         }
+        .frame(maxWidth: columnWidth * CGFloat(columnCount), alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
     }
 }

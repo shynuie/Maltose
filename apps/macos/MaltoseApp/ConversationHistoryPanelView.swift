@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ConversationSession: Identifiable {
@@ -43,7 +44,7 @@ struct ConversationSession: Identifiable {
     static let samples: [ConversationSession] = [
         .init(id: "workspace-layout", title: "工作空間的面板排列方式", updatedAt: "剛剛", messages: [
             .init(id: "wl-u1", speaker: .user, text: "我想讓面板像 iOS 主畫面一樣，拖曳時周圍面板會自動挪位。"),
-            .init(id: "wl-a1", speaker: .assistant, text: "可以先用固定格位編號，從左到右、由上到下處理衝突。一般面板依序向後移動，跨兩格的形象面板則保留固定位置。"),
+            .init(id: "wl-a1", speaker: .assistant, text: "可以先用固定格位編號，從左到右、由上到下處理衝突。一般面板依序向後移動，跨兩格的形象面板則保留固定位置。\n\n例如可以用這段 Swift 表示格位：\n\n```swift\nlet columns = 3\nlet nextSlot = currentSlot + 1\n```\n\n更多格式可參考[Markdown 指南](https://commonmark.org/help/)。"),
             .init(id: "wl-u2", speaker: .user, text: "只有一般面板支持自動挪位，形象面板維持原位。"),
             .init(id: "wl-a2", speaker: .assistant, text: "已把這個規則記入面板排列計畫。")
         ]),
@@ -226,6 +227,9 @@ private struct ConversationTranscript: View {
 private struct ConversationMessageView: View {
     let message: ConversationSession.Message
     let fontSize: CGFloat
+    @State private var isHovered = false
+    @State private var hoverExitGeneration = 0
+    @State private var didCopy = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -234,8 +238,22 @@ private struct ConversationMessageView: View {
                 Text(message.speaker == .user ? "你" : "MALTOSE")
                     .font(.system(size: fontSize * 0.68, weight: .medium, design: .monospaced))
                     .tracking(1.2).foregroundStyle(.white.opacity(0.42))
-                Text(message.text).font(.system(size: fontSize)).lineSpacing(fontSize * 0.45)
-                    .fixedSize(horizontal: false, vertical: true)
+                ConversationMarkdownContent(source: message.text, fontSize: fontSize)
+                HStack {
+                    Spacer()
+                    Button {
+                        copy(message.text)
+                    } label: {
+                        Label(didCopy ? "已複製" : "複製", systemImage: didCopy ? "checkmark" : "document.on.document")
+                            .font(.system(size: max(10, fontSize * 0.68)))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white.opacity(0.48))
+                    .opacity(isHovered || didCopy ? 1 : 0)
+                    .allowsHitTesting(isHovered || didCopy)
+                    .accessibilityLabel(didCopy ? "已複製訊息" : "複製訊息")
+                }
+                .frame(height: max(14, fontSize * 0.82))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, message.speaker == .user ? 16 : 0)
@@ -248,5 +266,110 @@ private struct ConversationMessageView: View {
             if message.speaker == .assistant { Spacer(minLength: 28) }
         }
         .frame(maxWidth: .infinity, alignment: message.speaker == .user ? .trailing : .leading)
+        .onHover(perform: updateHover)
+    }
+
+    private func updateHover(_ hovering: Bool) {
+        hoverExitGeneration += 1
+        let generation = hoverExitGeneration
+        if hovering {
+            isHovered = true
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+            guard hoverExitGeneration == generation else { return }
+            isHovered = false
+        }
+    }
+
+    private func copy(_ value: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        didCopy = pasteboard.setString(value, forType: .string)
+        guard didCopy else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { didCopy = false }
+    }
+}
+
+private struct ConversationMarkdownContent: View {
+    let source: String
+    let fontSize: CGFloat
+
+    private var blocks: [MarkdownDocumentBlock] { MarkdownDocumentParser.parse(source) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(blocks) { block in
+                switch block.content {
+                case let .heading(level, text):
+                    InlineMarkdownText(text)
+                        .font(.system(size: fontSize * (level == 1 ? 1.35 : 1.16), weight: .semibold))
+                case let .paragraph(text):
+                    InlineMarkdownText(text).font(.system(size: fontSize)).lineSpacing(fontSize * 0.45)
+                case let .bullet(text):
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("•").foregroundStyle(.white.opacity(0.58))
+                        InlineMarkdownText(text).font(.system(size: fontSize)).lineSpacing(fontSize * 0.4)
+                    }
+                case let .quote(text):
+                    HStack(alignment: .top, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 2).fill(.cyan.opacity(0.62)).frame(width: 3)
+                        InlineMarkdownText(text).font(.system(size: fontSize)).foregroundStyle(.white.opacity(0.75))
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                case let .code(language, text):
+                    ConversationCodeBlock(language: language, source: text, fontSize: fontSize)
+                case let .table(rows):
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                            InlineMarkdownText(row.joined(separator: "   ·   ")).font(.system(size: fontSize * 0.9))
+                        }
+                    }
+                case let .image(alt, _):
+                    if !alt.isEmpty { InlineMarkdownText(alt).font(.system(size: fontSize)).foregroundStyle(.secondary) }
+                case .divider:
+                    Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ConversationCodeBlock: View {
+    let language: String?
+    let source: String
+    let fontSize: CGFloat
+    @State private var didCopy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(language?.uppercased() ?? "CODE")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.48))
+                Spacer()
+                Button {
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    didCopy = pasteboard.setString(source, forType: .string)
+                    if didCopy { DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { didCopy = false } }
+                } label: {
+                    Label(didCopy ? "已複製" : "複製程式碼", systemImage: didCopy ? "checkmark" : "document.on.document")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.58))
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
+            ScrollView(.horizontal) {
+                Text(source).font(.system(size: max(11, fontSize * 0.84), design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+            }
+        }
+        .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 11))
     }
 }

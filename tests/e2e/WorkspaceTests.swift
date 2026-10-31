@@ -294,6 +294,7 @@ final class WorkspaceLayoutTests: XCTestCase {
         | A | B |
         | --- | --- |
         | 1 | 2 |
+        | 3 | 4 |
 
         ```swift
         let value = 1
@@ -305,8 +306,12 @@ final class WorkspaceLayoutTests: XCTestCase {
               case .paragraph = blocks[1].content,
               case .image = blocks[2].content,
               case .table = blocks[3].content,
-              case .code = blocks[4].content else {
+              case let .code(language, _) = blocks[4].content else {
             return XCTFail("Expected heading, paragraph, image, table, and code blocks")
+        }
+        XCTAssertEqual(language, "swift")
+        if case let .table(rows) = blocks[3].content {
+            XCTAssertEqual(rows.count, 3, "The parsed table should retain its header and both data rows")
         }
     }
 
