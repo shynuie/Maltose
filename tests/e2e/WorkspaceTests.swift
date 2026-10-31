@@ -474,6 +474,46 @@ final class WorkspaceLayoutTests: XCTestCase {
         XCTAssertTrue(model.nodes.isEmpty, "A failed open should leave the current document untouched")
     }
 
+    func testUserViewSnapshotPreservesStructuredPanelDetails() throws {
+        let snapshot = UserViewSnapshot(schemaVersion: 1,
+                                        capturedAt: "2026-11-01T00:00:00Z",
+                                        activeScreenID: "screen-1",
+                                        workspaces: [UserWorkspaceView(screenID: "screen-1",
+                                                                       screenName: "內建顯示器",
+                                                                       mode: "面板全屏",
+                                                                       isActive: true,
+                                                                       primaryPanelID: "chat",
+                                                                       selectedPanelIDs: ["chat"],
+                                                                       visiblePanelIDs: ["chat"],
+                                                                       offscreenPanelIDs: [],
+                                                                       overlays: [],
+                                                                       globalGrid: [:],
+                                                                       panels: [UserPanelView(panelID: "chat",
+                                                                                              kind: "conversation",
+                                                                                              title: "聊天",
+                                                                                              presentation: "mainPanel",
+                                                                                              isSelected: true,
+                                                                                              details: ["recentMessages": .strings(["使用者：你好"]),
+                                                                                                        "textVisibleAtCurrentSize": .boolean(true),
+                                                                                                        "messageCount": .number(1)])])])
+        let data = try JSONEncoder().encode(snapshot)
+        let decoded = try JSONDecoder().decode(UserViewSnapshot.self, from: data)
+        XCTAssertEqual(decoded, snapshot)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains("recentMessages"))
+        XCTAssertTrue(json.contains("使用者：你好"))
+    }
+
+    @MainActor func testUserViewSendDisplaysCapturedSnapshotAsJSON() async {
+        let expected = UserViewSnapshot(schemaVersion: 1, capturedAt: "now", activeScreenID: nil, workspaces: [])
+        let model = UserViewTestModel { expected }
+        await model.sendAndWait()
+        XCTAssertFalse(model.isSending)
+        XCTAssertNil(model.lastError)
+        XCTAssertTrue(model.response.contains("\"schemaVersion\""))
+        XCTAssertTrue(model.response.contains("now"))
+    }
+
     @MainActor func testImageGalleryAcceptsWebImageURLsAndRejectsUnsupportedSchemes() {
         let model = ImageGalleryModel(images: [])
         XCTAssertTrue(model.addRemoteImage("https://example.com/image.png"))
@@ -507,6 +547,12 @@ final class WorkspaceLayoutTests: XCTestCase {
 
     @MainActor func testChartAgentCanConfigureAreaFillBetweenNamedSeries() {
         let model = CSVLineChartModel()
+        model.setHoveredPoint(rowIndex: 0, seriesIndex: 0)
+        XCTAssertEqual(model.hoveredPoint?.xLabel, "09:00")
+        XCTAssertEqual(model.hoveredPoint?.seriesName, "工作量")
+        XCTAssertEqual(model.hoveredPoint?.note, "開始整理資料")
+        model.setHoveredPoint(rowIndex: nil, seriesIndex: nil)
+        XCTAssertNil(model.hoveredPoint)
         model.configureAgentBands([
             CSVLineChartBandRequest(firstSeriesName: "工作量", secondSeriesName: "完成率", opacity: 1.5),
             CSVLineChartBandRequest(firstSeriesName: "unknown", secondSeriesName: "完成率"),

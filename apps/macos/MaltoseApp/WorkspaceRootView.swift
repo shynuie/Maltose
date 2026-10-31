@@ -46,6 +46,9 @@ import SwiftUI
     var topChromeFrame: CGRect { topChrome.frame }
     var bottomChromeFrame: CGRect { bottomChrome.frame }
     var chromeIsVisible: Bool { !topChrome.isHidden && !bottomChrome.isHidden }
+    var chromeHasTips: Bool { chrome.tipsExpanded }
+    var chromeHasSettings: Bool { chrome.settingsPresented }
+    var panelIDsAreEmpty: Bool { state.panelIDs.isEmpty }
     var globalScrollOffset: CGFloat { gridScrollOffset }
     var agentTestGridZoom: CGFloat { gridZoom < 0 ? 0.5 : gridZoom }
     var globalGridGeometry: WorkspaceGeometry.GlobalGrid { makeGlobalGrid(viewport: globalScroll.contentView.bounds.size) }
@@ -130,6 +133,7 @@ import SwiftUI
     override func mouseEntered(with event: NSEvent) { pointerMoved() }
     func windowDidMove(_ notification: Notification) { manager?.restoreWindowFrame(screenID) }
     func windowDidResize(_ notification: Notification) { manager?.restoreWindowFrame(screenID) }
+    func windowDidBecomeKey(_ notification: Notification) { manager?.noteActiveWorkspace(screenID) }
     func windowDidResignKey(_ notification: Notification) {
         cancelHover(collapse: true)
         cancelSelectionMarquee()

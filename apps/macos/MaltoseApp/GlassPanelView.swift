@@ -16,6 +16,7 @@ extension NSPasteboard.PasteboardType {
     let imageGalleryModel: ImageGalleryModel?
     let browserModel: BrowserPanelModel?
     let flowchartModel: FlowchartCanvasModel?
+    let sampleContentModel: WorkspaceSampleContentModel?
     weak var manager: WorkspaceWindowManager?
     private let glass: NSView
     private let glassContents = NSView()
@@ -28,6 +29,7 @@ extension NSPasteboard.PasteboardType {
     var isPrimary = false
     var isGlobal = false
     var isSelected = false
+    var contentBounds: CGRect { content.bounds }
     var title: String = "" { didSet { setAccessibilityLabel(title); toolTip = title } }
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -41,18 +43,21 @@ extension NSPasteboard.PasteboardType {
         let imageGalleryModel = panel.kind == .imageGallery ? ImageGalleryModel() : nil
         let browserModel = panel.kind == .browser ? BrowserPanelModel(initialAddress: panel.initialBrowserAddress) : nil
         let flowchartModel = panel.kind == .canvas ? FlowchartCanvasModel() : nil
+        let sampleContentModel = panel.kind == .notes ? WorkspaceSampleContentModel() : nil
         self.conversationHistoryModel = historyModel
         self.markdownDocumentModel = documentModel
         self.chartModel = chartModel
         self.imageGalleryModel = imageGalleryModel
         self.browserModel = browserModel
         self.flowchartModel = flowchartModel
+        self.sampleContentModel = sampleContentModel
         self.contentView = panel.makeContentView(conversationHistoryModel: historyModel,
                                                  markdownDocumentModel: documentModel,
                                                  chartModel: chartModel,
                                                  imageGalleryModel: imageGalleryModel,
                                                  browserModel: browserModel,
-                                                 flowchartModel: flowchartModel)
+                                                 flowchartModel: flowchartModel,
+                                                 sampleContentModel: sampleContentModel)
         if #available(macOS 26.0, *) {
             let effect = NSGlassEffectView()
             effect.style = .clear

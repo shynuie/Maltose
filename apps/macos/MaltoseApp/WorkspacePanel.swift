@@ -47,7 +47,8 @@ struct WorkspacePanel: Identifiable {
                                     chartModel: CSVLineChartModel? = nil,
                                     imageGalleryModel: ImageGalleryModel? = nil,
                                     browserModel: BrowserPanelModel? = nil,
-                                    flowchartModel: FlowchartCanvasModel? = nil) -> NSView {
+                                    flowchartModel: FlowchartCanvasModel? = nil,
+                                    sampleContentModel: WorkspaceSampleContentModel? = nil) -> NSView {
         let view: NSView
         switch kind {
         case .chart:
@@ -97,7 +98,7 @@ struct WorkspacePanel: Identifiable {
         case .agentCoreTest:
             view = NSHostingView(rootView: AgentCoreAnimationTestView())
         default:
-            view = NSHostingView(rootView: WorkspaceSampleContent(panel: self))
+            view = NSHostingView(rootView: WorkspaceSampleContent(panel: self, model: sampleContentModel ?? WorkspaceSampleContentModel()))
         }
         (view as? NSHostingView<AgentCoreAnimationTestView>)?.sizingOptions = []
         (view as? NSHostingView<AgentIdentityPanelView>)?.sizingOptions = []
@@ -140,9 +141,13 @@ struct WorkspacePanel: Identifiable {
     }
 }
 
+@MainActor final class WorkspaceSampleContentModel: ObservableObject {
+    @Published var note = "從一個面板開始。\n\n內容會隨空間重新排列；縮圖保留完整畫面的比例。\n\n你可以在這裡輸入文字，試試放大與切換後是否保留。"
+}
+
 private struct WorkspaceSampleContent: View {
     let panel: WorkspacePanel
-    @State private var note = "從一個面板開始。\n\n內容會隨空間重新排列；縮圖保留完整畫面的比例。\n\n你可以在這裡輸入文字，試試放大與切換後是否保留。"
+    @ObservedObject var model: WorkspaceSampleContentModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -153,7 +158,7 @@ private struct WorkspaceSampleContent: View {
             }
             switch panel.kind {
             case .notes:
-                TextEditor(text: $note).font(.system(size: 16)).scrollContentBackground(.hidden)
+                TextEditor(text: $model.note).font(.system(size: 16)).scrollContentBackground(.hidden)
                     .accessibilityLabel("示範筆記")
             case .canvas:
                 EmptyView()

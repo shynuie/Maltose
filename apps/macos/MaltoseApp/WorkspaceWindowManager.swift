@@ -15,7 +15,9 @@ private struct AgentWorkspaceSnapshot {
     private var fullscreenAttempted: Set<String> = []
     private var fullscreenTask: Task<Void, Never>?
     private var coreAnimationTestWindowController: AgentCoreTestWindowController?
+    private var userViewTestWindowController: UserViewTestWindowController?
     private var agentInteractionTestTask: Task<Void, Never>?
+    private var lastActiveWorkspaceScreenID: String?
     private(set) var windows: [String: NSWindow] = [:]
     private(set) var roots: [String: WorkspaceRootView] = [:]
     private(set) var panels: [String: GlassPanelView] = [:]
@@ -136,7 +138,12 @@ private struct AgentWorkspaceSnapshot {
         root.arrange(animated: true)
     }
     var activeRoot: WorkspaceRootView? {
-        roots.values.first { $0.window?.isKeyWindow == true } ?? roots.values.first
+        if let active = roots.values.first(where: { $0.window?.isKeyWindow == true }) {
+            lastActiveWorkspaceScreenID = active.screenID
+            return active
+        }
+        if let lastActiveWorkspaceScreenID, let active = roots[lastActiveWorkspaceScreenID] { return active }
+        return roots.values.first
     }
     func showWindows() {
         for window in windows.values { window.orderFront(nil) }
@@ -147,6 +154,249 @@ private struct AgentWorkspaceSnapshot {
             coreAnimationTestWindowController = AgentCoreTestWindowController()
         }
         coreAnimationTestWindowController?.present()
+    }
+
+    func noteActiveWorkspace(_ screenID: String) {
+        guard roots[screenID] != nil else { return }
+        lastActiveWorkspaceScreenID = screenID
+    }
+
+    func showUserViewTest() {
+        _ = activeRoot
+        if userViewTestWindowController == nil {
+            userViewTestWindowController = UserViewTestWindowController(
+                model: UserViewTestModel { [weak self] in
+                    guard let self else { throw UserViewCaptureError.workspaceUnavailable }
+                    return try await self.getUserView()
+                })
+        }
+        userViewTestWindowController?.present()
+    }
+
+    /// Agent-facing read-only interface for the currently visible workspace UI.
+    func getUserView() async throws -> UserViewSnapshot {
+        guard !roots.isEmpty else { throw UserViewCaptureError.workspaceUnavailable }
+        let activeScreenID = activeRoot?.screenID
+        var workspaces: [UserWorkspaceView] = []
+        for root in roots.values.sorted(by: { $0.screenID < $1.screenID }) {
+            let mode = root.state.mode
+            let screen = NSScreen.screens.first { Self.screenID($0) == root.screenID }
+            let IDs = root.state.panelIDs
+            var panels: [UserPanelView] = []
+            var visibleIDs: [String] = []
+            var hiddenIDs: [String] = []
+
+            for id in IDs {
+                guard let panel = panelsByID(id) else { continue }
+                let presentation: String
+                let isVisible: Bool
+                switch mode {
+                case .grid:
+                    let frame = panel.convert(panel.bounds, to: root)
+                    isVisible = frame.intersects(root.globalViewportFrame)
+                    presentation = isVisible ? "globalCell" : "offscreen"
+                case .focused:
+                    isVisible = id == root.state.primaryID
+                    presentation = isVisible ? "mainPanel" : "hidden"
+                case .sidebar:
+                    isVisible = id == root.state.primaryID
+                        || panel.convert(panel.bounds, to: root).intersects(root.sidebar.frame)
+                    presentation = id == root.state.primaryID ? "mainPanel" : "sidebarThumbnail"
+                }
+
+                if isVisible { visibleIDs.append(id) } else { hiddenIDs.append(id) }
+                let details = isVisible ? await panelDetails(panel, presentation: presentation) : [:]
+                let kind = catalog.first(where: { $0.id == id })?.kind
+                panels.append(UserPanelView(panelID: id,
+                                            kind: kind.map(kindName) ?? "unknown",
+                                            title: panel.title,
+                                            presentation: presentation,
+                                            isSelected: root.state.selectedIDs.contains(id),
+                                            details: details))
+            }
+
+            let grid: [String: UserViewValue]
+            if mode == .grid {
+                let geometry = root.globalGridGeometry
+                grid = [
+                    "columns": .number(Double(geometry.columns)),
+                    "rows": .number(Double(geometry.rows)),
+                    "zoom": .number(Double(root.agentTestGridZoom)),
+                    "scrollOffsetY": .number(Double(root.globalScrollOffset))
+                ]
+            } else { grid = [:] }
+            var overlays: [String] = []
+            if root.chromeHasTips { overlays.append("使用提示") }
+            if root.chromeHasSettings { overlays.append("空間設定") }
+            if root.panelIDsAreEmpty { overlays.append("空工作區提示") }
+
+            workspaces.append(UserWorkspaceView(screenID: root.screenID,
+                                                screenName: screen?.localizedName ?? root.screenID,
+                                                mode: modeName(mode),
+                                                isActive: root.screenID == activeScreenID,
+                                                primaryPanelID: root.state.primaryID,
+                                                selectedPanelIDs: root.state.selectedIDs.sorted(),
+                                                visiblePanelIDs: visibleIDs,
+                                                offscreenPanelIDs: hiddenIDs,
+                                                overlays: overlays,
+                                                globalGrid: grid,
+                                                panels: panels))
+        }
+        return UserViewSnapshot(schemaVersion: 1,
+                                capturedAt: ISO8601DateFormatter().string(from: Date()),
+                                activeScreenID: activeScreenID,
+                                workspaces: workspaces)
+    }
+
+    private func panelsByID(_ id: String) -> GlassPanelView? { panels[id] }
+
+    private func modeName(_ mode: WorkspaceMode) -> String {
+        switch mode {
+        case .grid: "全局排列"
+        case .focused: "面板全屏"
+        case .sidebar: "面板＋側欄"
+        }
+    }
+
+    private func kindName(_ kind: WorkspacePanel.Kind) -> String {
+        switch kind {
+        case .agentIdentity: "agentIdentity"
+        case .agentCoreTest: "agentCoreTest"
+        case .browser: "browser"
+        case .canvas: "flowchartCanvas"
+        case .chart: "lineChart"
+        case .conversationHistory: "conversation"
+        case .document: "markdownDocument"
+        case .imageGallery: "imageGallery"
+        case .notes: "notes"
+        case .table: "table"
+        }
+    }
+
+    private func panelDetails(_ panel: GlassPanelView, presentation: String) async -> [String: UserViewValue] {
+        if let model = panel.conversationHistoryModel {
+            let session = model.currentSession
+            let focused = !panel.isGlobal && !panel.isPreview
+            let readable = ConversationHistoryLayout(width: panel.contentBounds.width, focused: focused).showsText
+            var details: [String: UserViewValue] = [
+                "sessionID": .string(session?.id ?? ""),
+                "sessionTitle": .string(session?.title ?? ""),
+                "textVisibleAtCurrentSize": .boolean(readable),
+                "presentationMode": .string(presentation)
+            ]
+            if readable, let session {
+                details["recentMessages"] = .strings(session.messages.suffix(12).map { message in
+                    let role = message.speaker == .user ? "使用者" : "Agent"
+                    return "\(role)：\(String(message.text.prefix(700)))"
+                })
+            }
+            return details
+        }
+        if let model = panel.markdownDocumentModel {
+            let focused = !panel.isGlobal && !panel.isPreview
+            let readable = MarkdownDocumentLayout(width: panel.contentBounds.width, focused: focused).showsText
+            let excerpts = model.blocks.compactMap(markdownExcerpt).prefix(32)
+            var details: [String: UserViewValue] = [
+                "blockCount": .number(Double(model.blocks.count)),
+                "textVisibleAtCurrentSize": .boolean(readable),
+                "presentationMode": .string(presentation)
+            ]
+            if readable { details["contentExcerpt"] = .strings(Array(excerpts)) }
+            else {
+                details["imageBlocks"] = .strings(model.blocks.compactMap { block in
+                    if case let .image(alt, source) = block.content { return "\(alt)：\(source)" }
+                    return nil
+                })
+            }
+            return details
+        }
+        if let model = panel.chartModel {
+            let names = model.data.seriesNames
+            let bands = model.filledBands.compactMap { band, opacity -> String? in
+                guard names.indices.contains(band.firstSeries), names.indices.contains(band.secondSeries) else { return nil }
+                return "\(names[band.firstSeries]) ↔ \(names[band.secondSeries]) (alpha \(opacity))"
+            }
+            var details: [String: UserViewValue] = [
+                "source": .string(model.sourceName),
+                "xAxis": .string(model.data.xTitle),
+                "rowCount": .number(Double(model.data.rows.count)),
+                "series": .strings(names),
+                "visibleSeries": .strings(model.visibleSeries.sorted().compactMap { names.indices.contains($0) ? names[$0] : nil }),
+                "xZoom": .number(Double(model.xZoom)),
+                "xPan": .number(model.xPan),
+                "filledBands": .strings(bands)
+            ]
+            if let hovered = model.hoveredPoint {
+                details["hoveredPoint"] = .object([
+                    "x": .string(hovered.xLabel),
+                    "series": .string(hovered.seriesName),
+                    "value": .number(hovered.value),
+                    "note": .string(hovered.note)
+                ])
+            }
+            return details
+        }
+        if let model = panel.imageGalleryModel {
+            let image = model.selectedImage
+            var details: [String: UserViewValue] = [
+                "selectedIndex": .number(Double(model.selectedIndex)),
+                "imageCount": .number(Double(model.images.count)),
+                "isExpanded": .boolean(model.expandedIndex != nil),
+                "zoomScale": .number(Double(model.zoomScale)),
+                "panX": .number(Double(model.panOffset.width)),
+                "panY": .number(Double(model.panOffset.height))
+            ]
+            if let image {
+                details["imageTitle"] = .string(image.title)
+                switch image.source {
+                case .sample: details["source"] = .string("內建範例")
+                case let .remote(url): details["source"] = .string(url.absoluteString)
+                case .local: details["source"] = .string("本機圖片：\(image.title)")
+                }
+            }
+            return details
+        }
+        if let model = panel.browserModel { return await model.userViewDetails() }
+        if let model = panel.flowchartModel {
+            return [
+                "documentTitle": .string(model.documentTitle),
+                "nodeCount": .number(Double(model.nodes.count)),
+                "connectionCount": .number(Double(model.connections.count)),
+                "selectedNodes": .strings(model.nodes.filter { model.selectedNodeIDs.contains($0.id) }.map { "\($0.type.title)：\($0.text)" }),
+                "nodes": .strings(model.nodes.map { "\($0.id) | \($0.type.rawValue) | \($0.text) | (\(Int($0.position.x)), \(Int($0.position.y)))" }),
+                "connections": .strings(model.connections.map { edge in
+                    let source = model.nodes.first(where: { $0.id == edge.fromNodeID })?.text ?? edge.fromNodeID
+                    let target = model.nodes.first(where: { $0.id == edge.toNodeID })?.text ?? edge.toNodeID
+                    return "\(source) → \(target)\(edge.label.map { " [\($0)]" } ?? "")"
+                })
+            ]
+        }
+        if let model = panel.sampleContentModel, catalog.first(where: { $0.id == panel.surfaceID })?.kind == .notes {
+            return ["text": .string(String(model.note.prefix(4000)))]
+        }
+        if catalog.first(where: { $0.id == panel.surfaceID })?.kind == .table {
+            let rows = (0..<8).map { index in
+                "\(String(format: "%02d", index + 1)) | \(["工作空間", "面板排列", "內容尺寸", "互動狀態"][index % 4]) | \(index % 2 == 0 ? "進行中" : "待確認")"
+            }
+            return ["rowCount": .number(Double(rows.count)), "visibleRows": .strings(rows)]
+        }
+        if catalog.first(where: { $0.id == panel.surfaceID })?.kind == .agentIdentity {
+            return ["animationState": .string(AgentIdentityAnimationModel.shared.preset.title)]
+        }
+        return [:]
+    }
+
+    private func markdownExcerpt(_ block: MarkdownDocumentBlock) -> String? {
+        switch block.content {
+        case let .heading(level, text): "\(String(repeating: "#", count: level)) \(text)"
+        case let .paragraph(text): String(text.prefix(500))
+        case let .bullet(text): "• \(text)"
+        case let .quote(text): "> \(text)"
+        case let .code(language, source): "程式碼（\(language ?? "text")）：\(String(source.prefix(500)))"
+        case let .table(rows): "表格：\(rows.prefix(4).map { $0.joined(separator: " | ") }.joined(separator: " / "))"
+        case let .image(alt, source): "圖片：\(alt)（\(source)）"
+        case .divider: nil
+        }
     }
 
     /// Adds a new workspace panel instance and returns its stable identifier.
@@ -484,6 +734,8 @@ private struct AgentWorkspaceSnapshot {
         transitioningScreenID = nil
         coreAnimationTestWindowController?.close()
         coreAnimationTestWindowController = nil
+        userViewTestWindowController?.close()
+        userViewTestWindowController = nil
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
         for root in roots.values { root.dispose() }

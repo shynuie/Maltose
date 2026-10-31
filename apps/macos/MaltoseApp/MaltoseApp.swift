@@ -17,6 +17,8 @@ import SwiftUI
                 CommandMenu("面板") {
                     Button("核心動畫測試…") { appDelegate.workspace?.showCoreAnimationTest() }
                         .keyboardShortcut("0", modifiers: [.command, .option])
+                    Button("UI 感知測試…") { appDelegate.workspace?.showUserViewTest() }
+                        .keyboardShortcut("v", modifiers: [.command, .option])
                 }
             }
     }

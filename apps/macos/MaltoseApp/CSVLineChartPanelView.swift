@@ -16,6 +16,13 @@ struct CSVLineChartData {
     let rows: [CSVLineChartRow]
 }
 
+struct CSVLineChartPointContext: Equatable {
+    let xLabel: String
+    let seriesName: String
+    let value: Double
+    let note: String
+}
+
 struct CSVLineChartBand: Hashable, Identifiable {
     let firstSeries: Int
     let secondSeries: Int
@@ -161,6 +168,7 @@ enum CSVLineChartParser {
     @Published private(set) var filledBands: [CSVLineChartBand: Double] = [:]
     @Published private(set) var xZoom: CGFloat = 1
     @Published private(set) var xPan: Double = 0
+    @Published private(set) var hoveredPoint: CSVLineChartPointContext?
 
     init() {
         let sample = """
@@ -179,7 +187,12 @@ enum CSVLineChartParser {
     }
 
     func toggleSeries(_ index: Int) {
-        if visibleSeries.contains(index) { visibleSeries.remove(index) }
+        if visibleSeries.contains(index) {
+            visibleSeries.remove(index)
+            if data.seriesNames.indices.contains(index), hoveredPoint?.seriesName == data.seriesNames[index] {
+                hoveredPoint = nil
+            }
+        }
         else { visibleSeries.insert(index) }
     }
 
@@ -190,6 +203,22 @@ enum CSVLineChartParser {
     func setXAxisViewport(zoom: CGFloat, pan: Double) {
         xZoom = min(8, max(1, zoom))
         xPan = pan.isFinite ? pan : 0
+    }
+
+    func setHoveredPoint(rowIndex: Int?, seriesIndex: Int?) {
+        guard let rowIndex, let seriesIndex,
+              data.rows.indices.contains(rowIndex),
+              data.seriesNames.indices.contains(seriesIndex),
+              data.rows[rowIndex].values.indices.contains(seriesIndex),
+              let value = data.rows[rowIndex].values[seriesIndex] else {
+            hoveredPoint = nil
+            return
+        }
+        let row = data.rows[rowIndex]
+        hoveredPoint = CSVLineChartPointContext(xLabel: row.xLabel,
+                                                seriesName: data.seriesNames[seriesIndex],
+                                                value: value,
+                                                note: row.note)
     }
 
     /// Called by the future agent adapter when it creates or updates a chart.
@@ -318,13 +347,20 @@ struct CSVLineChartPanelView: View {
                 chart(in: geometry.size)
                     .onContinuousHover { phase in
                         switch phase {
-                        case .active(let location): hover = closestPoint(to: location, in: geometry.size)
-                        case .ended: hover = nil
+                        case .active(let location):
+                            hover = closestPoint(to: location, in: geometry.size)
+                            model.setHoveredPoint(rowIndex: hover?.rowIndex, seriesIndex: hover?.seriesIndex)
+                        case .ended:
+                            hover = nil
+                            model.setHoveredPoint(rowIndex: nil, seriesIndex: nil)
                         }
                     }
             }
             .frame(minHeight: 120)
-            .onChange(of: model.sourceName) { _, _ in hover = nil }
+            .onChange(of: model.sourceName) { _, _ in
+                hover = nil
+                model.setHoveredPoint(rowIndex: nil, seriesIndex: nil)
+            }
 
             if let error = model.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle")

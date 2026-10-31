@@ -109,6 +109,49 @@ import WebKit
         else { pendingTestPage = true }
     }
 
+    func userViewDetails() async -> [String: UserViewValue] {
+        var details: [String: UserViewValue] = [
+            "pageTitle": .string(pageTitle),
+            "url": currentURL.map { .string($0.absoluteString) } ?? .null,
+            "isLoading": .boolean(isLoading),
+            "isPreview": .boolean(isPreview),
+            "hasBackHistory": .boolean(canGoBack),
+            "hasForwardHistory": .boolean(canGoForward)
+        ]
+        guard let webView else { return details }
+        let script = #"""
+        (() => {
+          const selectedText = window.getSelection()?.toString()?.trim() || "";
+          const nodes = [...document.querySelectorAll("h1,h2,h3,p,li")];
+          const visibleText = nodes.filter(node => {
+            const rect = node.getBoundingClientRect();
+            const style = getComputedStyle(node);
+            return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight
+              && style.visibility !== "hidden" && style.display !== "none";
+          }).map(node => node.innerText.trim()).filter(Boolean).join("\n").slice(0, 2400);
+          const video = document.querySelector("video");
+          const media = video ? { currentTime: video.currentTime, duration: video.duration, paused: video.paused } : null;
+          return JSON.stringify({ selectedText, visibleText, scrollY: window.scrollY, viewportHeight: window.innerHeight, media });
+        })()
+        """#
+        if let encoded = try? await webView.evaluateJavaScript(script) as? String,
+           let data = encoded.data(using: .utf8),
+           let context = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            details["selectedText"] = .string(context["selectedText"] as? String ?? "")
+            details["visibleTextExcerpt"] = .string(context["visibleText"] as? String ?? "")
+            details["scrollY"] = .number(context["scrollY"] as? Double ?? 0)
+            details["viewportHeight"] = .number(context["viewportHeight"] as? Double ?? 0)
+            if let media = context["media"] as? [String: Any] {
+                details["media"] = .object([
+                    "currentTime": .number(media["currentTime"] as? Double ?? 0),
+                    "duration": .number(media["duration"] as? Double ?? 0),
+                    "isPaused": .boolean(media["paused"] as? Bool ?? true)
+                ])
+            }
+        }
+        return details
+    }
+
     static func destination(for input: String) -> URL? {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
