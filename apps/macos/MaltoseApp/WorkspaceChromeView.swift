@@ -7,6 +7,12 @@ import SwiftUI
     @Published var settingsPresented = false { didSet { if oldValue != settingsPresented { onPresentationChange?() } } }
     @Published var draft = ""
 
+    func submitDraft() {
+        guard draft.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "test" else { return }
+        draft = ""
+        AgentIdentityAnimationModel.shared.runStateTest()
+    }
+
     func closeOverlays() {
         tipsExpanded = false
         settingsPresented = false
@@ -63,7 +69,7 @@ struct WorkspaceBottomChrome: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.92))
                 .accessibilityLabel("空間輸入")
-                .onSubmit { }
+                .onSubmit { model.submitDraft() }
             Button {
                 model.tipsExpanded = false
                 model.settingsPresented.toggle()

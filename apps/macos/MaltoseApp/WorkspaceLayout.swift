@@ -2,12 +2,18 @@ import Foundation
 
 enum WorkspaceMode: String { case grid, focused, sidebar }
 
+struct WorkspaceGridPosition: Equatable, Hashable {
+    var row: Int
+    var column: Int
+}
+
 /// Presentation belongs to a screen-sized window, independently of document/selection state.
 struct WorkspaceLayoutState {
     var panelIDs: [String] = []
     var primaryID: String?
     var selectedIDs: Set<String> = []
     var mode: WorkspaceMode = .grid
+    var identityPosition = WorkspaceGridPosition(row: 0, column: 0)
 
     mutating func reconcile(_ ids: [String]) {
         panelIDs = panelIDs.filter { ids.contains($0) } + ids.filter { !panelIDs.contains($0) }
@@ -47,6 +53,35 @@ struct WorkspaceLayoutState {
     mutating func clearSelection() {
         selectedIDs.removeAll()
     }
+
+    @discardableResult mutating func repositionPanels(_ ids: [String], to position: WorkspaceGridPosition,
+                                                       columns: Int, identityID: String = "agent-identity") -> Bool {
+        guard columns > 0, !ids.isEmpty, ids.allSatisfy(panelIDs.contains) else { return false }
+        if ids.contains(identityID) {
+            guard ids.count == 1 else { return false }
+            let next = WorkspaceGridPosition(row: max(0, position.row),
+                                             column: min(columns - 1, max(0, position.column)))
+            guard identityPosition != next else { return false }
+            identityPosition = next
+            return true
+        }
+
+        let moving = panelIDs.filter(ids.contains)
+        let identityIndex = panelIDs.firstIndex(of: identityID)
+        var remaining = panelIDs.filter { $0 != identityID && !ids.contains($0) }
+        let requestedCell = max(0, position.row) * columns + min(columns - 1, max(0, position.column))
+        let identityCell = identityPosition.row * columns + min(columns - 1, identityPosition.column)
+        let blockedCells: Set<Int> = [identityCell, identityCell + columns]
+        let searchLimit = max(requestedCell + columns * 2, remaining.count + moving.count + columns * 2)
+        let availableCells = (0...searchLimit).filter { !blockedCells.contains($0) }
+        let insertionIndex = availableCells.firstIndex(where: { $0 >= requestedCell }) ?? availableCells.count
+        let boundedIndex = min(remaining.count, insertionIndex)
+        remaining.insert(contentsOf: moving, at: boundedIndex)
+        if let identityIndex { remaining.insert(identityID, at: min(identityIndex, remaining.count)) }
+        guard remaining != panelIDs else { return false }
+        panelIDs = remaining
+        return true
+    }
 }
 
 enum WorkspaceGeometry {
@@ -69,7 +104,9 @@ enum WorkspaceGeometry {
     }
 
     /// Zoom is a normalized width between the two-column and ten-column limits.
-    static func globalGrid(count: Int, viewport: CGSize, zoom: CGFloat, margin requestedMargin: CGFloat = 16, gap requestedGap: CGFloat = 16) -> GlobalGrid {
+    static func globalGrid(count: Int, viewport: CGSize, zoom: CGFloat, rowSpans: [Int] = [],
+                           pinnedPositions: [Int: WorkspaceGridPosition] = [:],
+                           margin requestedMargin: CGFloat = 16, gap requestedGap: CGFloat = 16) -> GlobalGrid {
         let width = max(1, viewport.width)
         let height = max(1, viewport.height)
         let margin = min(max(0, requestedMargin), max(0, (width - 2) / 4))
@@ -82,18 +119,58 @@ enum WorkspaceGeometry {
         // A small epsilon makes column selection stable at fractional-point boundaries.
         let columns = min(10, max(2, Int(floor((available + gap + 0.001) / (panelWidth + gap)))))
         let safeCount = max(0, count)
-        let rows = safeCount == 0 ? 0 : Int(ceil(Double(safeCount) / Double(columns)))
         let panelHeight = panelWidth / panelAspect
         let gridWidth = CGFloat(columns) * panelWidth + CGFloat(max(0, columns - 1)) * gap
         let gridStartX = (width - gridWidth) / 2
+        var occupiedRows: [[Bool]] = []
+        var placements = Array<(column: Int, row: Int, span: Int)?>(repeating: nil, count: safeCount)
+        func canPlace(row: Int, column: Int, span: Int) -> Bool {
+            guard column >= 0, column < columns else { return false }
+            return (row..<(row + span)).allSatisfy { occupiedRow in
+                !occupiedRows.indices.contains(occupiedRow) || !occupiedRows[occupiedRow][column]
+            }
+        }
+        func occupy(row: Int, column: Int, span: Int) {
+            while occupiedRows.count < row + span { occupiedRows.append(Array(repeating: false, count: columns)) }
+            for occupiedRow in row..<(row + span) { occupiedRows[occupiedRow][column] = true }
+        }
+        func firstAvailable(span: Int) -> (row: Int, column: Int) {
+            var row = 0
+            search: while true {
+                for candidate in 0..<columns {
+                    if canPlace(row: row, column: candidate, span: span) { break search }
+                }
+                row += 1
+            }
+            return (row, (0..<columns).first(where: { canPlace(row: row, column: $0, span: span) }) ?? 0)
+        }
+
+        for index in pinnedPositions.keys.sorted() where index >= 0 && index < safeCount {
+            let span = min(2, max(1, rowSpans.indices.contains(index) ? rowSpans[index] : 1))
+            let requested = pinnedPositions[index]!
+            let row = max(0, requested.row)
+            let column = min(columns - 1, max(0, requested.column))
+            let cell = canPlace(row: row, column: column, span: span)
+                ? (row: row, column: column)
+                : firstAvailable(span: span)
+            occupy(row: cell.row, column: cell.column, span: span)
+            placements[index] = (cell.column, cell.row, span)
+        }
+        for index in 0..<safeCount where placements[index] == nil {
+            let span = min(2, max(1, rowSpans.indices.contains(index) ? rowSpans[index] : 1))
+            let cell = firstAvailable(span: span)
+            occupy(row: cell.row, column: cell.column, span: span)
+            placements[index] = (cell.column, cell.row, span)
+        }
+        let rows = occupiedRows.count
         let gridHeight = 2 * margin + CGFloat(rows) * panelHeight + CGFloat(max(0, rows - 1)) * gap
         let documentHeight = max(height, gridHeight)
-        let frames = (0..<safeCount).map { index -> CGRect in
-            let row = index / columns
-            let col = index % columns
-            return CGRect(x: gridStartX + CGFloat(col) * (panelWidth + gap),
-                          y: margin + CGFloat(row) * (panelHeight + gap),
-                          width: panelWidth, height: panelHeight)
+        let frames = placements.map { optionalPlacement -> CGRect in
+            let placement = optionalPlacement!
+            return CGRect(x: gridStartX + CGFloat(placement.column) * (panelWidth + gap),
+                          y: margin + CGFloat(placement.row) * (panelHeight + gap),
+                          width: panelWidth,
+                          height: CGFloat(placement.span) * panelHeight + CGFloat(placement.span - 1) * gap)
         }
         return GlobalGrid(frames: frames, columns: columns, rows: rows,
                           panelSize: CGSize(width: panelWidth, height: panelHeight),

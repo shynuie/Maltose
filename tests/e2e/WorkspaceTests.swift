@@ -118,6 +118,53 @@ final class WorkspaceLayoutTests: XCTestCase {
         }
     }
 
+    func testGlobalGridSupportsTwoRowIdentityPanelWithoutResizingOtherPanels() {
+        let grid = WorkspaceGeometry.globalGrid(count: 3, viewport: CGSize(width: 1400, height: 900),
+                                                zoom: 1, rowSpans: [2, 1, 1])
+
+        XCTAssertEqual(grid.columns, 2)
+        XCTAssertEqual(grid.rows, 2)
+        XCTAssertEqual(grid.frames[0].minX, grid.frames[1].minX - grid.panelSize.width - 16, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[0].height, grid.panelSize.height * 2 + 16, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[1].height, grid.panelSize.height, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[2].minY, grid.frames[1].minY + grid.panelSize.height + 16, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[2].minX, grid.frames[1].minX, accuracy: 0.01)
+    }
+
+    func testPinnedIdentityStaysPutWhileRegularPanelsFlowAroundItsCells() {
+        var state = WorkspaceLayoutState(panelIDs: ["agent-identity", "one", "two", "three"])
+        XCTAssertTrue(state.repositionPanels(["three"], to: WorkspaceGridPosition(row: 0, column: 0), columns: 3))
+        XCTAssertEqual(state.panelIDs, ["agent-identity", "three", "one", "two"])
+        XCTAssertEqual(state.identityPosition, WorkspaceGridPosition(row: 0, column: 0))
+
+        let zoom = WorkspaceGeometry.initialGlobalZoom(viewportWidth: 1200, initialColumns: 3)
+        let grid = WorkspaceGeometry.globalGrid(count: state.panelIDs.count,
+                                                viewport: CGSize(width: 1200, height: 900),
+                                                zoom: zoom,
+                                                rowSpans: [2, 1, 1, 1],
+                                                pinnedPositions: [0: state.identityPosition])
+        XCTAssertEqual(grid.frames[0].minX, grid.frames[1].minX - grid.panelSize.width - WorkspaceGeometry.gap, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[0].minY, grid.frames[1].minY, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[2].minY, grid.frames[1].minY, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[3].minY, grid.frames[2].minY + grid.panelSize.height + WorkspaceGeometry.gap, accuracy: 0.01)
+    }
+
+    func testIdentityPanelCanBeMovedManuallyAndRegularPanelsReflowAroundIt() {
+        var state = WorkspaceLayoutState(panelIDs: ["agent-identity", "one", "two"])
+        XCTAssertTrue(state.repositionPanels(["agent-identity"], to: WorkspaceGridPosition(row: 1, column: 1), columns: 3))
+        XCTAssertEqual(state.identityPosition, WorkspaceGridPosition(row: 1, column: 1))
+
+        let zoom = WorkspaceGeometry.initialGlobalZoom(viewportWidth: 1200, initialColumns: 3)
+        let grid = WorkspaceGeometry.globalGrid(count: state.panelIDs.count,
+                                                viewport: CGSize(width: 1200, height: 900),
+                                                zoom: zoom,
+                                                rowSpans: [2, 1, 1],
+                                                pinnedPositions: [0: state.identityPosition])
+        XCTAssertGreaterThan(grid.frames[0].minY, grid.frames[1].minY)
+        XCTAssertEqual(grid.frames[1].minY, grid.frames[2].minY, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[0].height, grid.panelSize.height * 2 + WorkspaceGeometry.gap, accuracy: 0.01)
+    }
+
     func testInitialGlobalColumnsFollowWindowAspectRatio() {
         let wideWindow = CGSize(width: 1920, height: 1080)
         let tallWindow = CGSize(width: 1080, height: 1920)

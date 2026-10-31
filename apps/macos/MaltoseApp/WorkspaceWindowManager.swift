@@ -8,12 +8,16 @@ import SwiftUI
     private(set) var fullscreenFailures: Set<String> = []
     private var fullscreenAttempted: Set<String> = []
     private var fullscreenTask: Task<Void, Never>?
+    private var coreAnimationTestWindowController: AgentCoreTestWindowController?
     private(set) var windows: [String: NSWindow] = [:]
     private(set) var roots: [String: WorkspaceRootView] = [:]
     private(set) var panels: [String: GlassPanelView] = [:]
     private(set) var assignments: [String: String] = [:]
     private(set) var draggingIDs: [String] = []
     var draggingID: String? { draggingIDs.first }
+    private var dragSourceScreenID: String?
+    private var originalDragState: WorkspaceLayoutState?
+    private var dragCommitted = false
     private var screenObserver: NSObjectProtocol?
     private var resignObserver: NSObjectProtocol?
 
@@ -96,6 +100,7 @@ import SwiftUI
     }
 
     func togglePanel(_ id: String) {
+        guard catalog.first(where: { $0.id == id })?.supportsFocusedMode != false else { return }
         guard let screen = assignments[id], let root = roots[screen] else { return }
         root.state.toggle(id)
         root.cancelHover(collapse: false)
@@ -129,6 +134,12 @@ import SwiftUI
     func showWindows() {
         for window in windows.values { window.orderFront(nil) }
         windows.values.first?.makeKeyAndOrderFront(nil)
+    }
+    func showCoreAnimationTest() {
+        if coreAnimationTestWindowController == nil {
+            coreAnimationTestWindowController = AgentCoreTestWindowController()
+        }
+        coreAnimationTestWindowController?.present()
     }
     func restoreWindowFrame(_ screenID: String) {
         guard let screen = NSScreen.screens.first(where: { Self.screenID($0) == screenID }),
@@ -188,6 +199,10 @@ import SwiftUI
             source.arrange(animated: false)
             draggingIDs = [id]
         }
+        dragSourceScreenID = screen
+        originalDragState = source.state
+        dragCommitted = false
+        for draggedID in draggingIDs { panels[draggedID]?.alphaValue = 0.28 }
         for root in roots.values { root.cancelHover(collapse: false) }
     }
     func acceptsDrag(_ info: NSDraggingInfo) -> Bool {
@@ -195,15 +210,36 @@ import SwiftUI
               let ids = info.draggingPasteboard.propertyList(forType: .maltosePanels) as? [String] else { return false }
         return ids == draggingIDs
     }
+
+    func isDraggingFrom(_ screenID: String) -> Bool { dragSourceScreenID == screenID }
+
+    func previewDraggedPanels(to screenID: String, position: WorkspaceGridPosition, columns: Int) {
+        guard dragSourceScreenID == screenID, let root = roots[screenID] else { return }
+        let beforeIDs = root.state.panelIDs
+        let beforeIdentityPosition = root.state.identityPosition
+        guard root.state.repositionPanels(draggingIDs, to: position, columns: columns) else { return }
+        guard beforeIDs != root.state.panelIDs || beforeIdentityPosition != root.state.identityPosition else { return }
+        root.arrange(animated: true)
+    }
+
     @discardableResult func moveDraggedPanels(to screenID: String) -> Bool {
         guard !draggingIDs.isEmpty, let target = roots[screenID], draggingIDs.allSatisfy({ panels[$0] != nil }) else { return false }
         let ids = draggingIDs
         guard let sourceScreen = assignments[ids[0]], ids.allSatisfy({ assignments[$0] == sourceScreen }) else { return false }
         let source = roots[sourceScreen]
+        if sourceScreen == screenID {
+            dragCommitted = true
+            return true
+        }
         if sourceScreen != screenID {
+            let movedIdentityPosition = source?.state.identityPosition
+            source?.state = originalDragState ?? source?.state ?? WorkspaceLayoutState()
             for id in ids {
                 panels[id]?.removeFromSuperview()
                 assignments[id] = screenID
+            }
+            if ids.contains("agent-identity"), let movedIdentityPosition {
+                target.state.identityPosition = movedIdentityPosition
             }
             target.state.primaryID = ids[0]
             target.state.selectedIDs = Set(ids)
@@ -211,17 +247,29 @@ import SwiftUI
             source?.arrange(animated: true)
             target.arrange(animated: true)
         }
+        dragCommitted = true
         focus(ids[0])
         return true
     }
     @discardableResult func moveDraggedPanel(to screenID: String) -> Bool { moveDraggedPanels(to: screenID) }
-    func endDrag() {
+    func endDrag(committed: Bool = false) {
+        if !committed, !dragCommitted,
+           let dragSourceScreenID, let root = roots[dragSourceScreenID], let originalDragState {
+            root.state = originalDragState
+            root.arrange(animated: true)
+        }
+        for id in draggingIDs { panels[id]?.alphaValue = 1 }
         draggingIDs = []
+        dragSourceScreenID = nil
+        originalDragState = nil
+        dragCommitted = false
         for root in roots.values { root.pointerMoved() }
     }
     func stop() {
         fullscreenTask?.cancel()
         transitioningScreenID = nil
+        coreAnimationTestWindowController?.close()
+        coreAnimationTestWindowController = nil
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
         for root in roots.values { root.dispose() }

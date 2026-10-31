@@ -6,8 +6,8 @@ extension NSPasteboard.PasteboardType {
 }
 
 @MainActor final class GlassPanelView: NSView, NSDraggingSource {
-    private static let glassTint = NSColor(calibratedRed: 0.20, green: 0.48, blue: 0.82, alpha: 0.16)
-    private static let selectedGlassTint = NSColor(calibratedRed: 0.20, green: 0.48, blue: 0.82, alpha: 0.34)
+    private static let glassTint = NSColor(calibratedWhite: 0.82, alpha: 0.02)
+    private static let selectedGlassTint = NSColor(calibratedWhite: 0.90, alpha: 0.05)
     let surfaceID: String
     let contentView: NSView
     weak var manager: WorkspaceWindowManager?
@@ -26,13 +26,13 @@ extension NSPasteboard.PasteboardType {
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
-    init(panel: WorkspacePanel, manager: WorkspaceWindowManager) {
+    init(panel: WorkspacePanel, manager: WorkspaceWindowManager? = nil) {
         self.surfaceID = panel.id
         self.manager = manager
         self.contentView = panel.makeContentView()
         if #available(macOS 26.0, *) {
             let effect = NSGlassEffectView()
-            effect.style = .regular
+            effect.style = .clear
             effect.tintColor = Self.glassTint
             effect.contentView = glassContents
             glass = effect
@@ -180,7 +180,7 @@ extension NSPasteboard.PasteboardType {
         context == .withinApplication ? .move : []
     }
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
-        manager?.endDrag()
+        manager?.endDrag(committed: operation == .move)
     }
     func ignoreModifierKeys(for session: NSDraggingSession) -> Bool { true }
 

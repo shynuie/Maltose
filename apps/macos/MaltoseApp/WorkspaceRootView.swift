@@ -287,7 +287,18 @@ import SwiftUI
             let columns = WorkspaceGeometry.defaultGlobalColumns(forWindowAspectRatio: aspectRatio)
             gridZoom = WorkspaceGeometry.initialGlobalZoom(viewportWidth: viewport.width, initialColumns: columns)
         }
-        return WorkspaceGeometry.globalGrid(count: state.panelIDs.count, viewport: viewport, zoom: gridZoom)
+        let rowSpans = state.panelIDs.map { id in
+            manager?.catalog.first(where: { $0.id == id })?.globalGridRowSpan ?? 1
+        }
+        var pinnedPositions: [Int: WorkspaceGridPosition] = [:]
+        for (index, id) in state.panelIDs.enumerated() {
+            if (manager?.catalog.first(where: { $0.id == id })?.globalGridRowSpan ?? 1) > 1 {
+                pinnedPositions[index] = state.identityPosition
+            }
+        }
+        return WorkspaceGeometry.globalGrid(count: state.panelIDs.count, viewport: viewport,
+                                            zoom: gridZoom, rowSpans: rowSpans,
+                                            pinnedPositions: pinnedPositions)
     }
 
     private func closeChromeIfClickedOutside(_ event: NSEvent) {
@@ -463,18 +474,50 @@ import SwiftUI
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         guard manager?.acceptsDrag(sender) == true else { return [] }
+        if manager?.isDraggingFrom(screenID) == true {
+            guard state.mode == .grid, let target = globalGridPosition(at: sender.draggingLocation) else { return [] }
+            manager?.previewDraggedPanels(to: screenID, position: target.position, columns: target.columns)
+            return .move
+        }
         layer?.borderWidth = 2
         layer?.borderColor = NSColor.systemBlue.cgColor
         return .move
     }
-    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { manager?.acceptsDrag(sender) == true ? .move : [] }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard manager?.acceptsDrag(sender) == true else { return [] }
+        if manager?.isDraggingFrom(screenID) == true {
+            guard state.mode == .grid, let target = globalGridPosition(at: sender.draggingLocation) else { return [] }
+            manager?.previewDraggedPanels(to: screenID, position: target.position, columns: target.columns)
+        }
+        return .move
+    }
     override func draggingExited(_ sender: NSDraggingInfo?) { layer?.borderWidth = 0 }
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         layer?.borderWidth = 0
         guard manager?.acceptsDrag(sender) == true else { return false }
+        if manager?.isDraggingFrom(screenID) == true {
+            guard state.mode == .grid, let target = globalGridPosition(at: sender.draggingLocation) else { return false }
+            manager?.previewDraggedPanels(to: screenID, position: target.position, columns: target.columns)
+            return true
+        }
         return manager?.moveDraggedPanels(to: screenID) == true
     }
     override func concludeDragOperation(_ sender: NSDraggingInfo?) { layer?.borderWidth = 0 }
+
+    private func globalGridPosition(at windowPoint: NSPoint) -> (position: WorkspaceGridPosition, columns: Int)? {
+        let grid = makeGlobalGrid(viewport: globalScroll.contentView.bounds.size)
+        guard grid.panelSize.width > 0, grid.panelSize.height > 0 else { return nil }
+        let rootPoint = convert(windowPoint, from: nil)
+        guard globalScroll.frame.contains(rootPoint) else { return nil }
+        let point = globalDocument.convert(rootPoint, from: self)
+        let gridWidth = CGFloat(grid.columns) * grid.panelSize.width + CGFloat(grid.columns - 1) * WorkspaceGeometry.gap
+        let gridStartX = (globalDocument.bounds.width - gridWidth) / 2
+        let column = Int(round((point.x - gridStartX - grid.panelSize.width / 2)
+                               / (grid.panelSize.width + WorkspaceGeometry.gap)))
+        let row = Int(round((point.y - WorkspaceGeometry.margin - grid.panelSize.height / 2)
+                            / (grid.panelSize.height + WorkspaceGeometry.gap)))
+        return (WorkspaceGridPosition(row: max(0, row), column: min(grid.columns - 1, max(0, column))), grid.columns)
+    }
 
     func dispose() {
         hoverTask?.cancel()

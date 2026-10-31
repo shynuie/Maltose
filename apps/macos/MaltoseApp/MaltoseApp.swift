@@ -14,6 +14,10 @@ import SwiftUI
                         .keyboardShortcut("f", modifiers: [.control, .command])
                     Button("顯示所有窗口") { appDelegate.workspace?.showWindows() }
                 }
+                CommandMenu("面板") {
+                    Button("核心動畫測試…") { appDelegate.workspace?.showCoreAnimationTest() }
+                        .keyboardShortcut("0", modifiers: [.command, .option])
+                }
             }
     }
 }

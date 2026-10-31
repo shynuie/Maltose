@@ -3,23 +3,43 @@ import SwiftUI
 
 /// UI-only model. Content has no dependency on the Host or an Agent document.
 struct WorkspacePanel: Identifiable {
-    enum Kind { case canvas, notes, chart, table }
+    enum Kind { case canvas, notes, chart, table, agentIdentity, agentCoreTest }
     let id: String
     let title: String
     let kind: Kind
 
+    var globalGridRowSpan: Int { kind == .agentIdentity ? 2 : 1 }
+    var supportsFocusedMode: Bool { kind != .agentIdentity }
+
     @MainActor func makeContentView() -> NSView {
-        let view = NSHostingView(rootView: WorkspaceSampleContent(panel: self))
-        view.sizingOptions = []
+        let view: NSView
+        switch kind {
+        case .agentIdentity:
+            let hostingView = NSHostingView(rootView: AgentIdentityPanelView())
+            hostingView.wantsLayer = true
+            hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+            hostingView.layer?.isOpaque = false
+            view = hostingView
+        case .agentCoreTest:
+            view = NSHostingView(rootView: AgentCoreAnimationTestView())
+        default:
+            view = NSHostingView(rootView: WorkspaceSampleContent(panel: self))
+        }
+        (view as? NSHostingView<AgentCoreAnimationTestView>)?.sizingOptions = []
+        (view as? NSHostingView<AgentIdentityPanelView>)?.sizingOptions = []
+        (view as? NSHostingView<WorkspaceSampleContent>)?.sizingOptions = []
         return view
     }
 
     static let samples: [WorkspacePanel] = [
+        .init(id: "agent-identity", title: "形象", kind: .agentIdentity),
         .init(id: "canvas", title: "畫布", kind: .canvas),
         .init(id: "notes", title: "筆記", kind: .notes),
         .init(id: "chart", title: "圖表", kind: .chart),
         .init(id: "table", title: "資料", kind: .table)
     ]
+
+    static let agentCoreTest = WorkspacePanel(id: "agent-core-test", title: "核心動畫測試", kind: .agentCoreTest)
 
     static func previewSamples(count: Int) -> [WorkspacePanel] {
         let kinds: [Kind] = [.canvas, .notes, .chart, .table]
@@ -92,6 +112,8 @@ private struct WorkspaceSampleContent: View {
                         }
                     }
                 }
+            case .agentCoreTest, .agentIdentity:
+                EmptyView()
             }
         }
         .padding(28)
