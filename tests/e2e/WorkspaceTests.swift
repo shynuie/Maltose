@@ -147,6 +147,14 @@ final class WorkspaceLayoutTests: XCTestCase {
         XCTAssertEqual(grid.frames[2].minX, grid.frames[1].minX, accuracy: 0.01)
     }
 
+    func testChatPanelUsesIdentitySizedGlobalFootprint() {
+        let identity = WorkspacePanel.samples.first { $0.kind == .agentIdentity }
+        let chat = WorkspacePanel.samples.first { $0.kind == .conversationHistory }
+
+        XCTAssertEqual(identity?.globalGridRowSpan, 2)
+        XCTAssertEqual(chat?.globalGridRowSpan, identity?.globalGridRowSpan)
+    }
+
     func testPinnedIdentityStaysPutWhileRegularPanelsFlowAroundItsCells() {
         var state = WorkspaceLayoutState(panelIDs: ["agent-identity", "one", "two", "three"])
         XCTAssertTrue(state.repositionPanels(["three"], to: WorkspaceGridPosition(row: 0, column: 0), columns: 3))
@@ -358,6 +366,42 @@ final class WorkspaceLayoutTests: XCTestCase {
         XCTAssertTrue(WorkspacePanel.Kind.chart.allowsMultipleInstances)
         XCTAssertTrue(WorkspacePanel.Kind.table.allowsMultipleInstances)
         XCTAssertTrue(WorkspacePanel.Kind.document.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.imageGallery.allowsMultipleInstances)
+    }
+
+    @MainActor func testImageGalleryStartsWithEmptyPreviousSlotAndSixSamples() {
+        let model = ImageGalleryModel()
+        XCTAssertEqual(model.images.count, 6)
+        XCTAssertEqual(model.selectedIndex, 0)
+        XCTAssertNil(model.previousIndex)
+        XCTAssertEqual(model.nextIndex, 1)
+
+        model.configure(mode: .focused)
+        model.selectImage(at: 2)
+        XCTAssertEqual(model.previousIndex, 1)
+        XCTAssertEqual(model.nextIndex, 3)
+        model.expandImage(at: 1)
+        XCTAssertEqual(model.selectedIndex, 1)
+        XCTAssertEqual(model.expandedIndex, 1)
+        model.beginMagnification()
+        model.updateMagnification(2)
+        model.beginPan()
+        model.updatePan(CGSize(width: 500, height: 500))
+        model.endPan(viewport: CGSize(width: 160, height: 90), content: CGSize(width: 160, height: 90))
+        XCTAssertEqual(model.panOffset.width, 80, accuracy: 0.01)
+        XCTAssertEqual(model.panOffset.height, 45, accuracy: 0.01)
+        model.collapse()
+        model.selectImage(at: 5)
+        XCTAssertNil(model.nextIndex)
+    }
+
+    @MainActor func testImageGalleryAcceptsWebImageURLsAndRejectsUnsupportedSchemes() {
+        let model = ImageGalleryModel(images: [])
+        XCTAssertTrue(model.addRemoteImage("https://example.com/image.png"))
+        XCTAssertFalse(model.addRemoteImage("file:///tmp/image.png"))
+        XCTAssertFalse(model.addRemoteImage("not a url"))
+        XCTAssertEqual(model.images.count, 1)
+        XCTAssertEqual(model.selectedIndex, 0)
     }
 
     @MainActor func testChartAgentCanConfigureAreaFillBetweenNamedSeries() {

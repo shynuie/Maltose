@@ -4,7 +4,7 @@ import SwiftUI
 /// UI-only model. Content has no dependency on the Host or an Agent document.
 struct WorkspacePanel: Identifiable {
     enum Kind: Equatable {
-        case canvas, notes, chart, table, conversationHistory, document, agentIdentity, agentCoreTest
+        case canvas, notes, chart, table, conversationHistory, document, imageGallery, agentIdentity, agentCoreTest
 
         var allowsMultipleInstances: Bool {
             self != .agentIdentity && self != .conversationHistory && self != .agentCoreTest
@@ -18,6 +18,7 @@ struct WorkspacePanel: Identifiable {
             case .table: "資料"
             case .conversationHistory: "聊天"
             case .document: "文檔"
+            case .imageGallery: "圖片"
             case .agentIdentity: "形象"
             case .agentCoreTest: "核心動畫測試"
             }
@@ -27,12 +28,15 @@ struct WorkspacePanel: Identifiable {
     let title: String
     let kind: Kind
 
-    var globalGridRowSpan: Int { kind == .agentIdentity ? 2 : 1 }
+    var globalGridRowSpan: Int {
+        kind == .agentIdentity || kind == .conversationHistory ? 2 : 1
+    }
     var supportsFocusedMode: Bool { kind != .agentIdentity }
 
     @MainActor func makeContentView(conversationHistoryModel: ConversationHistoryModel? = nil,
                                     markdownDocumentModel: MarkdownDocumentModel? = nil,
-                                    chartModel: CSVLineChartModel? = nil) -> NSView {
+                                    chartModel: CSVLineChartModel? = nil,
+                                    imageGalleryModel: ImageGalleryModel? = nil) -> NSView {
         let view: NSView
         switch kind {
         case .chart:
@@ -55,6 +59,12 @@ struct WorkspacePanel: Identifiable {
             hostingView.layer?.backgroundColor = NSColor.clear.cgColor
             hostingView.layer?.isOpaque = false
             view = hostingView
+        case .imageGallery:
+            let hostingView = NSHostingView(rootView: ImageGalleryPanelView(model: imageGalleryModel ?? ImageGalleryModel()))
+            hostingView.wantsLayer = true
+            hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+            hostingView.layer?.isOpaque = false
+            view = hostingView
         case .agentIdentity:
             let hostingView = NSHostingView(rootView: AgentIdentityPanelView())
             hostingView.wantsLayer = true
@@ -71,6 +81,7 @@ struct WorkspacePanel: Identifiable {
         (view as? NSHostingView<ConversationHistoryPanelView>)?.sizingOptions = []
         (view as? NSHostingView<MarkdownDocumentPanelView>)?.sizingOptions = []
         (view as? NSHostingView<CSVLineChartPanelView>)?.sizingOptions = []
+        (view as? NSHostingView<ImageGalleryPanelView>)?.sizingOptions = []
         (view as? NSHostingView<WorkspaceSampleContent>)?.sizingOptions = []
         return view
     }
@@ -79,6 +90,7 @@ struct WorkspacePanel: Identifiable {
         .init(id: "agent-identity", title: "形象", kind: .agentIdentity),
         .init(id: "chat", title: "聊天", kind: .conversationHistory),
         .init(id: "document", title: "文檔", kind: .document),
+        .init(id: "gallery", title: "圖片", kind: .imageGallery),
         .init(id: "canvas", title: "畫布", kind: .canvas),
         .init(id: "notes", title: "筆記", kind: .notes),
         .init(id: "chart", title: "圖表", kind: .chart),
@@ -142,7 +154,7 @@ private struct WorkspaceSampleContent: View {
                         }
                     }
                 }
-            case .chart, .conversationHistory, .document, .agentCoreTest, .agentIdentity:
+            case .chart, .conversationHistory, .document, .imageGallery, .agentCoreTest, .agentIdentity:
                 EmptyView()
             }
         }

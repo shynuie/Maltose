@@ -9,6 +9,10 @@ rm -rf "$stage"
 mkdir -p "$stage/Contents/MacOS"
 cp .build/release/MaltoseApp "$stage/Contents/MacOS/MaltoseApp"
 cp -R .build/release/MaltoseWorkspace_MaltoseApp.bundle "$stage/Contents/MacOS/"
+if [ -d data/imgs/demo ]; then
+    mkdir -p "$stage/Contents/Resources/GallerySamples"
+    cp data/imgs/demo/* "$stage/Contents/Resources/GallerySamples/"
+fi
 python3 - <<'PY'
 import plistlib
 from pathlib import Path

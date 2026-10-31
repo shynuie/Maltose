@@ -13,6 +13,7 @@ extension NSPasteboard.PasteboardType {
     let conversationHistoryModel: ConversationHistoryModel?
     let markdownDocumentModel: MarkdownDocumentModel?
     let chartModel: CSVLineChartModel?
+    let imageGalleryModel: ImageGalleryModel?
     weak var manager: WorkspaceWindowManager?
     private let glass: NSView
     private let glassContents = NSView()
@@ -35,12 +36,15 @@ extension NSPasteboard.PasteboardType {
         let historyModel = panel.kind == .conversationHistory ? ConversationHistoryModel() : nil
         let documentModel = panel.kind == .document ? MarkdownDocumentModel() : nil
         let chartModel = panel.kind == .chart ? CSVLineChartModel() : nil
+        let imageGalleryModel = panel.kind == .imageGallery ? ImageGalleryModel() : nil
         self.conversationHistoryModel = historyModel
         self.markdownDocumentModel = documentModel
         self.chartModel = chartModel
+        self.imageGalleryModel = imageGalleryModel
         self.contentView = panel.makeContentView(conversationHistoryModel: historyModel,
                                                  markdownDocumentModel: documentModel,
-                                                 chartModel: chartModel)
+                                                 chartModel: chartModel,
+                                                 imageGalleryModel: imageGalleryModel)
         if #available(macOS 26.0, *) {
             let effect = NSGlassEffectView()
             effect.style = .clear
@@ -86,6 +90,7 @@ extension NSPasteboard.PasteboardType {
         isSelected = selected
         conversationHistoryModel?.configure(mode: workspaceMode)
         markdownDocumentModel?.configure(mode: workspaceMode)
+        imageGalleryModel?.configure(mode: workspaceMode)
         if #available(macOS 26.0, *), let effect = glass as? NSGlassEffectView {
             effect.tintColor = selected ? Self.selectedGlassTint : Self.glassTint
         } else if let effect = glass as? NSVisualEffectView {

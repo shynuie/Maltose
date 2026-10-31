@@ -191,6 +191,8 @@ private struct AgentWorkspaceSnapshot {
         let chatModel = assignmentSnapshot["chat"] == selectedScreenID ? panels["chat"]?.conversationHistoryModel : nil
         let originalSessionID = chatModel?.currentSessionID
         let chartModel = assignmentSnapshot["chart"] == selectedScreenID ? panels["chart"]?.chartModel : nil
+        let galleryModel = assignmentSnapshot["gallery"] == selectedScreenID ? panels["gallery"]?.imageGalleryModel : nil
+        let originalGalleryIndex = galleryModel?.selectedIndex ?? 0
         let originalSeries = chartModel.map { model in
             model.visibleSeries.sorted().compactMap { model.data.seriesNames.indices.contains($0) ? model.data.seriesNames[$0] : nil }
         } ?? []
@@ -228,6 +230,8 @@ private struct AgentWorkspaceSnapshot {
                 chartModel?.configureAgentVisibleSeries(originalSeries)
                 chartModel?.configureAgentBands(originalBands)
                 chartModel?.setXAxisViewport(zoom: originalChartZoom, pan: originalChartPan)
+                galleryModel?.collapse()
+                galleryModel?.selectImage(at: originalGalleryIndex)
                 status("測試完成")
                 self.agentInteractionTestTask = nil
             }
@@ -252,7 +256,7 @@ private struct AgentWorkspaceSnapshot {
                 }),
                 ("測試：新增多個面板並檢查單例限制", {
                     root.setAgentTestMode(.grid)
-                    for kind in [WorkspacePanel.Kind.chart, .notes, .document, .table, .canvas] {
+                    for kind in [WorkspacePanel.Kind.chart, .notes, .document, .imageGallery, .table, .canvas] {
                         if let panel = self.addPanel(kind: kind, to: selectedScreenID) {
                             addedPanelIDs.append(panel.id)
                         }
@@ -291,6 +295,21 @@ private struct AgentWorkspaceSnapshot {
                         }
                         chartModel.setXAxisViewport(zoom: 1.8, pan: 0)
                     }
+                }),
+                ("測試：瀏覽圖片、放大與平移", {
+                    if assignmentSnapshot["gallery"] == selectedScreenID {
+                        self.selectPanel("gallery")
+                        galleryModel?.selectImage(at: 3)
+                        galleryModel?.expandImage(at: 3)
+                        galleryModel?.beginMagnification()
+                        galleryModel?.updateMagnification(1.8)
+                        galleryModel?.beginPan()
+                        galleryModel?.updatePan(CGSize(width: 30, height: 18))
+                    }
+                }),
+                ("測試：返回圖片預覽並切換", {
+                    galleryModel?.collapse()
+                    galleryModel?.move(by: -1)
                 }),
                 ("測試：切換資料與畫布面板", {
                     if assignmentSnapshot["table"] == selectedScreenID { self.selectPanel("table") }
