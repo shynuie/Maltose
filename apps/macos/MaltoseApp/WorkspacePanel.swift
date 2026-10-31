@@ -3,7 +3,7 @@ import SwiftUI
 
 /// UI-only model. Content has no dependency on the Host or an Agent document.
 struct WorkspacePanel: Identifiable {
-    enum Kind { case canvas, notes, chart, table, conversationHistory, agentIdentity, agentCoreTest }
+    enum Kind { case canvas, notes, chart, table, conversationHistory, document, agentIdentity, agentCoreTest }
     let id: String
     let title: String
     let kind: Kind
@@ -11,12 +11,20 @@ struct WorkspacePanel: Identifiable {
     var globalGridRowSpan: Int { kind == .agentIdentity ? 2 : 1 }
     var supportsFocusedMode: Bool { kind != .agentIdentity }
 
-    @MainActor func makeContentView(conversationHistoryModel: ConversationHistoryModel? = nil) -> NSView {
+    @MainActor func makeContentView(conversationHistoryModel: ConversationHistoryModel? = nil,
+                                    markdownDocumentModel: MarkdownDocumentModel? = nil) -> NSView {
         let view: NSView
         switch kind {
         case .conversationHistory:
             let model = conversationHistoryModel ?? ConversationHistoryModel()
             let hostingView = NSHostingView(rootView: ConversationHistoryPanelView(model: model))
+            hostingView.wantsLayer = true
+            hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+            hostingView.layer?.isOpaque = false
+            view = hostingView
+        case .document:
+            let model = markdownDocumentModel ?? MarkdownDocumentModel()
+            let hostingView = NSHostingView(rootView: MarkdownDocumentPanelView(model: model))
             hostingView.wantsLayer = true
             hostingView.layer?.backgroundColor = NSColor.clear.cgColor
             hostingView.layer?.isOpaque = false
@@ -35,6 +43,7 @@ struct WorkspacePanel: Identifiable {
         (view as? NSHostingView<AgentCoreAnimationTestView>)?.sizingOptions = []
         (view as? NSHostingView<AgentIdentityPanelView>)?.sizingOptions = []
         (view as? NSHostingView<ConversationHistoryPanelView>)?.sizingOptions = []
+        (view as? NSHostingView<MarkdownDocumentPanelView>)?.sizingOptions = []
         (view as? NSHostingView<WorkspaceSampleContent>)?.sizingOptions = []
         return view
     }
@@ -42,6 +51,7 @@ struct WorkspacePanel: Identifiable {
     static let samples: [WorkspacePanel] = [
         .init(id: "agent-identity", title: "形象", kind: .agentIdentity),
         .init(id: "chat", title: "聊天", kind: .conversationHistory),
+        .init(id: "document", title: "文檔", kind: .document),
         .init(id: "canvas", title: "畫布", kind: .canvas),
         .init(id: "notes", title: "筆記", kind: .notes),
         .init(id: "chart", title: "圖表", kind: .chart),
@@ -121,7 +131,7 @@ private struct WorkspaceSampleContent: View {
                         }
                     }
                 }
-            case .conversationHistory, .agentCoreTest, .agentIdentity:
+            case .conversationHistory, .document, .agentCoreTest, .agentIdentity:
                 EmptyView()
             }
         }

@@ -11,6 +11,7 @@ extension NSPasteboard.PasteboardType {
     let surfaceID: String
     let contentView: NSView
     let conversationHistoryModel: ConversationHistoryModel?
+    let markdownDocumentModel: MarkdownDocumentModel?
     weak var manager: WorkspaceWindowManager?
     private let glass: NSView
     private let glassContents = NSView()
@@ -31,8 +32,11 @@ extension NSPasteboard.PasteboardType {
         self.surfaceID = panel.id
         self.manager = manager
         let historyModel = panel.kind == .conversationHistory ? ConversationHistoryModel() : nil
+        let documentModel = panel.kind == .document ? MarkdownDocumentModel() : nil
         self.conversationHistoryModel = historyModel
-        self.contentView = panel.makeContentView(conversationHistoryModel: historyModel)
+        self.markdownDocumentModel = documentModel
+        self.contentView = panel.makeContentView(conversationHistoryModel: historyModel,
+                                                 markdownDocumentModel: documentModel)
         if #available(macOS 26.0, *) {
             let effect = NSGlassEffectView()
             effect.style = .clear
@@ -71,12 +75,13 @@ extension NSPasteboard.PasteboardType {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func configure(preview: Bool, primary: Bool, global: Bool = false, selected: Bool = false,
-                   conversationMode: WorkspaceMode = .grid) {
+                   workspaceMode: WorkspaceMode = .grid) {
         isPreview = preview
         isPrimary = primary
         isGlobal = global
         isSelected = selected
-        conversationHistoryModel?.configure(mode: conversationMode)
+        conversationHistoryModel?.configure(mode: workspaceMode)
+        markdownDocumentModel?.configure(mode: workspaceMode)
         if #available(macOS 26.0, *), let effect = glass as? NSGlassEffectView {
             effect.tintColor = selected ? Self.selectedGlassTint : Self.glassTint
         } else if let effect = glass as? NSVisualEffectView {

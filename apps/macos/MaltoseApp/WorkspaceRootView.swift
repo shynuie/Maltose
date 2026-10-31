@@ -224,7 +224,7 @@ import SwiftUI
                 }
                 panel.configure(preview: isPreview, primary: !globalMode && !isPreview, global: globalMode,
                                 selected: state.selectedIDs.contains(id),
-                                conversationMode: id == state.primaryID ? state.mode : (globalMode ? .grid : .sidebar))
+                                workspaceMode: id == state.primaryID ? state.mode : (globalMode ? .grid : .sidebar))
                 let frame: NSRect
                 if globalMode { frame = grid.frames[index] }
                 else if !isPreview { frame = mainFrame }
@@ -362,8 +362,8 @@ import SwiftUI
                                                  isInsideGrid: globalScroll.frame.contains(point),
                                                  isCovered: tipsDropdown.frame.contains(point) || settingsPlaceholder.frame.contains(point),
                                                  isInsideScrollablePanel: panel(at: event).flatMap { panel in
-                                                     manager?.catalog.first(where: { $0.id == panel.surfaceID })?.kind == .conversationHistory
-                                                 } ?? false,
+                                                     manager?.catalog.first(where: { $0.id == panel.surfaceID })?.kind
+                                                 }.map { [.conversationHistory, .document].contains($0) } ?? false,
                                                  controlPressed: useControl, deltaY: delta)
         switch action {
         case .passThrough: return false

@@ -285,12 +285,48 @@ struct ConversationHistoryLayout {
     }
 
     var contentWidth: CGFloat {
-        let target = fontSize * (focused ? Self.focusedCharactersPerLine : Self.globalCharactersPerLine)
-        return min(width, target)
+        guard focused else { return width }
+        return min(width, Self.focusedFontSize * Self.focusedCharactersPerLine)
     }
 
     var verticalPadding: CGFloat { focused ? 24 : 8 }
     var rowSpacing: CGFloat { focused ? 18 : 6 }
+}
+
+struct MarkdownDocumentLayout {
+    static let focusedFontSize: CGFloat = 16
+    static let focusedCharactersPerLine: CGFloat = 40
+    static let globalCharactersPerLine: CGFloat = 20
+    static let minimumGlobalFontSize: CGFloat = 10
+    static let maximumGlobalFontSize: CGFloat = 18
+
+    let width: CGFloat
+    let focused: Bool
+
+    init(width: CGFloat, focused: Bool) {
+        self.width = max(0, width)
+        self.focused = focused
+    }
+
+    var showsText: Bool {
+        focused || width >= Self.minimumGlobalFontSize * Self.globalCharactersPerLine
+    }
+
+    var fontSize: CGFloat {
+        guard !focused else { return Self.focusedFontSize }
+        return min(Self.maximumGlobalFontSize,
+                   max(Self.minimumGlobalFontSize, width / Self.globalCharactersPerLine))
+    }
+
+    var textColumnWidth: CGFloat {
+        guard focused else { return width }
+        return min(width, Self.focusedFontSize * Self.focusedCharactersPerLine)
+    }
+
+    /// Images align to the reading column and keep shrinking when global-mode text is hidden.
+    var imageWidth: CGFloat {
+        focused ? min(width, Self.focusedFontSize * Self.focusedCharactersPerLine) : textColumnWidth
+    }
 }
 
 struct WorkspaceWheelGesture {

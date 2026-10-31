@@ -241,15 +241,73 @@ final class WorkspaceLayoutTests: XCTestCase {
         let globalLarge = ConversationHistoryLayout(width: 800, focused: false)
         XCTAssertTrue(globalLarge.showsText)
         XCTAssertEqual(globalLarge.fontSize, 18)
-        XCTAssertEqual(globalLarge.contentWidth, 360)
+        XCTAssertEqual(globalLarge.contentWidth, 800)
 
         let globalCompact = ConversationHistoryLayout(width: 280, focused: false)
         XCTAssertTrue(globalCompact.showsText)
         XCTAssertEqual(globalCompact.fontSize, 14)
         XCTAssertEqual(globalCompact.contentWidth, 280)
 
+        let globalWide = ConversationHistoryLayout(width: 1_200, focused: false)
+        XCTAssertEqual(globalWide.fontSize, ConversationHistoryLayout.maximumGlobalFontSize)
+        XCTAssertEqual(globalWide.contentWidth, 1_200)
+
         XCTAssertFalse(ConversationHistoryLayout(width: 199, focused: false).showsText)
         XCTAssertTrue(ConversationHistoryLayout(width: 199, focused: true).showsText)
+    }
+
+    func testMarkdownDocumentKeepsProportionalImagesWhenGlobalTextIsHidden() {
+        let focused = MarkdownDocumentLayout(width: 1400, focused: true)
+        XCTAssertTrue(focused.showsText)
+        XCTAssertEqual(focused.fontSize, 16)
+        XCTAssertEqual(focused.textColumnWidth, 640)
+        XCTAssertEqual(focused.imageWidth, 640)
+
+        let globalLarge = MarkdownDocumentLayout(width: 800, focused: false)
+        XCTAssertTrue(globalLarge.showsText)
+        XCTAssertEqual(globalLarge.fontSize, 18)
+        XCTAssertEqual(globalLarge.textColumnWidth, 800)
+        XCTAssertEqual(globalLarge.imageWidth, 800)
+
+        let globalTooNarrow = MarkdownDocumentLayout(width: 199, focused: false)
+        XCTAssertFalse(globalTooNarrow.showsText)
+        XCTAssertEqual(globalTooNarrow.imageWidth, 199)
+
+        let globalCompact = MarkdownDocumentLayout(width: 280, focused: false)
+        XCTAssertEqual(globalCompact.textColumnWidth, 280)
+        XCTAssertEqual(globalCompact.imageWidth, globalCompact.textColumnWidth)
+
+        let globalWide = MarkdownDocumentLayout(width: 1_200, focused: false)
+        XCTAssertEqual(globalWide.fontSize, MarkdownDocumentLayout.maximumGlobalFontSize)
+        XCTAssertEqual(globalWide.textColumnWidth, 1_200)
+        XCTAssertEqual(globalWide.imageWidth, globalWide.textColumnWidth)
+    }
+
+    func testMarkdownParserRecognizesCoreDocumentBlocks() {
+        let blocks = MarkdownDocumentParser.parse("""
+        # Title
+
+        Text with **emphasis**.
+
+        ![Landscape](sample-landscape.svg)
+
+        | A | B |
+        | --- | --- |
+        | 1 | 2 |
+
+        ```swift
+        let value = 1
+        ```
+        """)
+
+        XCTAssertEqual(blocks.count, 5)
+        guard case .heading = blocks[0].content,
+              case .paragraph = blocks[1].content,
+              case .image = blocks[2].content,
+              case .table = blocks[3].content,
+              case .code = blocks[4].content else {
+            return XCTFail("Expected heading, paragraph, image, table, and code blocks")
+        }
     }
 
     @MainActor func testConversationSessionSelectionIsLimitedToFocusedPanelAndPersistsAsCurrent() {
