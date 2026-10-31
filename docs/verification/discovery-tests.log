@@ -1,0 +1,52 @@
+[0/1] Planning build
+Building for debugging...
+[0/10] Write sources
+[3/10] Write swift-version--58304C5D6DBC2206.txt
+[5/15] Compiling MaltoseCore Models.swift
+[6/15] Compiling MaltoseCore ContextStore.swift
+[7/15] Emitting module MaltoseCore
+[8/15] Compiling MaltoseCore ReferenceResolver.swift
+[9/15] Compiling MaltoseCore ContextCollector.swift
+[10/22] Compiling MaltoseCore LoopbackServer.swift
+[11/22] Compiling MaltoseCore Layout.swift
+[12/22] Compiling MaltoseCore EventRouter.swift
+[13/22] Compiling MaltoseCore DataRegistry.swift
+[14/22] Compiling MaltoseCore AgentRuntime.swift
+[15/22] Compiling MaltoseCore HostState.swift
+[16/22] Compiling MaltoseCore Permissions.swift
+[16/24] Write Objects.LinkFileList
+[17/34] Linking MaltoseHost
+[18/34] Applying MaltoseHost
+[20/34] Compiling MaltoseCoreTests LifecycleTests.swift
+[21/34] Compiling MaltoseCoreTests AwarenessTests.swift
+[22/34] Compiling MaltoseCoreTests AgentIntegrationTests.swift
+[23/34] Compiling MaltoseCoreTests TransportTests.swift
+[24/34] Emitting module MaltoseCoreTests
+[25/34] Compiling MaltoseCoreTests SecurityTests.swift
+[26/34] Compiling MaltoseApp WebSurface.swift
+[27/34] Compiling MaltoseApp HostController.swift
+[28/34] Compiling MaltoseApp MaltoseApp.swift
+[29/34] Emitting module MaltoseApp
+[29/34] Write Objects.LinkFileList
+[30/34] Linking MaltoseApp
+[31/34] Applying MaltoseApp
+[33/36] Emitting module MaltoseUITests
+[34/36] Compiling MaltoseUITests WKRendererTests.swift
+[34/36] Write Objects.LinkFileList
+[35/36] Linking MaltoseUIHostPackageTests
+Build complete! (4.45s)
+Test Suite 'Selected tests' started at 2026-10-29 13:50:29.508.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 13:50:29.509.
+Test Suite 'AgentIntegrationTests' started at 2026-10-29 13:50:29.509.
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testDiscoveryDynamicPortAndStableHostIdentity]' started.
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testDiscoveryDynamicPortAndStableHostIdentity]' passed (0.010 seconds).
+Test Suite 'AgentIntegrationTests' passed at 2026-10-29 13:50:29.519.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.010 (0.010) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' passed at 2026-10-29 13:50:29.519.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.010 (0.010) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 13:50:29.519.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.010 (0.011) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

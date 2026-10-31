@@ -1,0 +1,73 @@
+Building for debugging...
+[0/10] Write sources
+[3/10] Copying Resources
+[4/10] Write swift-version--58304C5D6DBC2206.txt
+[6/16] Emitting module MaltoseCore
+[7/16] Compiling MaltoseCore AgentRegistry.swift
+[8/16] Compiling MaltoseCore LoopbackServer.swift
+[9/16] Compiling MaltoseCore Pairing.swift
+[10/16] Compiling MaltoseCore Discovery.swift
+[11/16] Compiling MaltoseCore AgentRuntime.swift
+[12/24] Compiling MaltoseCore Permissions.swift
+[13/24] Compiling MaltoseCore DataRegistry.swift
+[14/24] Compiling MaltoseCore Layout.swift
+[15/24] Compiling MaltoseCore EventRouter.swift
+[16/24] Compiling MaltoseCore ReferenceResolver.swift
+[17/24] Compiling MaltoseCore HostState.swift
+[18/24] Compiling MaltoseCore ContextStore.swift
+[19/24] Compiling MaltoseCore ContextCollector.swift
+[20/43] Emitting module MaltoseHost
+[21/43] Compiling MaltoseHost main.swift
+[21/43] Write Objects.LinkFileList
+[23/43] Compiling MaltoseCoreTests ProtocolTests.swift
+[24/44] Compiling MaltoseCoreTests PatchTests.swift
+[25/44] Compiling MaltoseCoreTests HostTests.swift
+[26/44] Compiling MaltoseCoreTests KeychainTests.swift
+[27/44] Compiling MaltoseCoreTests LifecycleTests.swift
+[28/44] Compiling MaltoseCoreTests SchemaTests.swift
+[29/44] Compiling MaltoseCoreTests SecurityTests.swift
+[29/44] Linking MaltoseHost
+[30/44] Applying MaltoseHost
+[32/44] Compiling MaltoseCoreTests AwarenessTests.swift
+[33/44] Compiling MaltoseCoreTests TransportTests.swift
+[34/44] Emitting module MaltoseCoreTests
+[35/44] Compiling MaltoseCoreTests AgentIntegrationTests.swift
+[36/45] Compiling MaltoseApp resource_bundle_accessor.swift
+[37/45] Emitting module MaltoseApp
+[38/45] Compiling MaltoseApp MaltoseApp.swift
+[39/45] Compiling MaltoseApp WebSurface.swift
+[40/45] Compiling MaltoseApp HostController.swift
+[40/45] Write Objects.LinkFileList
+[41/45] Linking MaltoseApp
+[42/45] Applying MaltoseApp
+[44/48] Emitting module MaltoseUITests
+[45/48] Compiling MaltoseUITests WKRendererTests.swift
+[46/48] Compiling MaltoseUITests CredentialControllerTests.swift
+[46/48] Write Objects.LinkFileList
+[47/48] Linking MaltoseUIHostPackageTests
+Build complete! (4.43s)
+Test Suite 'Selected tests' started at 2026-10-29 13:55:41.054.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 13:55:41.055.
+Test Suite 'AgentIntegrationTests' started at 2026-10-29 13:55:41.055.
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testActualSignedToolkitUvSidecarAndMyAgent]' started.
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testActualSignedToolkitUvSidecarAndMyAgent]' passed (2.025 seconds).
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testDiscoveryDynamicPortAndStableHostIdentity]' started.
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testDiscoveryDynamicPortAndStableHostIdentity]' passed (0.004 seconds).
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testPairingCannotRotateExistingPrincipal]' started.
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testPairingCannotRotateExistingPrincipal]' passed (0.000 seconds).
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testPairingProofDenialAndSingleClaim]' started.
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testPairingProofDenialAndSingleClaim]' passed (0.001 seconds).
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testRestartChangedPortReconnectAndRevocation]' started.
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testRestartChangedPortReconnectAndRevocation]' passed (11.040 seconds).
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testRuntimeOverlapSequenceInputAndIsolation]' started.
+Test Case '-[MaltoseCoreTests.AgentIntegrationTests testRuntimeOverlapSequenceInputAndIsolation]' passed (0.054 seconds).
+Test Suite 'AgentIntegrationTests' passed at 2026-10-29 13:55:54.180.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 13.124 (13.125) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' passed at 2026-10-29 13:55:54.180.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 13.124 (13.125) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 13:55:54.180.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 13.124 (13.126) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

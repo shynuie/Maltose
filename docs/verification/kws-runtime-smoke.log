@@ -1,0 +1,12 @@
+2026-10-29 18:09:53,458 - modelscope - INFO - initiate model from /Users/Marvin/Workspace/MyAgent/models/alibaba-kws-maiyatang-real-tts1000-raw-clean35-speed-cp998
+2026-10-29 18:09:53,458 - modelscope - INFO - initiate model from location /Users/Marvin/Workspace/MyAgent/models/alibaba-kws-maiyatang-real-tts1000-raw-clean35-speed-cp998.
+2026-10-29 18:09:53,459 - modelscope - INFO - initialize model from /Users/Marvin/Workspace/MyAgent/models/alibaba-kws-maiyatang-real-tts1000-raw-clean35-speed-cp998
+2026-10-29 18:09:53,482 - modelscope - WARNING - No preprocessor field found in cfg.
+2026-10-29 18:09:53,482 - modelscope - WARNING - No val key and type key found in preprocessor domain of configuration.json file.
+2026-10-29 18:09:53,482 - modelscope - WARNING - Cannot find available config to build preprocessor at mode inference, current config: {'model_dir': '/Users/Marvin/Workspace/MyAgent/models/alibaba-kws-maiyatang-real-tts1000-raw-clean35-speed-cp998'}. trying to build by task and model information.
+2026-10-29 18:09:53,482 - modelscope - INFO - No preprocessor key ('speech_dfsmn_kws_char_farfield', 'keyword-spotting') found in PREPROCESSOR_MAP, skip building preprocessor. If the pipeline runs normally, please ignore this log.
+2026-10-29 18:09:53,483 - modelscope - INFO - cuda is not available, using cpu instead.
+Configured model worker READY in 3.75 seconds
+Health before: {'healthy': True, 'kws_state': 0, 'buffered_bytes': 0}
+Health after one second synthetic PCM/reset: {'healthy': True, 'kws_state': 0, 'buffered_bytes': 0}
+READY/health/PCM/reset/shutdown passed; microphone and private recordings not used

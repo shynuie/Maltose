@@ -1,0 +1,67 @@
+[0/1] Planning build
+Building for debugging...
+[0/13] Write sources
+[2/13] Copying Schemas
+[3/13] Copying Resources
+[4/13] Write swift-version--58304C5D6DBC2206.txt
+[6/20] Emitting module MaltoseCore
+[7/20] Compiling MaltoseCore ToolkitArtifact.swift
+[8/20] Compiling MaltoseCore LoopbackServer.swift
+[9/20] Compiling MaltoseCore Pairing.swift
+[10/20] Compiling MaltoseCore Discovery.swift
+[11/20] Compiling MaltoseCore AgentRuntime.swift
+[12/20] Compiling MaltoseCore HostState.swift
+[13/28] Compiling MaltoseCore Layout.swift
+[14/28] Compiling MaltoseCore DataRegistry.swift
+[15/28] Compiling MaltoseCore ReferenceResolver.swift
+[16/28] Compiling MaltoseCore Permissions.swift
+[17/28] Compiling MaltoseCore EventRouter.swift
+[18/28] Compiling MaltoseCore ContextCollector.swift
+[19/28] Compiling MaltoseCore ContextStore.swift
+[20/28] Compiling MaltoseCore UIContextSnapshot.swift
+[21/45] Compiling MaltoseHost main.swift
+[22/45] Emitting module MaltoseHost
+[22/45] Write Objects.LinkFileList
+[24/45] Compiling MaltoseCoreTests SchemaTests.swift
+[25/45] Compiling MaltoseCoreTests PatchTests.swift
+[26/45] Compiling MaltoseCoreTests HostTests.swift
+[27/45] Emitting module MaltoseCoreTests
+[28/45] Compiling MaltoseCoreTests AwarenessTests.swift
+[28/45] Linking MaltoseHost
+[29/45] Applying MaltoseHost
+[31/45] Compiling MaltoseCoreTests LifecycleTests.swift
+[32/45] Compiling MaltoseCoreTests SecurityTests.swift
+[33/45] Compiling MaltoseCoreTests ProtocolTests.swift
+[34/45] Compiling MaltoseCoreTests KeychainTests.swift
+[35/45] Compiling MaltoseCoreTests TransportTests.swift
+[36/45] Compiling MaltoseApp MaltoseApp.swift
+[37/45] Compiling MaltoseApp resource_bundle_accessor.swift
+[38/45] Compiling MaltoseApp WebSurface.swift
+[39/45] Emitting module MaltoseApp
+[40/45] Compiling MaltoseApp HostController.swift
+[40/45] Write Objects.LinkFileList
+[41/45] Linking MaltoseApp
+[42/45] Applying MaltoseApp
+[44/48] Compiling MaltoseUITests WKRendererTests.swift
+[45/48] Emitting module MaltoseUITests
+[46/48] Compiling MaltoseUITests CredentialControllerTests.swift
+[46/48] Write Objects.LinkFileList
+[47/48] Linking MaltoseUIHostPackageTests
+Build complete! (4.92s)
+Test Suite 'Selected tests' started at 2026-10-29 13:37:45.062.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 13:37:45.063.
+Test Suite 'CredentialControllerTests' started at 2026-10-29 13:37:45.063.
+Test Case '-[MaltoseUITests.CredentialControllerTests testFailureExplainsCauseWithoutOverwritingConnectionStatus]' started.
+Test Case '-[MaltoseUITests.CredentialControllerTests testFailureExplainsCauseWithoutOverwritingConnectionStatus]' passed (0.002 seconds).
+Test Case '-[MaltoseUITests.CredentialControllerTests testInvalidNameExplainsRequiredFormat]' started.
+Test Case '-[MaltoseUITests.CredentialControllerTests testInvalidNameExplainsRequiredFormat]' passed (0.000 seconds).
+Test Suite 'CredentialControllerTests' passed at 2026-10-29 13:37:45.065.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' passed at 2026-10-29 13:37:45.065.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 13:37:45.065.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

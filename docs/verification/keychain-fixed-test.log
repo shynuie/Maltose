@@ -1,0 +1,40 @@
+Building for debugging...
+[0/7] Write sources
+[1/7] Write swift-version--58304C5D6DBC2206.txt
+[3/9] Compiling MaltoseCore AgentRegistry.swift
+[4/9] Emitting module MaltoseCore
+[5/10] Compiling MaltoseCore LoopbackServer.swift
+[6/22] Emitting module MaltoseHost
+[7/22] Compiling MaltoseHost main.swift
+[7/22] Write Objects.LinkFileList
+[9/22] Compiling MaltoseCoreTests TransportTests.swift
+[10/22] Compiling MaltoseCoreTests SecurityTests.swift
+[11/22] Compiling MaltoseCoreTests KeychainTests.swift
+[12/22] Emitting module MaltoseCoreTests
+[12/22] Linking MaltoseHost
+[13/22] Applying MaltoseHost
+[15/22] Compiling MaltoseApp MaltoseApp.swift
+[16/22] Emitting module MaltoseApp
+[17/22] Compiling MaltoseApp HostController.swift
+[17/22] Write Objects.LinkFileList
+[18/22] Linking MaltoseApp
+[19/22] Applying MaltoseApp
+[21/23] Emitting module MaltoseUITests
+[21/23] Write Objects.LinkFileList
+[22/23] Linking MaltoseUIHostPackageTests
+Build complete! (2.69s)
+Test Suite 'Selected tests' started at 2026-10-29 12:40:53.863.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 12:40:53.864.
+Test Suite 'KeychainTests' started at 2026-10-29 12:40:53.864.
+Test Case '-[MaltoseCoreTests.KeychainTests testIsolatedKeychainRegistrationRotationRevocation]' started.
+Test Case '-[MaltoseCoreTests.KeychainTests testIsolatedKeychainRegistrationRotationRevocation]' passed (0.069 seconds).
+Test Suite 'KeychainTests' passed at 2026-10-29 12:40:53.933.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.069 (0.069) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' passed at 2026-10-29 12:40:53.933.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.069 (0.069) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 12:40:53.933.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.069 (0.070) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

@@ -1,0 +1,61 @@
+[0/1] Planning build
+Building for debugging...
+[0/12] Write sources
+[2/12] Copying Resources
+[3/12] Write swift-version--58304C5D6DBC2206.txt
+[5/15] Emitting module MaltoseCore
+[6/15] Compiling MaltoseCore UIContextSnapshot.swift
+[7/15] Compiling MaltoseCore AgentRegistry.swift
+[8/24] Compiling MaltoseCore Layout.swift
+[9/24] Compiling MaltoseCore Permissions.swift
+[10/24] Compiling MaltoseCore LoopbackServer.swift
+[11/24] Compiling MaltoseCore ReferenceResolver.swift
+[12/24] Compiling MaltoseCore ContextCollector.swift
+[13/24] Compiling MaltoseCore EventRouter.swift
+[14/24] Compiling MaltoseCore ContextStore.swift
+[15/24] Compiling MaltoseCore DataRegistry.swift
+[16/24] Compiling MaltoseCore HostState.swift
+[17/41] Emitting module MaltoseHost
+[18/41] Compiling MaltoseHost main.swift
+[19/41] Compiling MaltoseApp resource_bundle_accessor.swift
+[20/41] Compiling MaltoseCoreTests ProtocolTests.swift
+[20/41] Write Objects.LinkFileList
+[22/41] Compiling MaltoseCoreTests PatchTests.swift
+[23/41] Compiling MaltoseCoreTests HostTests.swift
+[24/41] Compiling MaltoseCoreTests TransportTests.swift
+[25/41] Compiling MaltoseCoreTests SchemaTests.swift
+[26/41] Compiling MaltoseCoreTests SecurityTests.swift
+[27/41] Compiling MaltoseApp WebSurface.swift
+[28/41] Compiling MaltoseCoreTests KeychainTests.swift
+[29/41] Emitting module MaltoseCoreTests
+[30/41] Compiling MaltoseCoreTests AwarenessTests.swift
+[31/41] Compiling MaltoseCoreTests LifecycleTests.swift
+[31/41] Linking MaltoseHost
+[32/41] Applying MaltoseHost
+[34/41] Compiling MaltoseApp HostController.swift
+[35/41] Emitting module MaltoseApp
+[36/41] Compiling MaltoseApp MaltoseApp.swift
+[36/41] Write Objects.LinkFileList
+[37/41] Linking MaltoseApp
+[38/41] Applying MaltoseApp
+[40/43] Compiling MaltoseUITests WKRendererTests.swift
+[41/43] Emitting module MaltoseUITests
+[41/43] Write Objects.LinkFileList
+[42/43] Linking MaltoseUIHostPackageTests
+Build complete! (3.34s)
+Test Suite 'Selected tests' started at 2026-10-29 12:39:52.134.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 12:39:52.135.
+Test Suite 'KeychainTests' started at 2026-10-29 12:39:52.135.
+Test Case '-[MaltoseCoreTests.KeychainTests testIsolatedKeychainRegistrationRotationRevocation]' started.
+/Users/Marvin/Workspace/Maltose_UI/native/AgentRegistry/AgentRegistry.swift:17: error: -[MaltoseCoreTests.KeychainTests testIsolatedKeychainRegistrationRotationRevocation] : failed: caught error: "MUPError(code: "keychain", message: "Credential store unavailable (OSStatus -50)")"
+Test Case '-[MaltoseCoreTests.KeychainTests testIsolatedKeychainRegistrationRotationRevocation]' failed (0.138 seconds).
+Test Suite 'KeychainTests' failed at 2026-10-29 12:39:52.274.
+	 Executed 1 test, with 1 failure (1 unexpected) in 0.138 (0.139) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' failed at 2026-10-29 12:39:52.274.
+	 Executed 1 test, with 1 failure (1 unexpected) in 0.138 (0.139) seconds
+Test Suite 'Selected tests' failed at 2026-10-29 12:39:52.274.
+	 Executed 1 test, with 1 failure (1 unexpected) in 0.138 (0.140) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

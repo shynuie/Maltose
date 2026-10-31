@@ -1,0 +1,33 @@
+Building for debugging...
+[0/10] Write sources
+[2/10] Copying Schemas
+[3/10] Copying Resources
+[4/10] Write swift-version--58304C5D6DBC2206.txt
+[6/13] Compiling MaltoseCore HostState.swift
+[7/13] Emitting module MaltoseCore
+[8/13] Compiling MaltoseCore ContextCollector.swift
+[8/16] Write Objects.LinkFileList
+[10/16] Linking MaltoseHost
+[11/16] Applying MaltoseHost
+[12/16] Linking MaltoseApp
+[13/16] Applying MaltoseApp
+[15/18] Compiling MaltoseUITests WKRendererTests.swift
+[16/18] Emitting module MaltoseUITests
+[16/18] Write Objects.LinkFileList
+[17/18] Linking MaltoseUIHostPackageTests
+Build complete! (2.03s)
+Test Suite 'Selected tests' started at 2026-10-29 12:34:31.966.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 12:34:31.968.
+Test Suite 'WKRendererTests' started at 2026-10-29 12:34:31.968.
+Test Case '-[MaltoseUITests.WKRendererTests testOfflineRendererAndNativeBridge]' started.
+Test Case '-[MaltoseUITests.WKRendererTests testOfflineRendererAndNativeBridge]' passed (1.582 seconds).
+Test Suite 'WKRendererTests' passed at 2026-10-29 12:34:33.550.
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.582 (1.583) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' passed at 2026-10-29 12:34:33.550.
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.582 (1.583) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 12:34:33.550.
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.582 (1.584) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

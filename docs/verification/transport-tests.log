@@ -1,0 +1,23 @@
+Another instance of SwiftPM (PID: 75111) is already running using '/Users/Marvin/Workspace/Maltose_UI/.build', waiting until that process has finished execution...[0/1] Planning build
+Building for debugging...
+[0/6] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.19s)
+Test Suite 'Selected tests' started at 2026-10-29 12:32:14.674.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 12:32:14.675.
+Test Suite 'TransportTests' started at 2026-10-29 12:32:14.675.
+Test Case '-[MaltoseCoreTests.TransportTests testBrowserOriginsRejected]' started.
+Test Case '-[MaltoseCoreTests.TransportTests testBrowserOriginsRejected]' passed (5.095 seconds).
+Test Case '-[MaltoseCoreTests.TransportTests testPythonAndTypeScriptSDKAgainstNativeHost]' started.
+Test Case '-[MaltoseCoreTests.TransportTests testPythonAndTypeScriptSDKAgainstNativeHost]' passed (0.445 seconds).
+Test Case '-[MaltoseCoreTests.TransportTests testRealLoopbackWebSocketAuthAndRevocation]' started.
+Test Case '-[MaltoseCoreTests.TransportTests testRealLoopbackWebSocketAuthAndRevocation]' passed (0.117 seconds).
+Test Suite 'TransportTests' passed at 2026-10-29 12:32:20.332.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 5.656 (5.657) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' passed at 2026-10-29 12:32:20.332.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 5.656 (5.657) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 12:32:20.332.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 5.656 (5.658) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

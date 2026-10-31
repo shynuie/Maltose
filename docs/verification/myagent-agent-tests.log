@@ -1,0 +1,62 @@
+.........F.......task_model_stream_tool_round_limit rounds=2; requesting text-only final
+.EF................E...
+======================================================================
+ERROR: test_taskbrain_exposes_task_tools_and_scopes_plan_to_user (test_agent.TaskBrainTest.test_taskbrain_exposes_task_tools_and_scopes_plan_to_user)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 373, in test_taskbrain_exposes_task_tools_and_scopes_plan_to_user
+    self.assertEqual(result["tasks"][0]["user_id"], "default")
+                     ~~~~~~^^^^^^^^^
+KeyError: 'tasks'
+
+======================================================================
+ERROR: test_unknown_speaker_cannot_access_personal_memory (test_agent.VoiceAgentTest.test_unknown_speaker_cannot_access_personal_memory)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 705, in test_unknown_speaker_cannot_access_personal_memory
+    memory.remember("使用者是工程師", user_id="default")
+  File "/Users/Marvin/Workspace/MyAgent/myagent/agent/taskbrain.py", line 165, in remember
+    self.path.write_text(
+  File "/Users/Marvin/.local/share/uv/python/cpython-3.12.10-macos-aarch64-none/lib/python3.12/pathlib.py", line 1047, in write_text
+    with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Marvin/.local/share/uv/python/cpython-3.12.10-macos-aarch64-none/lib/python3.12/pathlib.py", line 1013, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted: 'data/memory/memory.json'
+
+======================================================================
+FAIL: test_executes_tool_then_returns_final_response (test_agent.TaskBrainTest.test_executes_tool_then_returns_final_response)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 256, in test_executes_tool_then_returns_final_response
+    self.assertEqual(brain.process("請記住我喜歡綠茶"), "我記住了。")
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Marvin/Workspace/MyAgent/myagent/agent/taskbrain.py", line 1410, in process
+    response = self._complete_model(messages, self.tools.schemas())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Marvin/Workspace/MyAgent/myagent/agent/taskbrain.py", line 585, in _complete_model
+    try:result=self.model.complete(*args,**kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 245, in complete
+    self.assert_tool_result(messages)
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 251, in assert_tool_result
+    assert "喜歡綠茶" in messages[-1]["content"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_taskbrain_exposes_user_profile_tool (test_agent.TaskBrainTest.test_taskbrain_exposes_user_profile_tool)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 352, in test_taskbrain_exposes_user_profile_tool
+    self.assertEqual(brain.tools.execute("get_user_profile", {}), {
+AssertionError: {'error': 'User identity is not verified; p[73 chars]True} != {'id': 'default', 'display_name': 'Marvin'}
++ {'display_name': 'Marvin', 'id': 'default'}
+- {'error': 'User identity is not verified; personal data access is unavailable.',
+-  'requires_speaker_identification': True}
+
+----------------------------------------------------------------------
+Ran 40 tests in 3.857s
+
+FAILED (failures=2, errors=2)

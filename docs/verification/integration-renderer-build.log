@@ -1,0 +1,16 @@
+
+> maltose-ui-host@0.3.0 build
+> npm run build -w @maltose/renderer && tsc -p packages/sdk-typescript/tsconfig.json
+
+
+> @maltose/renderer@0.3.0 build
+> tsc --noEmit && vite build
+
+vite v6.3.5 building for production...
+transforming...
+✓ 582 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html            0.44 kB │ gzip:   0.29 kB
+dist/assets/renderer.js  804.11 kB │ gzip: 260.34 kB
+✓ built in 1.93s

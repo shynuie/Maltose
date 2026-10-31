@@ -1,0 +1,5 @@
+Using Python 3.10.19 environment at: /Users/Marvin/Workspace/MyAgent/.venvs/kws310
+Resolved 66 packages in 9ms
+Checked 66 packages in 1ms
+KWS 環境已備妥：/Users/Marvin/Workspace/MyAgent/.venvs/kws310/bin/python
+wake.toml: python = ".venvs/kws310/bin/python"

@@ -1,0 +1,118 @@
+[0/1] Planning build
+Building for debugging...
+[0/10] Write sources
+[3/10] Write swift-version--58304C5D6DBC2206.txt
+[5/12] Emitting module MaltoseCore
+[6/12] Compiling MaltoseCore AgentRegistry.swift
+[7/20] Emitting module MaltoseHost
+[8/20] Compiling MaltoseHost main.swift
+[8/20] Write Objects.LinkFileList
+[10/20] Compiling MaltoseCoreTests KeychainTests.swift
+[11/20] Emitting module MaltoseCoreTests
+[11/20] Linking MaltoseHost
+[12/20] Applying MaltoseHost
+[14/20] Compiling MaltoseApp HostController.swift
+[15/20] Compiling MaltoseApp MaltoseApp.swift
+[16/20] Emitting module MaltoseApp
+[16/21] Write Objects.LinkFileList
+[17/21] Linking MaltoseApp
+[18/21] Applying MaltoseApp
+[20/22] Emitting module MaltoseUITests
+[20/22] Write Objects.LinkFileList
+[21/22] Linking MaltoseUIHostPackageTests
+Build complete! (2.54s)
+Test Suite 'All tests' started at 2026-10-29 12:38:17.717.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 12:38:17.718.
+Test Suite 'AwarenessTests' started at 2026-10-29 12:38:17.718.
+Test Case '-[MaltoseCoreTests.AwarenessTests testAmbiguityAndStaleReferences]' started.
+Test Case '-[MaltoseCoreTests.AwarenessTests testAmbiguityAndStaleReferences]' passed (0.025 seconds).
+Test Case '-[MaltoseCoreTests.AwarenessTests testBridgeCannotForgeSurfaceOrActions]' started.
+Test Case '-[MaltoseCoreTests.AwarenessTests testBridgeCannotForgeSurfaceOrActions]' passed (0.018 seconds).
+Test Case '-[MaltoseCoreTests.AwarenessTests testCrossAgentFocusEventRedaction]' started.
+Test Case '-[MaltoseCoreTests.AwarenessTests testCrossAgentFocusEventRedaction]' passed (0.028 seconds).
+Test Case '-[MaltoseCoreTests.AwarenessTests testSelectionViewportAndReferenceEvidence]' started.
+Test Case '-[MaltoseCoreTests.AwarenessTests testSelectionViewportAndReferenceEvidence]' passed (0.045 seconds).
+Test Case '-[MaltoseCoreTests.AwarenessTests testSummaryRedactionRevocationAndNoPrivateFocusLeak]' started.
+Test Case '-[MaltoseCoreTests.AwarenessTests testSummaryRedactionRevocationAndNoPrivateFocusLeak]' passed (0.025 seconds).
+Test Suite 'AwarenessTests' passed at 2026-10-29 12:38:17.860.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.141 (0.142) seconds
+Test Suite 'HostTests' started at 2026-10-29 12:38:17.860.
+Test Case '-[MaltoseCoreTests.HostTests testDurabilityAndSessionBoundary]' started.
+Test Case '-[MaltoseCoreTests.HostTests testDurabilityAndSessionBoundary]' passed (0.024 seconds).
+Test Case '-[MaltoseCoreTests.HostTests testOwnershipAndDuplicates]' started.
+Test Case '-[MaltoseCoreTests.HostTests testOwnershipAndDuplicates]' passed (0.029 seconds).
+Test Case '-[MaltoseCoreTests.HostTests testValidationBeforeMutation]' started.
+Test Case '-[MaltoseCoreTests.HostTests testValidationBeforeMutation]' passed (0.007 seconds).
+Test Suite 'HostTests' passed at 2026-10-29 12:38:17.921.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.061 (0.061) seconds
+Test Suite 'KeychainTests' started at 2026-10-29 12:38:17.921.
+Test Case '-[MaltoseCoreTests.KeychainTests testIsolatedKeychainRegistrationRotationRevocation]' started.
+/Users/Marvin/Workspace/Maltose_UI/native/AgentRegistry/AgentRegistry.swift:17: error: -[MaltoseCoreTests.KeychainTests testIsolatedKeychainRegistrationRotationRevocation] : failed: caught error: "MUPError(code: "keychain", message: "Credential store unavailable")"
+Test Case '-[MaltoseCoreTests.KeychainTests testIsolatedKeychainRegistrationRotationRevocation]' failed (0.158 seconds).
+Test Suite 'KeychainTests' failed at 2026-10-29 12:38:18.079.
+	 Executed 1 test, with 1 failure (1 unexpected) in 0.158 (0.158) seconds
+Test Suite 'LifecycleTests' started at 2026-10-29 12:38:18.079.
+Test Case '-[MaltoseCoreTests.LifecycleTests testDetachAttachKeepsSelectionViewportAndStream]' started.
+Test Case '-[MaltoseCoreTests.LifecycleTests testDetachAttachKeepsSelectionViewportAndStream]' passed (0.043 seconds).
+Test Case '-[MaltoseCoreTests.LifecycleTests testReconnectGapsAndRevocationTerminateSubscriptions]' started.
+Test Case '-[MaltoseCoreTests.LifecycleTests testReconnectGapsAndRevocationTerminateSubscriptions]' passed (0.032 seconds).
+Test Case '-[MaltoseCoreTests.LifecycleTests testRestartRestoresLayoutAndZoomButNoFocusOrSelection]' started.
+Test Case '-[MaltoseCoreTests.LifecycleTests testRestartRestoresLayoutAndZoomButNoFocusOrSelection]' passed (0.036 seconds).
+Test Suite 'LifecycleTests' passed at 2026-10-29 12:38:18.191.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.111 (0.112) seconds
+Test Suite 'PatchTests' started at 2026-10-29 12:38:18.191.
+Test Case '-[MaltoseCoreTests.PatchTests testAtomicRevisionAndInvalidPatch]' started.
+Test Case '-[MaltoseCoreTests.PatchTests testAtomicRevisionAndInvalidPatch]' passed (0.035 seconds).
+Test Case '-[MaltoseCoreTests.PatchTests testTypedTreeOperationsAndIdentity]' started.
+Test Case '-[MaltoseCoreTests.PatchTests testTypedTreeOperationsAndIdentity]' passed (0.003 seconds).
+Test Suite 'PatchTests' passed at 2026-10-29 12:38:18.229.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.038 (0.038) seconds
+Test Suite 'ProtocolTests' started at 2026-10-29 12:38:18.229.
+Test Case '-[MaltoseCoreTests.ProtocolTests testProtocolVersion]' started.
+Test Case '-[MaltoseCoreTests.ProtocolTests testProtocolVersion]' passed (0.000 seconds).
+Test Suite 'ProtocolTests' passed at 2026-10-29 12:38:18.230.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'SchemaTests' started at 2026-10-29 12:38:18.230.
+Test Case '-[MaltoseCoreTests.SchemaTests testSharedFixtures]' started.
+Test Case '-[MaltoseCoreTests.SchemaTests testSharedFixtures]' passed (0.075 seconds).
+Test Case '-[MaltoseCoreTests.SchemaTests testSizeAndMalformed]' started.
+Test Case '-[MaltoseCoreTests.SchemaTests testSizeAndMalformed]' passed (0.000 seconds).
+Test Suite 'SchemaTests' passed at 2026-10-29 12:38:18.305.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.075 (0.075) seconds
+Test Suite 'SecurityTests' started at 2026-10-29 12:38:18.305.
+Test Case '-[MaltoseCoreTests.SecurityTests testEventBackpressureRequiresSnapshotAndDoesNotLeak]' started.
+Test Case '-[MaltoseCoreTests.SecurityTests testEventBackpressureRequiresSnapshotAndDoesNotLeak]' passed (0.448 seconds).
+Test Case '-[MaltoseCoreTests.SecurityTests testIdempotencyAcrossSessionsAndPayloadMismatch]' started.
+Test Case '-[MaltoseCoreTests.SecurityTests testIdempotencyAcrossSessionsAndPayloadMismatch]' passed (0.041 seconds).
+Test Case '-[MaltoseCoreTests.SecurityTests testPrivateChangesDoNotIncrementOtherPrincipalRevision]' started.
+Test Case '-[MaltoseCoreTests.SecurityTests testPrivateChangesDoNotIncrementOtherPrincipalRevision]' passed (0.013 seconds).
+Test Case '-[MaltoseCoreTests.SecurityTests testRevokedReadCannotBeReplayedFromRequestCache]' started.
+Test Case '-[MaltoseCoreTests.SecurityTests testRevokedReadCannotBeReplayedFromRequestCache]' passed (0.023 seconds).
+Test Case '-[MaltoseCoreTests.SecurityTests testSensitiveNodesNeverEnterAwareness]' started.
+Test Case '-[MaltoseCoreTests.SecurityTests testSensitiveNodesNeverEnterAwareness]' passed (0.028 seconds).
+Test Suite 'SecurityTests' passed at 2026-10-29 12:38:18.858.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.552 (0.553) seconds
+Test Suite 'TransportTests' started at 2026-10-29 12:38:18.858.
+Test Case '-[MaltoseCoreTests.TransportTests testBrowserOriginsRejected]' started.
+Test Case '-[MaltoseCoreTests.TransportTests testBrowserOriginsRejected]' passed (5.069 seconds).
+Test Case '-[MaltoseCoreTests.TransportTests testPythonAndTypeScriptSDKAgainstNativeHost]' started.
+Test Case '-[MaltoseCoreTests.TransportTests testPythonAndTypeScriptSDKAgainstNativeHost]' passed (0.426 seconds).
+Test Case '-[MaltoseCoreTests.TransportTests testRealLoopbackWebSocketAuthAndRevocation]' started.
+Test Case '-[MaltoseCoreTests.TransportTests testRealLoopbackWebSocketAuthAndRevocation]' passed (0.124 seconds).
+Test Suite 'TransportTests' passed at 2026-10-29 12:38:24.477.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 5.619 (5.619) seconds
+Test Suite 'WKRendererTests' started at 2026-10-29 12:38:24.477.
+Test Case '-[MaltoseUITests.WKRendererTests testNativeDetachAttachAndPersistGeometry]' started.
+Test Case '-[MaltoseUITests.WKRendererTests testNativeDetachAttachAndPersistGeometry]' passed (0.856 seconds).
+Test Case '-[MaltoseUITests.WKRendererTests testOfflineRendererAndNativeBridge]' started.
+Test Case '-[MaltoseUITests.WKRendererTests testOfflineRendererAndNativeBridge]' passed (1.233 seconds).
+Test Suite 'WKRendererTests' passed at 2026-10-29 12:38:26.567.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 2.090 (2.090) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' failed at 2026-10-29 12:38:26.567.
+	 Executed 27 tests, with 1 failure (1 unexpected) in 8.845 (8.849) seconds
+Test Suite 'All tests' failed at 2026-10-29 12:38:26.567.
+	 Executed 27 tests, with 1 failure (1 unexpected) in 8.845 (8.850) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

@@ -1,0 +1,4 @@
+Packaged schemas, offline renderer and toolkit verified
+dist/Maltose UI Host.app/Contents/Info.plist: OK
+Packaged toolkit pinned signature/digest verified: 0.4.0 0f08df27881ab036adcfaa98c3c11f8574b70cc6e5a29dff8054641fe643c0aa
+MyAgent vendored bootstrap matches trusted source, including publisher key

@@ -1,0 +1,33 @@
+Built signed offline UI toolkit maltose_ui_runtime-0.4.0-py3-none-any.whl 0f08df27881ab036adcfaa98c3c11f8574b70cc6e5a29dff8054641fe643c0aa
+
+> maltose-ui-host@0.3.0 build
+> npm run build -w @maltose/renderer && tsc -p packages/sdk-typescript/tsconfig.json
+
+
+> @maltose/renderer@0.3.0 build
+> tsc --noEmit && vite build
+
+vite v6.3.5 building for production...
+transforming...
+✓ 582 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html            0.44 kB │ gzip:   0.29 kB
+dist/assets/renderer.js  804.11 kB │ gzip: 260.34 kB
+✓ built in 1.99s
+[0/1] Planning build
+Building for production...
+[0/9] Write sources
+[2/9] Copying Schemas
+[3/9] Copying Resources
+[4/9] Write swift-version--58304C5D6DBC2206.txt
+[6/10] Compiling MaltoseCore AgentRegistry.swift
+[7/12] Compiling MaltoseHost main.swift
+[7/12] Write Objects.LinkFileList
+[8/12] Linking MaltoseHost
+[10/12] Compiling MaltoseApp HostController.swift
+[10/12] Write Objects.LinkFileList
+[11/12] Linking MaltoseApp
+Build complete! (13.01s)
+dist/Maltose UI Host.app: replacing existing signature
+Built: dist/Maltose UI Host.app (local ad-hoc signature; not notarized)

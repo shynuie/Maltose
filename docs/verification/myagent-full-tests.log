@@ -1,0 +1,67 @@
+.........F.......task_model_stream_tool_round_limit rounds=2; requesting text-only final
+.EF............................................................sssss...................................................................kdb_index_failed document_id=doc_bd223447d2a14926b384de3d7a5ceecc path=/private/var/folders/rq/pzfbz4q15sn3d50wjgj26b_80000gn/T/tmp_vswjndx/note.txt
+Traceback (most recent call last):
+  File "/Users/Marvin/Workspace/MyAgent/myagent/knowledge/indexer.py", line 68, in index
+    self.vectors.replace_document(
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_knowledge_indexer.py", line 38, in replace_document
+    raise RuntimeError("vector write failed")
+RuntimeError: vector write failed
+.........kdb_index_job_retry job_id=index-818c1cfe84384bca80ea057094375c77 attempt=1/2 error=temporary error
+kdb_index_job_failed job_id=index-818c1cfe84384bca80ea057094375c77 error=permanent error
+.........................kdb_index_job_retry job_id=index-ac6c244063c3427392179c7ecb5b0e6c attempt=1/2 error=temporary indexing failure
+.........................................................task_failed task_id=2d9f7a7a-e193-4c83-8e35-796d8124e68a
+Traceback (most recent call last):
+  File "/Users/Marvin/Workspace/MyAgent/myagent/agent/tasks.py", line 687, in _run
+    result = worker.run(task, lambda progress: self._report_progress(task_id, progress))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Marvin/Workspace/MyAgent/myagent/agent/tasks.py", line 411, in run
+    result = self.function(task.input)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_tasks.py", line 226, in fail_once
+    raise RuntimeError("temporary failure")
+RuntimeError: temporary failure
+...............................
+======================================================================
+ERROR: test_taskbrain_exposes_task_tools_and_scopes_plan_to_user (test_agent.TaskBrainTest.test_taskbrain_exposes_task_tools_and_scopes_plan_to_user)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 373, in test_taskbrain_exposes_task_tools_and_scopes_plan_to_user
+    self.assertEqual(result["tasks"][0]["user_id"], "default")
+                     ~~~~~~^^^^^^^^^
+KeyError: 'tasks'
+
+======================================================================
+FAIL: test_executes_tool_then_returns_final_response (test_agent.TaskBrainTest.test_executes_tool_then_returns_final_response)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 256, in test_executes_tool_then_returns_final_response
+    self.assertEqual(brain.process("請記住我喜歡綠茶"), "我記住了。")
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Marvin/Workspace/MyAgent/myagent/agent/taskbrain.py", line 1410, in process
+    response = self._complete_model(messages, self.tools.schemas())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Marvin/Workspace/MyAgent/myagent/agent/taskbrain.py", line 585, in _complete_model
+    try:result=self.model.complete(*args,**kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 245, in complete
+    self.assert_tool_result(messages)
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 251, in assert_tool_result
+    assert "喜歡綠茶" in messages[-1]["content"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_taskbrain_exposes_user_profile_tool (test_agent.TaskBrainTest.test_taskbrain_exposes_user_profile_tool)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/Marvin/Workspace/MyAgent/tests/test_agent.py", line 352, in test_taskbrain_exposes_user_profile_tool
+    self.assertEqual(brain.tools.execute("get_user_profile", {}), {
+AssertionError: {'error': 'User identity is not verified; p[73 chars]True} != {'id': 'default', 'display_name': 'Marvin'}
++ {'display_name': 'Marvin', 'id': 'default'}
+- {'error': 'User identity is not verified; personal data access is unavailable.',
+-  'requires_speaker_identification': True}
+
+----------------------------------------------------------------------
+Ran 274 tests in 4.203s
+
+FAILED (failures=2, errors=1, skipped=5)

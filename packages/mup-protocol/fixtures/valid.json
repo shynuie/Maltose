@@ -1,0 +1,140 @@
+[
+  {
+    "protocol": "mup/0.3",
+    "message_id": "00000000-0000-4000-8000-000000000001",
+    "session_id": "00000000-0000-4000-8000-000000000002",
+    "request_id": "00000000-0000-4000-8000-000000000003",
+    "type": "command",
+    "name": "host.capabilities",
+    "payload": {}
+  },
+  {
+    "protocol": "mup/0.3",
+    "message_id": "00000000-0000-4000-8000-000000000001",
+    "session_id": "00000000-0000-4000-8000-000000000002",
+    "request_id": "00000000-0000-4000-8000-000000000003",
+    "type": "command",
+    "name": "surface.create",
+    "payload": {
+      "surface_id": "market-1",
+      "title": "Market Monitor",
+      "document": {
+        "root": {
+          "node_id": "chart-1",
+          "type": "chart.line",
+          "props": {
+            "title": "Synthetic prices",
+            "points": [
+              [
+                1,
+                10
+              ],
+              [
+                2,
+                12
+              ]
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "protocol": "mup/0.3",
+    "message_id": "00000000-0000-4000-8000-000000000001",
+    "session_id": "00000000-0000-4000-8000-000000000002",
+    "request_id": "00000000-0000-4000-8000-000000000003",
+    "type": "command",
+    "name": "ui.context.get",
+    "payload": {
+      "include": [
+        "focus",
+        "selection",
+        "viewport"
+      ]
+    }
+  },
+  {
+    "protocol": "mup/0.3",
+    "message_id": "00000000-0000-4000-8000-000000000001",
+    "session_id": "00000000-0000-4000-8000-000000000002",
+    "request_id": "00000000-0000-4000-8000-000000000003",
+    "type": "command",
+    "name": "surface.create",
+    "payload": {
+      "surface_id": "scene-1",
+      "title": "Canvas Scene",
+      "document": {
+        "root": {
+          "node_id": "scene",
+          "type": "canvas",
+          "props": {
+            "width": 640,
+            "height": 480
+          },
+          "children": [
+            {
+              "node_id": "house",
+              "type": "canvas.rect",
+              "props": {
+                "x": 180,
+                "y": 150,
+                "width": 220,
+                "height": 170,
+                "color": "#F4B183",
+                "label": "\u5c0f\u623f\u5b50"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "protocol": "mup/0.3",
+    "message_id": "00000000-0000-4000-8000-000000000001",
+    "session_id": "00000000-0000-4000-8000-000000000002",
+    "request_id": "00000000-0000-4000-8000-000000000003",
+    "type": "command",
+    "name": "host.discover",
+    "payload": {}
+  },
+  {
+    "protocol": "mup/0.3",
+    "message_id": "00000000-0000-4000-8000-000000000001",
+    "session_id": "00000000-0000-4000-8000-000000000002",
+    "request_id": "00000000-0000-4000-8000-000000000003",
+    "type": "command",
+    "name": "host.pair.request",
+    "payload": {
+      "name": "MyAgent",
+      "agent_id": "agent.myagent",
+      "claim": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  },
+  {
+    "protocol": "mup/0.3",
+    "message_id": "00000000-0000-4000-8000-000000000001",
+    "session_id": "00000000-0000-4000-8000-000000000002",
+    "request_id": "00000000-0000-4000-8000-000000000003",
+    "type": "command",
+    "name": "agent.runtime.publish",
+    "payload": {
+      "run_id": "00000000-0000-4000-8000-000000000004",
+      "sequence": 1,
+      "event": "state_changed",
+      "data": {
+        "state": "thinking"
+      }
+    }
+  },
+  {
+    "protocol": "mup/0.3",
+    "message_id": "00000000-0000-4000-8000-000000000001",
+    "session_id": "00000000-0000-4000-8000-000000000002",
+    "request_id": "00000000-0000-4000-8000-000000000003",
+    "type": "command",
+    "name": "agent.input.poll",
+    "payload": {}
+  }
+]

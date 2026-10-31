@@ -1,0 +1,49 @@
+[0/1] Planning build
+Building for debugging...
+[0/11] Write sources
+[3/11] Copying Schemas
+[4/11] Copying Resources
+[5/11] Write swift-version--58304C5D6DBC2206.txt
+[7/14] Compiling MaltoseCore LoopbackServer.swift
+[8/14] Emitting module MaltoseCore
+[9/14] Compiling MaltoseCore AgentRuntime.swift
+[10/22] Compiling MaltoseCore DataRegistry.swift
+[11/22] Compiling MaltoseCore Layout.swift
+[12/22] Compiling MaltoseCore ReferenceResolver.swift
+[13/22] Compiling MaltoseCore Permissions.swift
+[14/22] Compiling MaltoseCore ContextStore.swift
+[15/22] Compiling MaltoseCore EventRouter.swift
+[16/22] Compiling MaltoseCore ContextCollector.swift
+[17/22] Compiling MaltoseCore HostState.swift
+[17/23] Write Objects.LinkFileList
+[18/28] Linking MaltoseHost
+[19/28] Applying MaltoseHost
+[21/28] Emitting module MaltoseCoreTests
+[22/28] Compiling MaltoseCoreTests AgentIntegrationTests.swift
+[23/28] Emitting module MaltoseApp
+[24/28] Compiling MaltoseApp HostController.swift
+[25/28] Compiling MaltoseApp MaltoseApp.swift
+[25/30] Write Objects.LinkFileList
+[26/30] Linking MaltoseApp
+[27/30] Applying MaltoseApp
+[29/33] Compiling MaltoseUITests CredentialControllerTests.swift
+[30/33] Compiling MaltoseUITests WKRendererTests.swift
+[31/33] Emitting module MaltoseUITests
+[31/33] Write Objects.LinkFileList
+[32/33] Linking MaltoseUIHostPackageTests
+Build complete! (4.39s)
+Test Suite 'Selected tests' started at 2026-10-29 14:03:07.147.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 14:03:07.148.
+Test Suite 'WKRendererTests' started at 2026-10-29 14:03:07.148.
+Test Case '-[MaltoseUITests.WKRendererTests testRealChartBrushThroughSignedToolkitIntoMyAgent]' started.
+Test Case '-[MaltoseUITests.WKRendererTests testRealChartBrushThroughSignedToolkitIntoMyAgent]' passed (3.478 seconds).
+Test Suite 'WKRendererTests' passed at 2026-10-29 14:03:10.626.
+	 Executed 1 test, with 0 failures (0 unexpected) in 3.478 (3.478) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' passed at 2026-10-29 14:03:10.626.
+	 Executed 1 test, with 0 failures (0 unexpected) in 3.478 (3.478) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 14:03:10.626.
+	 Executed 1 test, with 0 failures (0 unexpected) in 3.478 (3.479) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

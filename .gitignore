@@ -1,0 +1,12 @@
+.build/
+.cache/
+node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+packages/*/dist/
+apps/macos/MaltoseApp/Resources/renderer/
+dist/
+*.sqlite*
+.DS_Store

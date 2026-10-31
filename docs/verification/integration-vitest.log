@@ -1,0 +1,17 @@
+
+> maltose-ui-host@0.3.0 test
+> vitest run
+
+
+ RUN  v3.2.4 /Users/Marvin/Workspace/Maltose_UI
+
+ ✓ tests/protocol/renderer.test.ts (2 tests) 5ms
+ ✓ tests/protocol/schema.test.ts (18 tests) 8ms
+ ✓ tests/protocol/bootstrap.test.ts (1 test) 1ms
+ ✓ tests/protocol/sdk.test.ts (1 test) 8ms
+
+ Test Files  4 passed (4)
+      Tests  22 passed (22)
+   Start at  14:01:32
+   Duration  375ms (transform 113ms, setup 0ms, collect 467ms, tests 22ms, environment 0ms, prepare 146ms)
+

@@ -1,0 +1,43 @@
+[0/1] Planning build
+Building for debugging...
+[0/9] Write sources
+[2/9] Copying Resources
+[3/9] Write swift-version--58304C5D6DBC2206.txt
+[5/12] Compiling MaltoseCore Discovery.swift
+[6/12] Compiling MaltoseCore LoopbackServer.swift
+[7/12] Emitting module MaltoseCore
+[8/22] Compiling MaltoseHost main.swift
+[9/22] Emitting module MaltoseHost
+[9/22] Write Objects.LinkFileList
+[10/22] Linking MaltoseHost
+[12/22] Emitting module MaltoseCoreTests
+[13/22] Compiling MaltoseCoreTests TransportTests.swift
+[13/22] Applying MaltoseHost
+[15/22] Compiling MaltoseApp MaltoseApp.swift
+[16/22] Compiling MaltoseApp HostController.swift
+[17/22] Emitting module MaltoseApp
+[17/22] Write Objects.LinkFileList
+[18/22] Linking MaltoseApp
+[19/22] Applying MaltoseApp
+[21/24] Emitting module MaltoseUITests
+[22/24] Compiling MaltoseUITests CredentialControllerTests.swift
+[22/24] Write Objects.LinkFileList
+[23/24] Linking MaltoseUIHostPackageTests
+Build complete! (3.65s)
+Test Suite 'Selected tests' started at 2026-10-29 13:48:02.717.
+Test Suite 'MaltoseUIHostPackageTests.xctest' started at 2026-10-29 13:48:02.718.
+Test Suite 'CredentialControllerTests' started at 2026-10-29 13:48:02.718.
+Test Case '-[MaltoseUITests.CredentialControllerTests testFailureExplainsCauseWithoutOverwritingConnectionStatus]' started.
+Test Case '-[MaltoseUITests.CredentialControllerTests testFailureExplainsCauseWithoutOverwritingConnectionStatus]' passed (0.002 seconds).
+Test Case '-[MaltoseUITests.CredentialControllerTests testInvalidNameExplainsRequiredFormat]' started.
+Test Case '-[MaltoseUITests.CredentialControllerTests testInvalidNameExplainsRequiredFormat]' passed (0.000 seconds).
+Test Suite 'CredentialControllerTests' passed at 2026-10-29 13:48:02.721.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'MaltoseUIHostPackageTests.xctest' passed at 2026-10-29 13:48:02.721.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 13:48:02.721.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
