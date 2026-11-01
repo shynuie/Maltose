@@ -1,6 +1,8 @@
-# Maltose Native UI Integration
+# Maltose Native UI Integration（歷史 Host／MUP 方案）
 
-狀態：done。跨專案開發計畫來源：`/Users/Marvin/Workspace/Maltose_UI/plans/agent-integration.md`。
+> 本頁保留 2026-10-29 的舊 Host／MUP／uv sidecar 整合及其實測結果，不是現行 App 的啟動方式。現行主 Agent 自動啟動、私有 stdio 與 Codex 協作以 [產品整合計畫](maltose_unification_dev_plan.md) 及 [共用面板介面](../../../docs/architecture/workspace-agent-interface.md) 為準。下方 done 僅表示舊方案當時的交付，不表示現行整合已完成。
+
+狀態：done（歷史方案）。原跨專案開發計畫：[舊 Agent 整合計畫](../../../plans/agent-integration.md)。
 
 - [x] opt-in CLI/config 與獨立 uv sidecar，不改 ML/voice dependencies。
 - [x] 將真實 model/tool/speech、回答串流與 task progress 經 EventHub 同步至原生 UI。
@@ -19,7 +21,7 @@
 
 架構決策：[ADR 003](../decisions/ADR-003-maltose-native-ui.md)。完整 logs 與驗證限制集中於 `/Users/Marvin/Workspace/Maltose_UI/docs/verification/agent-integration-report.md`。
 
-下一步：以 `./start --maltose` 做真人麥克風與實際模型驗收；第一次正式配對由使用者在原生 UI 核對並批准。未宣稱這些真人／服務路徑已驗證。其他 framework 可重用 bootstrap，但仍需接上該 framework 的 registry/runtime callbacks。
+當時的下一步（2026-10-29；非現行 App 啟動方式）：以 `./start --maltose` 做真人麥克風與實際模型驗收；第一次正式配對由使用者在原生 UI 核對並批准。未宣稱這些真人／服務路徑已驗證。其他 framework 可重用 bootstrap，但仍需接上該 framework 的 registry/runtime callbacks。
 
 ## 2026-10-29 實際啟動環境修復
 

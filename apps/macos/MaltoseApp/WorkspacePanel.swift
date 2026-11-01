@@ -3,7 +3,7 @@ import SwiftUI
 
 /// UI-only model. Content has no dependency on the Host or an Agent document.
 struct WorkspacePanel: Identifiable {
-    enum Kind: Equatable {
+    enum Kind: String, Codable, CaseIterable {
         case canvas, notes, chart, table, conversationHistory, document, imageGallery, browser, agentIdentity, agentCoreTest
 
         var allowsMultipleInstances: Bool {

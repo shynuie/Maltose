@@ -10,7 +10,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Iterator, Protocol
@@ -18,6 +18,8 @@ from typing import Callable, Iterator, Protocol
 from maltose.agent.brain import AgentBrain, EchoBrain, TurnContext
 from maltose.agent.config import AgentConfig
 from maltose.runtime import EventHub
+from maltose.runtime.control import AutonomyControl, AutonomyPaused
+from contextlib import nullcontext
 from maltose.voice import (
     FasterWhisperSTT,
     ListeningEvent,
@@ -77,6 +79,7 @@ class PendingTurn:
     transcript: str
     speaker_result: SpeakerResult
     interrupt_requested: bool = True
+    captured_epoch: int | None = None
 
 
 ListenerFactory = Callable[
@@ -97,6 +100,27 @@ class ObservableSpeaker:
         return observed
 
 
+class ControlledSpeaker:
+    def __init__(self, provider, control): self._provider, self._control = provider, control
+    def __getattr__(self, name):
+        value = getattr(self._provider, name)
+        if name not in ('synthesize', 'render', 'play') or not callable(value): return value
+        def admitted(*args, **kwargs):
+            with self._control.activity('speech'):
+                return value(*args, **kwargs)
+        return admitted
+
+
+@dataclass(frozen=True)
+class QueuedAgentInput:
+    text: str
+    source: str
+    captured_epoch: int | None
+    message_id: str
+    # Runtime-owned callback, never a serialized identity supplied by the UI.
+    voice_context: Callable[[], TurnContext | None] | None = None
+
+
 class VoiceAgent:
     """Main Voice Agent controlling standby, listening, thinking, and speaking."""
 
@@ -112,19 +136,32 @@ class VoiceAgent:
         event_hub: EventHub | None = None,
         audio_device_controller: AudioInputDeviceController | None = None,
         observe_speech: bool = False,
+        voice_enabled: bool = True,
+        control_gate: AutonomyControl | None = None,
+        input_router: Callable | None = None,
     ) -> None:
         self.config = config or AgentConfig()
         self.brain = brain or EchoBrain()
         self._transcriber = transcriber
         self._speaker = speaker
         self._observable_speaker = None
+        self._controlled_speaker = None
+        self.control_gate = control_gate
+        self.input_router = input_router
+        self.voice_context_observer = None
+        self._assistant_stream_id = None
+        self._assistant_stream_text = ''
         self._observe_speech = observe_speech
+        self._voice_enabled = voice_enabled
+        self._shutdown_requested = threading.Event()
+        self._audio_input_count = 0
+        self._audio_input_lock = threading.Lock()
         self._speaker_identifier = speaker_identifier or NullSpeakerIdentifier()
         self._speaker_identity_manager = speaker_identity_manager
         self._listener_factory = listener_factory
         self._event_hub = event_hub
         self._audio_device_controller = audio_device_controller
-        self._command_queue: queue.Queue[str] = queue.Queue()
+        self._command_queue: queue.Queue[QueuedAgentInput] = queue.Queue()
         self._state = AgentState.INITIALIZING
         self.turn_count = 0
 
@@ -138,12 +175,35 @@ class VoiceAgent:
         if self._event_hub is not None:
             self._event_hub.publish("state_changed", {"state": value.value})
 
-    def submit_text(self, text: str) -> None:
+    def submit_text(self, text: str, *, source: str = "web", message_id: str | None = None) -> None:
         """Queue text from a non-voice interface for the current Agent session."""
-        text = text.strip()
-        if not text:
+        if not text.strip():
             raise ValueError("Agent text input cannot be empty")
-        self._command_queue.put(text)
+        if source not in {"web", "native"}: raise ValueError("Unknown Agent text input source")
+        if message_id is not None and (not isinstance(message_id, str) or not message_id or len(message_id) > 128): raise ValueError('Invalid input ID')
+        self._command_queue.put(QueuedAgentInput(text, source, self.control_gate.epoch if self.control_gate else None, message_id or uuid.uuid4().hex))
+
+    def submit_routed_voice(self, text: str, *, message_id: str, context_provider: Callable[[], TurnContext | None]) -> None:
+        """Re-admit a runtime-verified voice input after the controller hands back."""
+        if not text.strip() or not message_id or not callable(context_provider): raise ValueError('Invalid routed voice input')
+        self._command_queue.put(QueuedAgentInput(text, 'voice', self.control_gate.epoch if self.control_gate else None,
+                                                 message_id, context_provider))
+
+    def request_shutdown(self) -> None:
+        """Cooperatively wake the listener and stop this runtime, not another process."""
+        self._shutdown_requested.set()
+        self.state = AgentState.SHUTDOWN
+
+    @property
+    def audio_input_active(self) -> bool:
+        with self._audio_input_lock: return self._audio_input_count > 0
+
+    def _audio_input_changed(self, active: bool) -> None:
+        with self._audio_input_lock:
+            self._audio_input_count = max(0, self._audio_input_count + (1 if active else -1))
+            count = self._audio_input_count
+        self._publish("audio_input_state", {"active": count > 0, "streams": count})
+        logger.info("audio_input_state active=%s streams=%d", count > 0, count)
 
     @property
     def transcriber(self) -> STTProvider:
@@ -160,10 +220,15 @@ class VoiceAgent:
     def speaker(self) -> TTSProvider:
         if self._speaker is None:
             self._speaker = MacOSSayTTS()
-        if not self._observe_speech:return self._speaker
-        if self._observable_speaker is None:
-            self._observable_speaker=ObservableSpeaker(self._speaker,self._publish)
-        return self._observable_speaker
+        provider = self._speaker
+        if self._observe_speech:
+            if self._observable_speaker is None:
+                self._observable_speaker=ObservableSpeaker(self._speaker,self._publish)
+            provider = self._observable_speaker
+        if self.control_gate:
+            if self._controlled_speaker is None: self._controlled_speaker = ControlledSpeaker(provider, self.control_gate)
+            return self._controlled_speaker
+        return provider
 
     def run(self) -> None:
         logger.info(
@@ -175,11 +240,11 @@ class VoiceAgent:
             self._warm_up_transcriber()
             conversation_active = self.config.wake_word_detector is None
             brain_session_open = False
-            if conversation_active:
+            if conversation_active and (not self.control_gate or self.control_gate.active):
                 self._begin_brain_session()
                 brain_session_open = True
             pending_turn: PendingTurn | None = None
-            while self.state != AgentState.SHUTDOWN:
+            while self.state != AgentState.SHUTDOWN and not self._shutdown_requested.is_set():
                 self.state = AgentState.STANDBY
                 logger.info(
                     "agent_standby wake_required=%s conversation_timeout=%s",
@@ -189,9 +254,14 @@ class VoiceAgent:
                 self._speak_task_notifications()
 
                 captured_utterance = pending_turn.utterance if pending_turn else None
+                captured_epoch = pending_turn.captured_epoch if pending_turn and pending_turn.captured_epoch is not None else self.control_gate.epoch if self.control_gate else None
                 pretranscribed_turn = pending_turn
                 pending_turn = None
                 external_text: str | None = None
+                external_source = "web"
+                external_message_id = None
+                external_voice_context = None
+                queued_input = None
                 if captured_utterance is None:
                     listening_events: queue.Queue[object] = queue.Queue()
                     listener_stop = threading.Event()
@@ -211,9 +281,11 @@ class VoiceAgent:
                         daemon=True,
                     )
                     listener_thread.start()
-                    while captured_utterance is None and external_text is None:
+                    while captured_utterance is None and external_text is None and not self._shutdown_requested.is_set():
                         try:
-                            external_text = self._command_queue.get_nowait()
+                            queued_input = self._command_queue.get_nowait()
+                            external_text, external_source = queued_input.text, queued_input.source
+                            captured_epoch, external_message_id = queued_input.captured_epoch, queued_input.message_id
                             listener_stop.set()
                             break
                         except queue.Empty:
@@ -238,9 +310,12 @@ class VoiceAgent:
                         elif event.kind == "wake_detected":
                             logger.info("wake_detected keyword=%s", event.keyword)
                             if not brain_session_open:
-                                self._begin_brain_session()
-                                brain_session_open = True
-                                logger.info("conversation_session_resumed")
+                                try:
+                                    with self.control_gate.activity('conversation_control') if self.control_gate else nullcontext():
+                                        self._begin_brain_session()
+                                        brain_session_open = True
+                                        logger.info("conversation_session_resumed")
+                                except AutonomyPaused: pass
                         elif event.kind == "wake_ack_requested":
                             self._speak_wake_ack()
                         elif event.kind == "speech_ended" and event.utterance is not None:
@@ -255,13 +330,21 @@ class VoiceAgent:
                     listener_thread.join(timeout=1.0)
 
                 if external_text is not None:
+                    if queued_input.voice_context is not None:
+                        external_voice_context = queued_input.voice_context()
+                        if external_voice_context is None or (self.control_gate and
+                                (not self.control_gate.active or captured_epoch != self.control_gate.epoch)):
+                            self._publish('input_deferred', {'message_id': external_message_id, 'source': 'voice',
+                                'reason': 'Voice verification or control changed before admission'})
+                            continue
                     result = STTResult(
                         text=external_text,
                         language=self.config.whisper_language,
                         duration=0.0,
                         segments=[],
                     )
-                    speaker_result = SpeakerResult(None, None, "web")
+                    speaker_result = (SpeakerResult(external_voice_context.user_id, external_voice_context.speaker_score,
+                        external_voice_context.speaker_status) if external_voice_context else SpeakerResult(None, None, "unknown"))
                 elif captured_utterance is None:
                     continue
 
@@ -327,55 +410,52 @@ class VoiceAgent:
                     speaker_label,
                     result.text.strip(),
                 )
-                self._publish("user_message", {"content": result.text.strip(), "source": "web" if external_text is not None else "voice"})
-
                 if not result.text.strip():
                     logger.info("empty_transcript_ignored")
                     continue
 
-                if _is_wake_only(result.text, self.config.wake_keywords):
-                    reply_text = self.config.wake_ack_text or "我在"
-                    logger.info("wake_only_reply text=%s", reply_text)
-                    interrupted_utterance = self._speak_reply(
-                        TTSRequest(
-                            text=reply_text,
-                            voice=self.config.tts_voice,
-                            rate=self.config.tts_rate,
-                        )
-                    )
-                    streamed_reply = False
-                else:
-                    turn_context = TurnContext(
-                        user_id=speaker_result.user_id,
-                        speaker_score=speaker_result.score,
-                        speaker_status=speaker_result.status,
-                    )
-                    stream_process = getattr(self.brain, "process_stream", None)
-                    if callable(stream_process):
-                        reply_text, interrupted_utterance = self._speak_stream(
-                            stream_process(result.text, context=turn_context)
-                        )
-                        streamed_reply = True
-                    else:
-                        reply_text = self.brain.process(result.text, context=turn_context)
-                        interrupted_utterance = self._speak_reply(
-                            TTSRequest(
-                                text=reply_text,
-                                voice=self.config.tts_voice,
-                                rate=self.config.tts_rate,
-                            )
-                            )
-                        streamed_reply = False
-                logger.info("brain_reply text=%s", reply_text)
-                if not streamed_reply:
-                    self._publish("assistant_message", {"content": reply_text})
+                source = external_source if external_text is not None else 'voice'
+                turn_context = TurnContext(user_id=speaker_result.user_id, speaker_score=speaker_result.score,
+                                           speaker_status=speaker_result.status, input_source=source)
+                if external_text is None and self.voice_context_observer:
+                    self.voice_context_observer(turn_context)
+                if external_text is None and self.control_gate and not self.control_gate.active and _is_wake_only(result.text, self.config.wake_keywords):
+                    conversation_active = True
+                    self._publish('voice_wake_observed', {'recipient': 'current'})
+                    continue
+                input_id = external_message_id or uuid.uuid4().hex
+                input_text = result.text if external_text is not None else result.text.strip()
+                if external_voice_context is None and self.input_router and self.input_router(input_text, turn_context, source, captured_epoch, input_id):
+                    continue
+                admitted = False
+                try:
+                    with self.control_gate.activity('conversation', expected_epoch=captured_epoch) if self.control_gate else nullcontext():
+                        admitted = True
+                        if not brain_session_open:
+                            self._begin_brain_session(); brain_session_open = True
+                        self._publish("user_message", {"message_id": input_id, "content": input_text, "source": source})
+                        reply_text, interrupted_utterance, streamed_reply = self._respond_to_input(result.text, turn_context)
+                        if interrupted_utterance and interrupted_utterance.captured_epoch is None:
+                            interrupted_utterance = replace(interrupted_utterance, captured_epoch=captured_epoch)
+                        logger.info("brain_reply text=%s", reply_text)
+                        if not streamed_reply:
+                            self._publish("assistant_message", {"content": reply_text})
+                except AutonomyPaused:
+                    if not admitted:
+                        if external_voice_context is not None:
+                            self._publish('input_deferred', {'message_id': input_id, 'source': 'voice',
+                                'reason': 'Control changed before routed voice admission'})
+                        elif self.input_router:
+                            self.input_router(input_text, turn_context, source, captured_epoch, input_id)
+                    if self._assistant_stream_id:
+                        self._finish_assistant_stream(self._assistant_stream_id, self._assistant_stream_text, interrupted=True)
+                    self._publish('autonomy_turn_interrupted', {'reason': 'control_handoff', 'messageID': input_id})
+                    logger.info('autonomy_turn_interrupted')
+                    continue
                 logger.info("speaking_done")
                 if interrupted_utterance is not None:
                     conversation_active = True
                     if interrupted_utterance.interrupt_requested:
-                        # Explicit stop commands such as "等等" control TTS;
-                        # they are not a new conversational turn. Preserve the
-                        # current brain session and return to the listener.
                         pending_turn = None
                         self.state = AgentState.LISTENING
                         logger.info("speaking_barge_in interrupted_return_to_listening")
@@ -387,11 +467,14 @@ class VoiceAgent:
 
                 consume_standby = getattr(self.brain, "consume_return_to_standby", None)
                 if callable(consume_standby) and consume_standby():
-                    self._end_brain_session()
-                    brain_session_open = False
-                    conversation_active = self.config.wake_word_detector is None
-                    pending_turn = None
-                    logger.info("conversation_control return_to_standby")
+                    try:
+                        with self.control_gate.activity('conversation_control') if self.control_gate else nullcontext():
+                            self._end_brain_session()
+                            brain_session_open = False
+                            conversation_active = self.config.wake_word_detector is None
+                            pending_turn = None
+                            logger.info("conversation_control return_to_standby")
+                    except AutonomyPaused: pass
 
                 logger.info("conversation_turn_complete turns=%d", self.turn_count)
 
@@ -404,6 +487,25 @@ class VoiceAgent:
             self._end_brain_session()
             self.state = AgentState.SHUTDOWN
             logger.info("agent_stopped")
+
+    def _respond_to_input(self, text, turn_context):
+        if _is_wake_only(text, self.config.wake_keywords):
+            reply_text = self.config.wake_ack_text or "我在"
+            logger.info("wake_only_reply text=%s", reply_text)
+            interrupted_utterance = self._speak_reply(TTSRequest(
+                text=reply_text, voice=self.config.tts_voice, rate=self.config.tts_rate))
+            streamed_reply = False
+        else:
+            stream_process = getattr(self.brain, "process_stream", None)
+            if callable(stream_process):
+                reply_text, interrupted_utterance = self._speak_stream(stream_process(text, context=turn_context))
+                streamed_reply = True
+            else:
+                reply_text = self.brain.process(text, context=turn_context)
+                interrupted_utterance = self._speak_reply(TTSRequest(
+                    text=reply_text, voice=self.config.tts_voice, rate=self.config.tts_rate))
+                streamed_reply = False
+        return reply_text, interrupted_utterance, streamed_reply
 
     def _begin_brain_session(self) -> None:
         begin_session = getattr(self.brain, "begin_session", None)
@@ -428,10 +530,12 @@ class VoiceAgent:
 
     def _start_assistant_stream(self) -> str:
         message_id = uuid.uuid4().hex
+        self._assistant_stream_id = message_id; self._assistant_stream_text = ''
         self._publish("assistant_start", {"message_id": message_id})
         return message_id
 
     def _publish_assistant_delta(self, message_id: str, content: str) -> None:
+        if self._assistant_stream_id == message_id: self._assistant_stream_text += content
         self._publish(
             "assistant_delta",
             {"message_id": message_id, "content": content},
@@ -444,6 +548,8 @@ class VoiceAgent:
         *,
         interrupted: bool = False,
     ) -> None:
+        if self._assistant_stream_id == message_id:
+            self._assistant_stream_id = None; self._assistant_stream_text = ''
         self._publish(
             "assistant_end",
             {
@@ -458,6 +564,13 @@ class VoiceAgent:
         stop_event: threading.Event,
         conversation_active: bool,
     ) -> Iterator[ListeningEvent]:
+        if not self._voice_enabled:
+            def wait_for_input():
+                while not stop_event.wait(0.05):
+                    if self._shutdown_requested.is_set():
+                        return
+                yield from ()
+            return wait_for_input()
         device = (
             self._audio_device_controller.device_for_stream()
             if self._audio_device_controller is not None
@@ -471,28 +584,47 @@ class VoiceAgent:
             self.config.wake_ack_delay,
             self.config.wake_buffer_ms,
         )
+        return self._listener_with_lifecycle(arguments, stop_event)
+
+    def _listener_with_lifecycle(self, arguments: tuple, stop_event: threading.Event | None = None) -> Iterator[ListeningEvent]:
         try:
             signature = inspect.signature(self._listener_factory)
+            audio_state = {"on_audio_state": self._audio_input_changed} if "on_audio_state" in signature.parameters else {}
+            stop_parameter = signature.parameters.get("stop_event")
+            stop_as_keyword = stop_parameter is not None and stop_parameter.kind != inspect.Parameter.POSITIONAL_ONLY
             accepts_stop_event = (
-                "stop_event" in signature.parameters
-                or any(
+                any(
                     parameter.kind == inspect.Parameter.VAR_POSITIONAL
                     for parameter in signature.parameters.values()
                 )
-                or len(signature.parameters) >= 7
+                or sum(parameter.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                       for parameter in signature.parameters.values()) >= 7
             )
         except (TypeError, ValueError):
             accepts_stop_event = False
+            stop_as_keyword = False
+            audio_state = {}
+        if stop_as_keyword:
+            return self._listener_factory(*arguments, stop_event=stop_event, **audio_state)
         if accepts_stop_event:
-            return self._listener_factory(*arguments, stop_event)
-        return self._listener_factory(*arguments)
+            return self._listener_factory(*arguments, stop_event, **audio_state)
+        return self._listener_factory(*arguments, **audio_state)
 
     def _speak_task_notifications(self) -> None:
+        try:
+            with self.control_gate.activity('notifications') if self.control_gate else nullcontext():
+                self._speak_admitted_notifications()
+        except AutonomyPaused: return
+
+    def _speak_admitted_notifications(self) -> None:
         consume = getattr(self.brain, "consume_task_notifications", None)
         if not callable(consume):
             return
         for text in consume():
             logger.info("task_notification text=%s", text)
+            if not self._voice_enabled:
+                self._publish("assistant_message", {"content": text})
+                continue
             self.speaker.synthesize(
                 TTSRequest(
                     text=text,
@@ -503,6 +635,17 @@ class VoiceAgent:
 
     def _speak_stream(self, chunks: Iterator[str]) -> tuple[str, PendingTurn | None]:
         """Coordinate LLM streaming, sentence TTS, and optional barge-in listening."""
+        if not self._voice_enabled:
+            message_id = self._start_assistant_stream()
+            parts = []
+            for chunk in chunks:
+                if self._shutdown_requested.is_set():
+                    break
+                parts.append(chunk)
+                self._publish_assistant_delta(message_id, chunk)
+            text = "".join(parts)
+            self._finish_assistant_stream(message_id, text, interrupted=self._shutdown_requested.is_set())
+            return text, None
         if callable(getattr(self.speaker, "render", None)) and callable(
             getattr(self.speaker, "play", None)
         ):
@@ -877,15 +1020,7 @@ class VoiceAgent:
             if self._audio_device_controller is not None
             else self.config.device
         )
-        try:
-            return iter(self._listener_factory(
-                self.config.vad_settings, device, None, None, 0.0, 0,
-                stop_event=stop_event,
-            ))
-        except TypeError:
-            return iter(self._listener_factory(
-                self.config.vad_settings, device, None, None, 0.0, 0,
-            ))
+        return iter(self._listener_with_lifecycle((self.config.vad_settings, device, None, None, 0.0, 0), stop_event))
 
     @staticmethod
     def _clean_spoken_sentence(text: str) -> str:
@@ -896,6 +1031,8 @@ class VoiceAgent:
         return text.strip()
 
     def _warm_up_transcriber(self) -> None:
+        if not self._voice_enabled:
+            return
         warmup = getattr(self.transcriber, "warmup", None)
         if not callable(warmup):
             return
@@ -910,35 +1047,29 @@ class VoiceAgent:
         )
 
         ready_text = "你好，我是麥芽糖。"
+        if self.control_gate and not self.control_gate.active: return
         self.state = AgentState.SPEAKING
         logger.info("ready_prompt text=%s", ready_text)
-        self.speaker.synthesize(
-            TTSRequest(
-                text=ready_text,
-                voice=self.config.tts_voice,
-                rate=self.config.tts_rate,
-            )
-        )
+        try: self.speaker.synthesize(TTSRequest(text=ready_text, voice=self.config.tts_voice, rate=self.config.tts_rate))
+        except AutonomyPaused: return
         logger.info("ready_prompt_done")
 
     def _speak_wake_ack(self) -> None:
         if not self.config.wake_ack_text:
             return
+        if self.control_gate and not self.control_gate.active: return
 
         previous_state = self.state
         self.state = AgentState.SPEAKING
         logger.info("wake_ack speaking text=%s", self.config.wake_ack_text)
-        self.speaker.synthesize(
-            TTSRequest(
-                text=self.config.wake_ack_text,
-                voice=self.config.tts_voice,
-                rate=self.config.tts_rate,
-            )
-        )
+        try: self.speaker.synthesize(TTSRequest(text=self.config.wake_ack_text, voice=self.config.tts_voice, rate=self.config.tts_rate))
+        except AutonomyPaused: pass
         logger.info("wake_ack_done")
         self.state = previous_state
 
     def _speak_reply(self, request: TTSRequest) -> PendingTurn | None:
+        if not self._voice_enabled:
+            return None
         """Speak once and let the brain classify a completed barge-in utterance."""
         stop_speaking = getattr(self.speaker, "stop", None)
         if not self.config.interruptible_tts or not callable(stop_speaking):
@@ -963,7 +1094,7 @@ class VoiceAgent:
         interrupt_requested = False
         speech_in_progress = False
         listener = iter(
-            self._listener_factory(
+            self._listener_with_lifecycle((
                 self.config.vad_settings,
                 self._audio_device_controller.device_for_stream()
                 if self._audio_device_controller is not None
@@ -972,7 +1103,7 @@ class VoiceAgent:
                 None,
                 0.0,
                 0,
-            )
+            ))
         )
         try:
             while not speaking_done.is_set() or speech_in_progress:

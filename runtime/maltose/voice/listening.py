@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import queue
 import logging
+from contextlib import ExitStack
 import threading
 import wave
 from collections import deque
@@ -257,6 +258,7 @@ def microphone_events(
     wake_ack_delay: float = 0.8,
     wake_buffer_ms: int = 1000,
     stop_event: threading.Event | None = None,
+    on_audio_state=None,
 ) -> Iterator[ListeningEvent]:
     import time
     import sounddevice as sd
@@ -282,14 +284,21 @@ def microphone_events(
             logger.warning("audio_input_status %s", status)
         audio_queue.put(bytes(indata))
 
-    with sd.RawInputStream(
+    opened = False
+    def closed():
+        if opened and on_audio_state is not None: on_audio_state(False)
+    with ExitStack() as resources:
+        resources.callback(closed)
+        resources.enter_context(sd.RawInputStream(
         samplerate=settings.sample_rate,
         blocksize=settings.frame_samples,
         dtype="int16",
         channels=settings.channels,
         device=device,
         callback=callback,
-    ):
+        ))
+        opened = True
+        if on_audio_state is not None: on_audio_state(True)
         standby_start = time.monotonic()
         while True:
             if stop_event is not None and stop_event.is_set():

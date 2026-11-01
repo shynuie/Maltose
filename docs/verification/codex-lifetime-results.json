@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "codexVersion": "0.155.1",
+  "model": "gpt-6-astra",
+  "preFixServerGroupCrash": {
+    "fault": "server-crash",
+    "ignoresHangup": true,
+    "crashAt": "background",
+    "turnStatusBeforeCrash": "completed",
+    "hostKilled": true,
+    "serverStopped": true,
+    "backgroundStopped": false,
+    "allCapturedProcessesStopped": false,
+    "heartbeatStopped": false,
+    "capturedProcesses": 7,
+    "trackedTerminals": 1,
+    "humanInteractions": [],
+    "model": "gpt-6-astra"
+  },
+  "postFixServerGroupCrash": {
+    "fault": "server-crash",
+    "ignoresHangup": true,
+    "crashAt": "background",
+    "turnStatusBeforeCrash": "completed",
+    "hostKilled": false,
+    "hostAliveDuringObservation": true,
+    "serverStopped": true,
+    "backgroundStopped": true,
+    "allCapturedProcessesStopped": true,
+    "heartbeatStopped": true,
+    "capturedProcesses": 18,
+    "trackedTerminals": 1,
+    "humanInteractions": [],
+    "model": "gpt-6-astra",
+    "recovery": {
+      "resumedSameThread": true,
+      "preservedWorkspace": true,
+      "backgroundWorkReplayed": false,
+      "modelPromptSent": false,
+      "recoveredTurnStatuses": [
+        "completed"
+      ],
+      "fixtureThreadArchived": true
+    }
+  },
+  "postFixHostCrashDuringTool": {
+    "fault": "host-crash",
+    "ignoresHangup": true,
+    "crashAt": "running-tool",
+    "turnStatusBeforeCrash": "inProgress",
+    "hostKilled": true,
+    "serverStopped": true,
+    "backgroundStopped": true,
+    "allCapturedProcessesStopped": true,
+    "heartbeatStopped": true,
+    "capturedProcesses": 18,
+    "trackedTerminals": 1,
+    "humanInteractions": [],
+    "model": "gpt-6-astra",
+    "recovery": {
+      "resumedSameThread": true,
+      "preservedWorkspace": true,
+      "backgroundWorkReplayed": false,
+      "modelPromptSent": false,
+      "recoveredTurnStatuses": [
+        "interrupted"
+      ],
+      "fixtureThreadArchived": true
+    }
+  },
+  "originalWorkerWasInAnotherGroup": true,
+  "nativeGUIAppCrashTested": false,
+  "finalGoalComplete": false,
+  "tests": {
+    "swift": {
+      "tests": 141,
+      "skipped": 0,
+      "failures": 0,
+      "liveMain": true,
+      "liveCodex": true,
+      "gui": true,
+      "physicalScreens": 2,
+      "finishedLocal": "2026-11-01 13:11:42",
+      "elapsedSeconds": 191.471
+    },
+    "python": {
+      "tests": 393,
+      "skipped": 0,
+      "failures": 0,
+      "docker": true
+    }
+  }
+}

@@ -30,7 +30,7 @@ struct CSVLineChartBand: Hashable, Identifiable {
 }
 
 /// Agent-facing chart generation option: fill the area between two named series.
-struct CSVLineChartBandRequest: Hashable {
+struct CSVLineChartBandRequest: Hashable, Codable {
     let firstSeriesName: String
     let secondSeriesName: String
     var opacity: Double = 0.16
@@ -245,18 +245,15 @@ enum CSVLineChartParser {
     }
 
     func loadCSV(_ url: URL) {
+        do { try importCSV(url) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    /// Shared by the file picker, drag/drop and Agent calls.
+    func importCSV(_ url: URL) throws {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        do {
-            let source = try String(contentsOf: url, encoding: .utf8)
-            data = try CSVLineChartParser.parse(source)
-            sourceName = url.lastPathComponent
-            visibleSeries = Set(data.seriesNames.indices)
-            filledBands = [:]
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        try loadCSV(contents: String(contentsOf: url, encoding: .utf8), sourceName: url.lastPathComponent)
     }
 
     func loadCSV(contents: String, sourceName: String = "Agent CSV") throws {

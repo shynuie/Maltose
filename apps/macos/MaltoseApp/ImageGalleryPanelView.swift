@@ -86,11 +86,21 @@ struct GalleryImage: Identifiable {
         return true
     }
 
-    func addLocalImage(_ url: URL) {
+    func addLocalImage(_ url: URL) { try? importLocalImage(url) }
+
+    /// Shared file-loading path; Agent callers receive the error instead of silent failure.
+    func importLocalImage(_ url: URL) throws {
         let hasScope = url.startAccessingSecurityScopedResource()
         defer { if hasScope { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { return }
-        append(GalleryImage(id: UUID().uuidString, title: url.lastPathComponent, source: .local(data)))
+        try importImageData(Data(contentsOf: url), title: url.lastPathComponent)
+    }
+
+    func importImageData(_ data: Data, title: String) throws {
+        guard NSImage(data: data) != nil else {
+            throw NSError(domain: "MaltoseImageGallery", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "無法辨識此圖片檔案。"])
+        }
+        append(GalleryImage(id: UUID().uuidString, title: title, source: .local(data)))
     }
 
     func beginMagnification() { zoomStart = zoomScale }
@@ -109,6 +119,16 @@ struct GalleryImage: Identifiable {
         let maxY = max(0, (content.height * zoomScale - viewport.height) / 2)
         panOffset = CGSize(width: min(maxX, max(-maxX, panOffset.width)),
                            height: min(maxY, max(-maxY, panOffset.height)))
+    }
+
+    func constrainPan(to viewport: CGSize) {
+        guard let image = selectedImage else { return }
+        let sourceAspect = aspectRatio(for: image)
+        let viewportAspect = viewport.width / max(viewport.height, 1)
+        let fittedSize = sourceAspect > viewportAspect
+            ? CGSize(width: viewport.width, height: viewport.width / sourceAspect)
+            : CGSize(width: viewport.height * sourceAspect, height: viewport.height)
+        endPan(viewport: viewport, content: fittedSize)
     }
 
     private func append(_ image: GalleryImage) {
@@ -309,12 +329,7 @@ struct ImageGalleryPanelView: View {
             }
             .onEnded { _ in
                 isPanning = false
-                let viewportAspect = size.width / max(size.height, 1)
-                let sourceAspect = model.aspectRatio(for: image)
-                let fittedSize = sourceAspect > viewportAspect
-                    ? CGSize(width: size.width, height: size.width / sourceAspect)
-                    : CGSize(width: size.height * sourceAspect, height: size.height)
-                model.endPan(viewport: size, content: fittedSize)
+                model.constrainPan(to: size)
             }
     }
 

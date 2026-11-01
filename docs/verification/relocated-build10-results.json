@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "gitHead": "28dded81596402410812954f623e426631a6ff6b",
+  "workingTreeContainsUncommittedChanges": true,
+  "physicalProjectRoot": "/Users/Marvin/Workspace/Maltose",
+  "legacyPathIsTemporaryAlias": true,
+  "relocation": {
+    "sourceFilesPreservedAtMove": 413,
+    "sourceHeadAndStatusPreserved": true,
+    "managedConfigurationUpdated": true,
+    "developmentPython": "3.12.10",
+    "dependencyVersionsUnchanged": 117,
+    "appEnvironmentsUnchanged": true
+  },
+  "tests": {
+    "swift": {
+      "discovered": 137,
+      "skipped": 20,
+      "failures": 0,
+      "guiEnabled": false,
+      "localCodexEnabled": true,
+      "liveCodexEnabled": false,
+      "liveMainEnabled": false,
+      "freshBuildDirectory": ".build/relocated"
+    },
+    "python": {
+      "discovered": 387,
+      "skipped": 0,
+      "failures": 0,
+      "dockerEnabled": true
+    }
+  },
+  "package": {
+    "version": "0.7.0",
+    "build": "10",
+    "bundleFiles": 141,
+    "runtimeFiles": 125,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false,
+    "legacyAliasAbsentDuringVerification": true
+  },
+  "executableSHA256": "2429c3eacb6995cbf5564f257baa5d0dfad70659334fc4f8a8723e677d95dc79",
+  "finalGoalComplete": false,
+  "pending": [
+    "Codex project and current chat relocation",
+    "native fullscreen and cross-screen",
+    "new Finder launch lifecycle",
+    "voice identity and device matrix",
+    "fault recovery matrix"
+  ]
+}

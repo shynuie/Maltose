@@ -149,11 +149,22 @@ class TaskBrainTest(unittest.TestCase):
             {"choices": [{"message": {"content": "完成"}}]}
         ).encode("utf-8")
 
-        OpenAICompatibleTaskModel(token="secret").complete([], [])
+        tools = [{"type": "function", "function": {"name": "fixture", "parameters": {"type": "object", "properties": {}}}}]
+        OpenAICompatibleTaskModel(token="secret").complete([], tools)
 
         payload = json.loads(urlopen.call_args.args[0].data.decode("utf-8"))
         self.assertEqual(payload["reasoning_effort"], "none")
         self.assertEqual(payload["tool_choice"], "auto")
+        self.assertEqual(payload["tools"], tools)
+
+    @patch("maltose.agent.taskbrain.urllib.request.urlopen")
+    def test_readonly_model_request_does_not_advertise_tools_or_auto_tool_choice(self, urlopen) -> None:
+        response = urlopen.return_value.__enter__.return_value
+        response.read.return_value = json.dumps({"choices": [{"message": {"content": "fixture"}}]}).encode()
+        OpenAICompatibleTaskModel(token="fixture").complete([{"role": "system", "content": "read only"}], [])
+        payload = json.loads(urlopen.call_args.args[0].data)
+        self.assertNotIn("tools", payload)
+        self.assertNotIn("tool_choice", payload)
 
     def test_memory_store_persists_and_searches(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

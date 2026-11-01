@@ -34,7 +34,7 @@ private extension Float {
     func clamped(to range: ClosedRange<Float>) -> Float { min(range.upperBound, max(range.lowerBound, self)) }
 }
 
-enum EntityPreset: String, CaseIterable, Identifiable {
+enum EntityPreset: String, CaseIterable, Identifiable, Codable {
     case idle, listening, thinking, speaking, executing
     var id: String { rawValue }
     var title: String {
@@ -447,6 +447,12 @@ struct AgentCoreAnimationTestView: View {
             self.apply(.idle)
             self.testTask = nil
         }
+    }
+
+    func setState(_ preset: EntityPreset) {
+        testTask?.cancel()
+        testTask = nil
+        apply(preset)
     }
 
     private func apply(_ preset: EntityPreset) {

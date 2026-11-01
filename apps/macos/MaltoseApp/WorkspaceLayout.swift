@@ -1,6 +1,6 @@
 import Foundation
 
-enum WorkspaceMode: String { case grid, focused, sidebar }
+enum WorkspaceMode: String, Codable { case grid, focused, sidebar }
 
 struct WorkspaceGridPosition: Equatable, Hashable {
     var row: Int

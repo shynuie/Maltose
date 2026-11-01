@@ -5,9 +5,11 @@ import select
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
-from maltose.kws_protocol import ERROR, HEALTH, PCM, READY, RESET, RESPONSE, SHUTDOWN, json_bytes, parse_json, read_message, write_message
+from maltose.kws_protocol import ERROR, HEADER, HEALTH, PCM, READY, RESET, RESPONSE, SHUTDOWN, parse_json, write_message
 from maltose.voice.wake import WakeWordDetector, WakeWordHit
 
 
@@ -30,6 +32,7 @@ class AlibabaKWSDetector:
     ) -> None:
         self.model_dir = Path(model_dir).expanduser()
         self.python = str(Path(python).expanduser())
+        self._io_lock = threading.RLock()
         self._process = None
         if shutil.which(self.python) is None:
             raise AlibabaKWSProcessError(
@@ -50,6 +53,7 @@ class AlibabaKWSDetector:
                 stdout=subprocess.PIPE,
                 stderr=None,
                 env=env,
+                bufsize=0,
             )
         except OSError as error:
             raise AlibabaKWSProcessError(
@@ -72,8 +76,7 @@ class AlibabaKWSDetector:
     def process_frame(self, pcm_frame: bytes, sample_rate: int) -> WakeWordHit | None:
         if sample_rate != self.sample_rate:
             raise ValueError(f"Alibaba KWS requires {self.sample_rate}Hz audio")
-        write_message(self._stdin, PCM, pcm_frame)
-        kind, payload = self._read_response()
+        kind, payload = self._request(PCM, pcm_frame)
         if kind != RESPONSE:
             return None
         data = parse_json(payload)
@@ -81,17 +84,21 @@ class AlibabaKWSDetector:
         return WakeWordHit(keyword=str(hit["keyword"])) if hit else None
 
     def reset(self) -> None:
-        write_message(self._stdin, RESET)
-        self._read_response()
+        self._request(RESET)
 
     def health(self) -> dict:
-        write_message(self._stdin, HEALTH)
-        kind, payload = self._read_response()
+        kind, payload = self._request(HEALTH)
         if kind != RESPONSE:
             raise AlibabaKWSProcessError(parse_json(payload).get("error", "worker error"))
         return parse_json(payload)
 
     def close(self) -> None:
+        lock = getattr(self, "_io_lock", None)
+        if lock is None: return
+        with lock:
+            self._close()
+
+    def _close(self) -> None:
         process = getattr(self, "_process", None)
         if process is None:
             return
@@ -108,23 +115,55 @@ class AlibabaKWSDetector:
                 if stream is not None:
                     stream.close()
 
+    def _request(self, kind: int, payload: bytes = b"") -> tuple[int, bytes]:
+        # Listening, device changes and shutdown may arrive from different threads.
+        # Keep a complete write/read transaction together so replies cannot cross.
+        with self._io_lock:
+            if self._process is None or self._process.poll() is not None:
+                raise AlibabaKWSProcessError("Alibaba KWS worker is closed")
+            try:
+                write_message(self._stdin, kind, payload)
+                return self._read_response()
+            except (BrokenPipeError, OSError, EOFError) as error:
+                self._close()
+                raise AlibabaKWSProcessError("Alibaba KWS worker communication failed") from error
+
     def _read_response(self) -> tuple[int, bytes]:
         message = self._read_message_with_timeout()
         if message is None:
             raise AlibabaKWSProcessError("Alibaba KWS worker exited")
         if message[0] == ERROR:
             raise AlibabaKWSProcessError(parse_json(message[1]).get("error", "worker error"))
+        if message[0] != RESPONSE:
+            self.close()
+            raise AlibabaKWSProcessError("Unexpected Alibaba KWS response kind")
         return message
 
     def _read_message_with_timeout(self, timeout: float | None = None) -> tuple[int, bytes] | None:
         timeout = self.timeout_seconds if timeout is None else timeout
-        ready, _, _ = select.select([self._stdout], [], [], timeout)
-        if not ready:
+        deadline = time.monotonic() + timeout
+        def exact(length: int, *, allow_eof: bool = False):
+            chunks = bytearray()
+            while len(chunks) < length:
+                remaining = deadline - time.monotonic()
+                ready, _, _ = select.select([self._stdout], [], [], max(0, remaining))
+                if not ready or remaining <= 0:
+                    self.close()
+                    raise AlibabaKWSProcessError(f"Alibaba KWS worker response timed out after {timeout:.2f}s")
+                chunk = os.read(self._stdout.fileno(), length - len(chunks))
+                if not chunk:
+                    if allow_eof and not chunks: return None
+                    self.close()
+                    raise AlibabaKWSProcessError("Incomplete Alibaba KWS response frame")
+                chunks.extend(chunk)
+            return bytes(chunks)
+        header = exact(HEADER.size, allow_eof=True)
+        if header is None: return None
+        kind, length = HEADER.unpack(header)
+        if kind not in (READY, RESPONSE, ERROR) or length > 1_048_576:
             self.close()
-            raise AlibabaKWSProcessError(
-                f"Alibaba KWS worker response timed out after {timeout:.2f}s"
-            )
-        return read_message(self._stdout)
+            raise AlibabaKWSProcessError("Invalid Alibaba KWS protocol frame")
+        return kind, exact(length)
 
     def __del__(self) -> None:
         self.close()

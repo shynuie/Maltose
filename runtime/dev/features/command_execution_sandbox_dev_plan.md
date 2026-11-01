@@ -4,7 +4,7 @@
 
 - 狀態：`in_progress`
 - 目前階段：Phase 4 - Hardening & Platform Backends
-- 最後更新：2026-10-01
+- 最後更新：2026-11-01
 
 ## 目標
 
@@ -135,6 +135,14 @@ Agent -> ExecutionPolicy -> Approval/UI -> ExecutionBroker
 
 ## 目前進度
 
+### 2026-11-01 Maltose 整合驗證
+
+- 已實際執行本機既有 Docker engine 與快取映像的五項整合測試，未升級依賴或下載映像。新 opt-in 名稱為 `MALTOSE_RUN_DOCKER_INTEGRATION`，舊 `MYAGENT_RUN_DOCKER_INTEGRATION` 保留 fallback。
+- 修正 timeout 只終止 Docker client 的缺口：唯一 execution 名稱／標籤查詢完整容器 ID，daemon 強制移除後再確認不存在；身分不符、daemon 失聯或清理未確認不宣稱成功。
+- 強化 timeout fixture：忽略 TERM 的父子程序持續寫入 heartbeat，回傳後 heartbeat 停止且容器消失；另外建立的獨立容器不被清理。加入 daemon 失聯／錯誤 ID 的拒絕測試。
+- 最新完整 Python 378 項，0 failures／errors／skip，包含五項實際容器整合。指定 Maltose execution 標籤無殘留；engine 上仍有其他獨立容器，因此保留 engine 運作。
+- restricted-network proxy 及原規劃的跨平台能力仍未完成，不因本次 timeout 驗收而勾選。詳細證據見 [整合清理報告](../../../docs/verification/main-review-and-cleanup-report.md)。
+
 ### 2026-10-01 Progress Update
 
 - 狀態：`in_progress`
@@ -167,3 +175,7 @@ Agent -> ExecutionPolicy -> Approval/UI -> ExecutionBroker
 - 結果：Phase 0/1 control-plane 與 disposable Docker workspace backend 已完成；Phase 3 artifact/runtime integration 已完成；Phase 2 僅剩 restricted allowlist proxy。
 - 阻塞：restricted network proxy；目前沒有可用的強制 allowlist proxy runtime，Docker `bridge` 不能安全地宣稱 exact-domain isolation。
 - 下一步：需要可用的 restricted-network proxy runtime，才能完成最後的 exact-domain network isolation 驗收。
+
+## 原生 Docker 崩潰清理修補（build 13）
+
+已修復前輪 TERM-resistant 容器在 root 群組崩潰後繼續寫入的缺口。原生 guardian 接管 stopped-container 建立、PID／准入 barrier 與完整 ID 的持久化；主 runtime 只啟動已登記容器，kernel lease 延伸至 daemon 清理。未確認時關閉 gate 並失敗，重啟先清理且不重播。七項真實故障／同目錄恢復矩陣通過，含 API 失聯後的啟動阻擋與旁觀容器保全。聚焦 44 項、完整 Python 408 項無失敗／skip；Swift 141 項無失敗、15 GUI skip。獨立 build 13 的 145／129 檔來源、簽章、受管理匯入與憑證掃描通過；dist 的 build 11 未被覆蓋。正式 GUI、真人及全 App 故障驗收仍待人員解鎖，目標未完成。詳見 [容器生命週期驗證](../../../docs/verification/native-docker-lifetime-report.md)。

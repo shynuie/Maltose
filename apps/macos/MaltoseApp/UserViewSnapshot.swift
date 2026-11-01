@@ -1,12 +1,13 @@
 import AppKit
 import SwiftUI
 
-enum UserViewValue: Codable, Equatable {
+enum UserViewValue: Codable, Equatable, Sendable {
     case string(String)
     case number(Double)
     case boolean(Bool)
     case strings([String])
     case object([String: UserViewValue])
+    case array([UserViewValue])
     case null
 
     init(from decoder: Decoder) throws {
@@ -16,6 +17,7 @@ enum UserViewValue: Codable, Equatable {
         else if let value = try? container.decode(Double.self) { self = .number(value) }
         else if let value = try? container.decode(String.self) { self = .string(value) }
         else if let value = try? container.decode([String].self) { self = .strings(value) }
+        else if let value = try? container.decode([UserViewValue].self) { self = .array(value) }
         else { self = .object(try container.decode([String: UserViewValue].self)) }
     }
 
@@ -27,6 +29,7 @@ enum UserViewValue: Codable, Equatable {
         case let .boolean(value): try container.encode(value)
         case let .strings(value): try container.encode(value)
         case let .object(value): try container.encode(value)
+        case let .array(value): try container.encode(value)
         case .null: try container.encodeNil()
         }
     }
@@ -58,6 +61,8 @@ struct UserWorkspaceView: Codable, Equatable, Identifiable {
     var overlays: [String]
     var globalGrid: [String: UserViewValue]
     var panels: [UserPanelView]
+    var isNativeFullscreen: Bool = false
+    var layoutMode: WorkspaceMode = .grid
 }
 
 struct UserPanelView: Codable, Equatable, Identifiable {
@@ -68,17 +73,40 @@ struct UserPanelView: Codable, Equatable, Identifiable {
     var presentation: String
     var isSelected: Bool
     var details: [String: UserViewValue]
+    var detailLevel: String = "summary"
+    var capabilities: [String] = []
 }
 
 @MainActor final class UserViewTestModel: ObservableObject {
     @Published private(set) var isSending = false
     @Published private(set) var response = "按下按鈕後，這裡會顯示 get_user_view 的回傳內容。"
     @Published private(set) var lastError: String?
+    @Published var requestJSON = "{\"schemaVersion\":1,\"command\":{\"list_capabilities\":{}}}"
+    private let agentInterface: WorkspaceAgentInterface?
+
+    var capabilities: [WorkspaceAgentCapability] { agentInterface?.capabilities() ?? [] }
 
     private let capture: () async throws -> UserViewSnapshot
 
-    init(capture: @escaping () async throws -> UserViewSnapshot) {
+    init(capture: @escaping () async throws -> UserViewSnapshot, agentInterface: WorkspaceAgentInterface? = nil) {
+        self.agentInterface = agentInterface
         self.capture = capture
+    }
+
+    func useExample(_ capability: WorkspaceAgentCapability) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        if let data = try? encoder.encode(capability.example) { requestJSON = String(decoding: data, as: UTF8.self) }
+    }
+
+    func execute() { Task { @MainActor in await executeAndWait() } }
+
+    func executeAndWait() async {
+        guard !isSending, let agentInterface else { return }
+        isSending = true
+        lastError = nil
+        defer { isSending = false }
+        response = await agentInterface.handleJSON(requestJSON)
     }
 
     func send() {
@@ -112,7 +140,7 @@ struct UserViewTestWindow: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("UI 感知測試").font(.system(size: 20, weight: .semibold))
-                    Text("模擬呼叫 get_user_view，檢視 UI 回傳給 Agent 的目前視圖資訊。")
+                    Text("讀取目前視圖，或透過共用介面模擬 Agent 面板指令。")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -123,6 +151,23 @@ struct UserViewTestWindow: View {
                 .disabled(model.isSending)
                 .accessibilityIdentifier("get-user-view-send")
             }
+
+            HStack {
+                Menu("載入操作範例") {
+                    ForEach(Array(model.capabilities.enumerated()), id: \.offset) { _, capability in
+                        Button("\(capability.panelID ?? "工作區") · \(capability.example.command.displayName)") { model.useExample(capability) }
+                    }
+                }
+                Text("操作會套用到目前工作區；請以測試面板試用。")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer()
+                Button("執行指令", action: model.execute).disabled(model.isSending)
+                    .accessibilityIdentifier("agent-command-send")
+            }
+            TextEditor(text: $model.requestJSON)
+                .font(.system(size: 12, design: .monospaced))
+                .frame(height: 130)
+                .accessibilityIdentifier("agent-command-json")
 
             ScrollView([.vertical, .horizontal]) {
                 Text(model.response)

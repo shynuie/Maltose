@@ -1,6 +1,6 @@
 # Development Documentation
 
-這個目錄是 MyAgent 的開發規劃、架構決策與進度紀錄的集中入口。
+這個目錄是 Maltose 的開發規劃、架構決策與進度紀錄的集中入口。
 
 ## 文件入口
 
@@ -23,8 +23,15 @@ data/
 └── tasks/       # task and schedule state
 ```
 
-Background KDB logs are written to `data/logs/knowledge.log` by `./start`;
-the foreground Agent log remains in the terminal.
+上圖是邏輯資料分類；現行原生 App 的正式資料根目錄為
+`~/Library/Application Support/Maltose/`。App 的 runtime 診斷位於
+`logs/runtime.log`，執行資源收據位於設定目錄的 `native-executions/`；
+Memory 與 Knowledge 分開保存，原文仍是 source of truth。
+
+CLI／Web UI 相容入口 `./start` 的背景 KDB 日誌仍為
+`data/logs/knowledge.log`，前景 Agent 日誌保留在終端機。
+不要用該入口與 App 同時寫入同一份正式資料；設定、遷移與回復以
+[產品整合計畫](features/maltose_unification_dev_plan.md) 為準。
 
 Model files belong under `models/`; user source documents belong under
 `documents/`; neither belongs under `dev/`.

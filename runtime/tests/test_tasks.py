@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import time
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -247,23 +248,35 @@ class TaskManagerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             store = TaskStore(Path(tmpdir) / "tasks.sqlite3")
             manager = TaskManager(store)
-            manager.register_worker("local", FunctionTaskWorker(lambda data: data["result"]))
-            run_at = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
-            schedule = manager.create_schedule(
-                "Scheduled task", "local", run_at,
-                input={"result": "scheduled ok"}, user_id="marvin",
-            )
-
-            deadline = time.time() + 2
-            while time.time() < deadline:
-                if store.get_schedule(schedule["schedule_id"]).status == "completed":
-                    break
-                time.sleep(0.02)
-
-            self.assertEqual(store.get_schedule(schedule["schedule_id"]).status, "completed")
-            self.assertEqual(manager.list_tasks("marvin")[0]["result_summary"], "scheduled ok")
-            manager.shutdown()
-            store.close()
+            release = threading.Event()
+            def worker(data):
+                if not release.wait(5): raise TimeoutError("Fixture worker was not released")
+                return data["result"]
+            manager.register_worker("local", FunctionTaskWorker(worker))
+            try:
+                run_at = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+                schedule = manager.create_schedule(
+                    "Scheduled task", "local", run_at,
+                    input={"result": "scheduled ok"}, user_id="marvin",
+                )
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    if store.get_schedule(schedule["schedule_id"]).status == "completed": break
+                    time.sleep(0.02)
+                self.assertEqual(store.get_schedule(schedule["schedule_id"]).status, "completed")
+                # A one-time schedule is consumed when it dispatches, independently of
+                # its worker. Waiting for that schedule never guaranteed a task result.
+                task = manager.list_tasks("marvin")[0]
+                self.assertEqual(task["status"], TaskStatus.RUNNING)
+                self.assertIsNone(task["result_summary"])
+                release.set()
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline and manager.get_status(task["task_id"])["status"] == TaskStatus.RUNNING:
+                    time.sleep(0.01)
+                self.assertEqual(manager.get_status(task["task_id"])["status"], TaskStatus.SUCCEEDED)
+                self.assertEqual(manager.get_status(task["task_id"])["result_summary"], "scheduled ok")
+            finally:
+                release.set(); manager.shutdown(); store.close()
 
     def test_recurring_schedule_can_be_paused_and_resumed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

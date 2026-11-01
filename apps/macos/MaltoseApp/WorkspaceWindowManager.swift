@@ -8,15 +8,26 @@ private struct AgentWorkspaceSnapshot {
 }
 
 @MainActor final class WorkspaceWindowManager {
+    var onSubmitText: ((String) -> Bool)?
+    private var conversationStorageURL: URL?
+    private(set) var liveConversationModel: ConversationHistoryModel?
+    private var runtimeActivities: Set<String> = []
+    private var runtimeSessionID: String?
+    private var runtimeWorkerFailed = false
+    private var runtimePhase = "standby"
+    private var runtimeSequences: [String: Int] = [:]
+    lazy var agentInterface = WorkspaceAgentInterface(manager: self)
     private(set) var catalog: [WorkspacePanel]
     let automaticallyFullscreen: Bool
     private(set) var transitioningScreenID: String?
     private(set) var fullscreenFailures: Set<String> = []
+    private(set) var fullscreenDiagnostics: [String] = []
     private var fullscreenAttempted: Set<String> = []
     private var fullscreenTask: Task<Void, Never>?
     private var coreAnimationTestWindowController: AgentCoreTestWindowController?
     private var userViewTestWindowController: UserViewTestWindowController?
     private var agentInteractionTestTask: Task<Void, Never>?
+    var isAgentInteractionTestRunning: Bool { agentInteractionTestTask != nil }
     private var lastActiveWorkspaceScreenID: String?
     private(set) var windows: [String: NSWindow] = [:]
     private(set) var roots: [String: WorkspaceRootView] = [:]
@@ -29,6 +40,8 @@ private struct AgentWorkspaceSnapshot {
     private var dragCommitted = false
     private var screenObserver: NSObjectProtocol?
     private var resignObserver: NSObjectProtocol?
+    private var activationObserver: NSObjectProtocol?
+    private(set) var fullscreenAwaitingActivation: String?
 
     init(catalog: [WorkspacePanel] = WorkspacePanel.samples, automaticallyFullscreen: Bool = true) {
         self.catalog = catalog
@@ -42,6 +55,65 @@ private struct AgentWorkspaceSnapshot {
                 for root in self.roots.values { root.cancelHover(collapse: true) }
             }
         }
+        activationObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let id = self.fullscreenAwaitingActivation else { return }
+                self.fullscreenAwaitingActivation = nil
+                self.enterNextFullscreen(preferred: id)
+            }
+        }
+    }
+
+    @discardableResult func submitText(_ text: String) -> Bool {
+        guard onSubmitText?(text) == true else { return false }
+        (liveConversationModel ?? panels["chat"]?.conversationHistoryModel)?.showLiveSession()
+        return true
+    }
+
+    func prepareLiveConversation(at url: URL) throws {
+        let model = liveConversationModel ?? panels["chat"]?.conversationHistoryModel ?? ConversationHistoryModel(sessions: [])
+        try model.enableLiveStorage(at: url)
+        liveConversationModel = model
+        conversationStorageURL = url
+    }
+
+    func receiveRuntimeEvent(_ data: Data) throws {
+        let message = try JSONDecoder().decode(ConversationHistoryModel.RuntimeEnvelope.self, from: data)
+        guard message.sequence > (runtimeSequences[message.sessionID] ?? 0) else { return }
+        try (liveConversationModel ?? panels["chat"]?.conversationHistoryModel)?.applyRuntimeEvent(data)
+        runtimeSequences[message.sessionID] = message.sequence
+        // Coordination messages share the chat journal, not the main runtime's activity identity.
+        if message.sessionID.hasPrefix("coordination:") { return }
+        if runtimeSessionID != message.sessionID {
+            runtimeSessionID = message.sessionID; runtimeWorkerFailed = false; runtimeActivities = []
+        }
+        let event = message.event
+        switch event.type {
+        case "model_started": runtimeActivities.insert("model")
+        case "model_finished", "model_failed": runtimeActivities.remove("model")
+        case "tool_started": runtimeActivities.insert("tool")
+        case "tool_finished", "tool_failed": runtimeActivities.remove("tool")
+        case "speech_started": runtimeActivities.insert("speech")
+        case "speech_finished": runtimeActivities.remove("speech")
+        case "runtime_worker_failed": runtimeWorkerFailed = true
+        case "state_changed":
+            if case let .string(phase) = event.payload["state"] { runtimePhase = phase }
+            if runtimePhase == "shutdown" { runtimeActivities = [] }
+        default: break
+        }
+        let preset: EntityPreset = runtimeActivities.contains("speech") ? .speaking
+            : runtimeActivities.contains("tool") ? .executing
+            : runtimeActivities.contains("model") || runtimePhase == "thinking" ? .thinking
+            : runtimePhase == "listening" ? .listening : .idle
+        AgentIdentityAnimationModel.shared.setState(preset)
+        let warning = runtimeWorkerFailed ? " · 背景服務已停止，請查看日誌並重啟主 Agent" : ""
+        for root in roots.values { root.setRuntimeStatus("主 Agent · \(preset.title)\(warning)") }
+    }
+
+    private var agentPresentation: (recipient: String, status: String)?
+    func setAgentPresentation(recipient: String, status: String) {
+        agentPresentation = (recipient, status)
+        for root in roots.values { root.setAgentRecipient(recipient); root.setRuntimeStatus(status) }
     }
 
     static func screenID(_ screen: NSScreen) -> String {
@@ -80,6 +152,7 @@ private struct AgentWorkspaceSnapshot {
                 window.collectionBehavior = NSScreen.screensHaveSeparateSpaces || id == fallback
                     ? [.fullScreenPrimary, .fullScreenDisallowsTiling] : [.fullScreenAuxiliary]
                 let root = WorkspaceRootView(screenID: id, manager: self)
+                if let presentation = agentPresentation { root.setAgentRecipient(presentation.recipient); root.setRuntimeStatus(presentation.status) }
                 window.contentView = root
                 window.delegate = root
                 windows[id] = window
@@ -117,6 +190,7 @@ private struct AgentWorkspaceSnapshot {
         focus(id)
     }
     func selectPanel(_ id: String) {
+        guard catalog.first(where: { $0.id == id })?.supportsFocusedMode == true else { return }
         guard let screen = assignments[id], let root = roots[screen] else { return }
         root.state.select(id)
         root.arrange(animated: true)
@@ -133,7 +207,16 @@ private struct AgentWorkspaceSnapshot {
     }
     func showGrid() {
         guard let root = activeRoot else { return }
-        root.state.mode = .grid
+        setWorkspaceMode(.grid, on: root.screenID)
+    }
+
+    func setWorkspaceMode(_ mode: WorkspaceMode, on screenID: String) {
+        guard let root = roots[screenID] else { return }
+        if mode != .grid {
+            guard let id = root.state.primaryID,
+                  catalog.first(where: { $0.id == id })?.supportsFocusedMode == true else { return }
+        }
+        root.state.mode = mode
         root.cancelHover(collapse: false)
         root.arrange(animated: true)
     }
@@ -165,10 +248,10 @@ private struct AgentWorkspaceSnapshot {
         _ = activeRoot
         if userViewTestWindowController == nil {
             userViewTestWindowController = UserViewTestWindowController(
-                model: UserViewTestModel { [weak self] in
+                model: UserViewTestModel(capture: { [weak self] in
                     guard let self else { throw UserViewCaptureError.workspaceUnavailable }
                     return try await self.getUserView()
-                })
+                }, agentInterface: agentInterface))
         }
         userViewTestWindowController?.present()
     }
@@ -178,6 +261,7 @@ private struct AgentWorkspaceSnapshot {
         guard !roots.isEmpty else { throw UserViewCaptureError.workspaceUnavailable }
         let activeScreenID = activeRoot?.screenID
         var workspaces: [UserWorkspaceView] = []
+        let capabilities = agentInterface.capabilities()
         for root in roots.values.sorted(by: { $0.screenID < $1.screenID }) {
             let mode = root.state.mode
             let screen = NSScreen.screens.first { Self.screenID($0) == root.screenID }
@@ -201,18 +285,23 @@ private struct AgentWorkspaceSnapshot {
                 case .sidebar:
                     isVisible = id == root.state.primaryID
                         || panel.convert(panel.bounds, to: root).intersects(root.sidebar.frame)
-                    presentation = id == root.state.primaryID ? "mainPanel" : "sidebarThumbnail"
+                    presentation = id == root.state.primaryID ? "mainPanel" : (isVisible ? "sidebarThumbnail" : "offscreen")
                 }
 
                 if isVisible { visibleIDs.append(id) } else { hiddenIDs.append(id) }
-                let details = isVisible ? await panelDetails(panel, presentation: presentation) : [:]
+                let detailLevel = presentation == "mainPanel" ? "content" : "summary"
+                let details = detailLevel == "content"
+                    ? await panelDetails(panel, presentation: presentation)
+                    : panelSummary(panel)
                 let kind = catalog.first(where: { $0.id == id })?.kind
                 panels.append(UserPanelView(panelID: id,
-                                            kind: kind.map(kindName) ?? "unknown",
+                                            kind: kind?.rawValue ?? "unknown",
                                             title: panel.title,
                                             presentation: presentation,
                                             isSelected: root.state.selectedIDs.contains(id),
-                                            details: details))
+                                            details: details,
+                                            detailLevel: detailLevel,
+                                            capabilities: capabilities.filter { $0.panelID == id }.map(\.name)))
             }
 
             let grid: [String: UserViewValue]
@@ -240,9 +329,11 @@ private struct AgentWorkspaceSnapshot {
                                                 offscreenPanelIDs: hiddenIDs,
                                                 overlays: overlays,
                                                 globalGrid: grid,
-                                                panels: panels))
+                                                panels: panels,
+                                                isNativeFullscreen: windows[root.screenID]?.styleMask.contains(.fullScreen) == true,
+                                                layoutMode: mode))
         }
-        return UserViewSnapshot(schemaVersion: 1,
+        return UserViewSnapshot(schemaVersion: 2,
                                 capturedAt: ISO8601DateFormatter().string(from: Date()),
                                 activeScreenID: activeScreenID,
                                 workspaces: workspaces)
@@ -258,27 +349,52 @@ private struct AgentWorkspaceSnapshot {
         }
     }
 
-    private func kindName(_ kind: WorkspacePanel.Kind) -> String {
-        switch kind {
-        case .agentIdentity: "agentIdentity"
-        case .agentCoreTest: "agentCoreTest"
-        case .browser: "browser"
-        case .canvas: "flowchartCanvas"
-        case .chart: "lineChart"
-        case .conversationHistory: "conversation"
-        case .document: "markdownDocument"
-        case .imageGallery: "imageGallery"
-        case .notes: "notes"
-        case .table: "table"
+    /// Summaries do not evaluate browser JavaScript or include hidden document bodies.
+    private func panelSummary(_ panel: GlassPanelView) -> [String: UserViewValue] {
+        if let model = panel.conversationHistoryModel {
+            return ["sessionID": .string(model.currentSessionID),
+                    "sessionTitle": .string(model.currentSession?.title ?? ""),
+                    "sessionIDs": .strings(model.sessions.map(\.id))]
         }
+        if let model = panel.markdownDocumentModel { return ["blockCount": .number(Double(model.blocks.count))] }
+        if let model = panel.chartModel {
+            return ["source": .string(model.sourceName), "rowCount": .number(Double(model.data.rows.count)),
+                    "series": .strings(model.data.seriesNames)]
+        }
+        if let model = panel.imageGalleryModel {
+            return ["imageCount": .number(Double(model.images.count)), "selectedIndex": .number(Double(model.selectedIndex)),
+                    "imageTitle": .string(model.selectedImage?.title ?? "")]
+        }
+        if let model = panel.browserModel {
+            return ["pageTitle": .string(model.pageTitle), "url": model.currentURL.map { .string($0.absoluteString) } ?? .null]
+        }
+        if let model = panel.flowchartModel {
+            return ["documentTitle": .string(model.documentTitle), "nodeCount": .number(Double(model.nodes.count)),
+                    "connectionCount": .number(Double(model.connections.count)), "hasUnsavedChanges": .boolean(model.isDirty)]
+        }
+        if let model = panel.sampleContentModel { return ["characterCount": .number(Double(model.note.count))] }
+        if catalog.first(where: { $0.id == panel.surfaceID })?.kind == .table { return ["rowCount": .number(8)] }
+        if catalog.first(where: { $0.id == panel.surfaceID })?.kind == .agentIdentity {
+            return ["animationState": .string(AgentIdentityAnimationModel.shared.preset.rawValue)]
+        }
+        return [:]
     }
 
-    private func panelDetails(_ panel: GlassPanelView, presentation: String) async -> [String: UserViewValue] {
+    func readPanel(_ id: String) async throws -> [String: UserViewValue] {
+        guard let panel = panels[id], let entry = catalog.first(where: { $0.id == id }) else {
+            throw WorkspaceAgentFailure(code: "not_found", message: "找不到指定面板。")
+        }
+        return ["panelID": .string(id), "kind": .string(entry.kind.rawValue), "title": .string(panel.title),
+                "details": .object(await panelDetails(panel, presentation: "explicitRead", explicit: true))]
+    }
+
+    private func panelDetails(_ panel: GlassPanelView, presentation: String, explicit: Bool = false) async -> [String: UserViewValue] {
         if let model = panel.conversationHistoryModel {
             let session = model.currentSession
             let focused = !panel.isGlobal && !panel.isPreview
-            let readable = ConversationHistoryLayout(width: panel.contentBounds.width, focused: focused).showsText
+            let readable = explicit || ConversationHistoryLayout(width: panel.contentBounds.width, focused: focused).showsText
             var details: [String: UserViewValue] = [
+                "sessionIDs": .strings(model.sessions.map(\.id)),
                 "sessionID": .string(session?.id ?? ""),
                 "sessionTitle": .string(session?.title ?? ""),
                 "textVisibleAtCurrentSize": .boolean(readable),
@@ -294,7 +410,7 @@ private struct AgentWorkspaceSnapshot {
         }
         if let model = panel.markdownDocumentModel {
             let focused = !panel.isGlobal && !panel.isPreview
-            let readable = MarkdownDocumentLayout(width: panel.contentBounds.width, focused: focused).showsText
+            let readable = explicit || MarkdownDocumentLayout(width: panel.contentBounds.width, focused: focused).showsText
             let excerpts = model.blocks.compactMap(markdownExcerpt).prefix(32)
             var details: [String: UserViewValue] = [
                 "blockCount": .number(Double(model.blocks.count)),
@@ -359,12 +475,21 @@ private struct AgentWorkspaceSnapshot {
         if let model = panel.browserModel { return await model.userViewDetails() }
         if let model = panel.flowchartModel {
             return [
+                "hasUnsavedChanges": .boolean(model.isDirty),
+                "zoom": .number(Double(model.zoom)),
+                "panX": .number(Double(model.panOffset.width)),
+                "panY": .number(Double(model.panOffset.height)),
                 "documentTitle": .string(model.documentTitle),
                 "nodeCount": .number(Double(model.nodes.count)),
                 "connectionCount": .number(Double(model.connections.count)),
-                "selectedNodes": .strings(model.nodes.filter { model.selectedNodeIDs.contains($0.id) }.map { "\($0.type.title)：\($0.text)" }),
-                "nodes": .strings(model.nodes.map { "\($0.id) | \($0.type.rawValue) | \($0.text) | (\(Int($0.position.x)), \(Int($0.position.y)))" }),
-                "connections": .strings(model.connections.map { edge in
+                "contentIsTruncated": .boolean(model.nodes.count > 100 || model.connections.count > 100),
+                "nodesByID": .object(Dictionary(uniqueKeysWithValues: model.nodes.prefix(100).map { node in
+                    (node.id, .object(["type": .string(node.type.rawValue), "text": .string(String(node.text.prefix(700))),
+                                       "x": .number(Double(node.position.x)), "y": .number(Double(node.position.y))]))
+                })),
+                "selectedNodes": .strings(model.nodes.filter { model.selectedNodeIDs.contains($0.id) }.map { "\($0.type.title)：\(String($0.text.prefix(700)))" }),
+                "nodes": .strings(model.nodes.prefix(100).map { "\($0.id) | \($0.type.rawValue) | \(String($0.text.prefix(700))) | (\($0.position.x.rounded()), \($0.position.y.rounded()))" }),
+                "connections": .strings(model.connections.prefix(100).map { edge in
                     let source = model.nodes.first(where: { $0.id == edge.fromNodeID })?.text ?? edge.fromNodeID
                     let target = model.nodes.first(where: { $0.id == edge.toNodeID })?.text ?? edge.toNodeID
                     return "\(source) → \(target)\(edge.label.map { " [\($0)]" } ?? "")"
@@ -613,6 +738,7 @@ private struct AgentWorkspaceSnapshot {
     /// Fullscreen transitions must be serialized; concurrent toggles can be rejected by AppKit.
     private func enterNextFullscreen(preferred: String? = nil) {
         guard transitioningScreenID == nil else { return }
+        guard fullscreenAwaitingActivation == nil || NSApp.isActive else { return }
         let eligible = NSScreen.screens.map(Self.screenID).filter {
             windows[$0] != nil && !fullscreenAttempted.contains($0)
                 && (NSScreen.screensHaveSeparateSpaces || $0 == Self.screenID(NSScreen.screens[0]))
@@ -626,7 +752,27 @@ private struct AgentWorkspaceSnapshot {
             do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             guard let self, let window else { return }
             window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
+            // Activation is asynchronous on macOS 14+. AppKit can reject a
+            // fullscreen request sent before this App and window become active.
+            let activationDeadline = Date().addingTimeInterval(3)
+            while (!NSApp.isActive || !window.isKeyWindow), Date() < activationDeadline {
+                if NSApp.isActive { window.makeKeyAndOrderFront(nil) }
+                do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+            }
+            guard NSApp.isActive, window.isKeyWindow else {
+                // The system may preserve the user's focus in another app.
+                // Keep the windowed workspace usable and enter when activated.
+                self.recordFullscreenState(id, event: "awaiting-activation")
+                self.fullscreenAwaitingActivation = id
+                self.fullscreenAttempted.remove(id)
+                self.transitioningScreenID = nil
+                self.roots[id]?.fullScreenTransitioning = false
+                self.fullscreenTask = nil
+                return
+            }
+            self.fullscreenAwaitingActivation = nil
+            self.recordFullscreenState(id, event: "toggle")
             window.toggleFullScreen(nil)
             do { try await Task.sleep(for: .seconds(8)) } catch { return }
             // Some system configurations reject a transition without delivering completion.
@@ -641,14 +787,22 @@ private struct AgentWorkspaceSnapshot {
         enterNextFullscreen(preferred: root.screenID)
     }
     func finishedFullscreen(_ id: String, succeeded: Bool) {
+        recordFullscreenState(id, event: succeeded ? "entered" : "failed")
         roots[id]?.fullScreenTransitioning = false
         roots[id]?.setNativeFullscreen(succeeded)
-        if !succeeded { fullscreenFailures.insert(id); restoreWindowFrame(id) }
+        if succeeded { fullscreenFailures.remove(id) }
+        else { fullscreenFailures.insert(id); restoreWindowFrame(id) }
         if transitioningScreenID == id {
             fullscreenTask?.cancel()
             transitioningScreenID = nil
             if automaticallyFullscreen { enterNextFullscreen() }
         }
+    }
+
+    private func recordFullscreenState(_ id: String, event: String) {
+        guard let window = windows[id] else { return }
+        fullscreenDiagnostics.append("\(event) \(id) active=\(NSApp.isActive) running=\(NSApp.isRunning) key=\(window.isKeyWindow) activeSpace=\(window.isOnActiveSpace) native=\(window.styleMask.contains(.fullScreen))")
+        if fullscreenDiagnostics.count > 32 { fullscreenDiagnostics.removeFirst(fullscreenDiagnostics.count - 32) }
     }
 
     func beginDrag(_ id: String) {
@@ -684,33 +838,42 @@ private struct AgentWorkspaceSnapshot {
         root.arrange(animated: true)
     }
 
-    @discardableResult func moveDraggedPanels(to screenID: String) -> Bool {
-        guard !draggingIDs.isEmpty, let target = roots[screenID], draggingIDs.allSatisfy({ panels[$0] != nil }) else { return false }
-        let ids = draggingIDs
-        guard let sourceScreen = assignments[ids[0]], ids.allSatisfy({ assignments[$0] == sourceScreen }) else { return false }
-        let source = roots[sourceScreen]
-        if sourceScreen == screenID {
-            dragCommitted = true
-            return true
-        }
-        if sourceScreen != screenID {
-            let movedIdentityPosition = source?.state.identityPosition
-            source?.state = originalDragState ?? source?.state ?? WorkspaceLayoutState()
+    /// Shared by native drag/drop and Agent commands; does not synthesize mouse events.
+    @discardableResult func movePanels(_ ids: [String], to screenID: String,
+                                        position: WorkspaceGridPosition? = nil,
+                                        movedIdentityPosition: WorkspaceGridPosition? = nil) -> Bool {
+        guard !ids.isEmpty, Set(ids).count == ids.count, let target = roots[screenID],
+              ids.allSatisfy({ panels[$0] != nil }), let sourceID = assignments[ids[0]],
+              ids.allSatisfy({ assignments[$0] == sourceID }), let source = roots[sourceID] else { return false }
+        if sourceID != screenID {
+            let identityPosition = movedIdentityPosition ?? source.state.identityPosition
             for id in ids {
                 panels[id]?.removeFromSuperview()
                 assignments[id] = screenID
             }
-            if ids.contains("agent-identity"), let movedIdentityPosition {
-                target.state.identityPosition = movedIdentityPosition
-            }
+            if ids.contains("agent-identity") { target.state.identityPosition = identityPosition }
+            if catalog.first(where: { $0.id == ids[0] })?.supportsFocusedMode == false { target.state.mode = .grid }
             target.state.primaryID = ids[0]
             target.state.selectedIDs = Set(ids)
             synchronize()
-            source?.arrange(animated: true)
-            target.arrange(animated: true)
+            source.arrange(animated: true)
         }
-        dragCommitted = true
+        if let position {
+            _ = target.state.repositionPanels(ids, to: position, columns: target.globalGridGeometry.columns)
+        }
+        target.arrange(animated: true)
         focus(ids[0])
+        return true
+    }
+
+    @discardableResult func moveDraggedPanels(to screenID: String) -> Bool {
+        guard !draggingIDs.isEmpty else { return false }
+        let movedIdentityPosition = dragSourceScreenID.flatMap { roots[$0]?.state.identityPosition }
+        if dragSourceScreenID != screenID, let sourceID = dragSourceScreenID, let originalDragState {
+            roots[sourceID]?.state = originalDragState
+        }
+        guard movePanels(draggingIDs, to: screenID, movedIdentityPosition: movedIdentityPosition) else { return false }
+        dragCommitted = true
         return true
     }
     @discardableResult func moveDraggedPanel(to screenID: String) -> Bool { moveDraggedPanels(to: screenID) }
@@ -738,14 +901,25 @@ private struct AgentWorkspaceSnapshot {
         userViewTestWindowController = nil
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
+        fullscreenAwaitingActivation = nil
+        liveConversationModel?.closeLiveStorage()
         for root in roots.values { root.dispose() }
-        for panel in panels.values { panel.dispose() }
+        for panel in panels.values { panel.conversationHistoryModel?.closeLiveStorage(); panel.dispose() }
         for window in windows.values { NSApp.removeWindowsItem(window); window.delegate = nil; window.close() }
         roots.removeAll(); panels.removeAll(); windows.removeAll()
     }
 }
 
 @MainActor final class WorkspaceWindow: NSWindow {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        if styleMask.contains(.fullScreen) || (contentView as? WorkspaceRootView)?.fullScreenTransitioning == true {
+            return super.constrainFrameRect(frameRect, to: screen)
+        }
+        // Windowed workspaces are pinned to the whole screen by their manager.
+        // AppKit's delayed menu-bar constraint must not shrink their content area.
+        return frameRect
+    }
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
     override func cancelOperation(_ sender: Any?) {

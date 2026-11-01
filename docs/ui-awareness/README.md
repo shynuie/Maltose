@@ -1,3 +1,5 @@
+> 現行 AppKit 工作區的感知與 Agent 指令合約見 [共用面板介面](../architecture/workspace-agent-interface.md)。以下保留舊版 Host 設計紀錄。
+
 > 以下為舊版 Host 的架構紀錄。目前的純 UI 原型不啟動或依賴這些服務；新 UI 規格見 [Glass 工作空間計劃](../../plans/glass-workspace.md)。
 
 # Agent UI Awareness（P0）

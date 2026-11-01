@@ -363,6 +363,11 @@ class FileService:
         }
 
     def read_file(self, root: str, path: str, *, max_bytes: int | None = None) -> dict[str, Any]:
+        result = self.read_bytes(root, path, max_bytes=max_bytes)
+        data = result.pop("data")
+        return {**result, "text": data.decode("utf-8")}
+
+    def read_bytes(self, root: str, path: str, *, max_bytes: int | None = None) -> dict[str, Any]:
         self.policy.require_allowed(root, "read")
         resolved = self.resolver.resolve(root, path, must_exist=True)
         if not resolved.path.is_file():
@@ -381,7 +386,7 @@ class FileService:
             "root": root,
             "path": resolved.relative_path,
             "bytes": len(data),
-            "text": data.decode("utf-8"),
+            "data": data,
         }
 
     def list_files(

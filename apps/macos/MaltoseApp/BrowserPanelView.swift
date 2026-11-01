@@ -58,10 +58,14 @@ import WebKit
     func goBack() { webView?.goBack() }
     func goForward() { webView?.goForward() }
     func reload() { webView?.reload() }
+    func stopLoading() {
+        webView?.stopLoading()
+        isLoading = false
+    }
+
     func reloadOrStop() {
         if isLoading {
-            webView?.stopLoading()
-            isLoading = false
+            stopLoading()
         }
         else { webView?.reload() }
     }

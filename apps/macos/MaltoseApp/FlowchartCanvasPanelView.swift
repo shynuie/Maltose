@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import CryptoKit
 
 struct FlowchartPoint: Codable, Equatable {
     var x: CGFloat
@@ -92,6 +93,8 @@ enum FlowchartFileError: LocalizedError {
     @Published private(set) var documentTitle: String
     @Published private(set) var isDirty: Bool
     private(set) var fileURL: URL?
+    private(set) var documentIdentity = UUID().uuidString
+    private(set) var lastSavedSHA256: String?
 
     var document: FlowchartDocument { FlowchartDocument(nodes: nodes, connections: connections) }
 
@@ -203,6 +206,8 @@ enum FlowchartFileError: LocalizedError {
     }
 
     func newDocument() {
+        documentIdentity = UUID().uuidString
+        lastSavedSHA256 = nil
         nodes = []
         connections = []
         selectedNodeIDs = []
@@ -214,25 +219,44 @@ enum FlowchartFileError: LocalizedError {
         resetViewport()
     }
 
-    func save(to url: URL) throws {
-        let savedTitle = Self.displayTitle(for: url)
-        let file = FlowchartFile(title: savedTitle, document: document)
+    func encodedFile(for url: URL) throws -> Data {
+        let file = FlowchartFile(title: Self.displayTitle(for: url), document: document)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        try encoder.encode(file).write(to: url, options: .atomic)
-        fileURL = url
-        documentTitle = savedTitle
-        isDirty = false
+        return try encoder.encode(file)
     }
 
-    func load(from url: URL) throws {
-        let data = try Data(contentsOf: url)
+    func documentFingerprint() throws -> String {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return SHA256.hash(data: try encoder.encode(document)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    func save(to url: URL) throws {
+        let data = try encodedFile(for: url)
+        try data.write(to: url, options: .atomic)
+        fileURL = url; documentTitle = Self.displayTitle(for: url); isDirty = false
+        documentIdentity = UUID().uuidString
+        lastSavedSHA256 = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    @discardableResult func acknowledgeSave(to url: URL, documentID: String, fingerprint: String, fileSHA256: String) throws -> Bool {
+        guard documentIdentity == documentID else { return false }
+        isDirty = try documentFingerprint() != fingerprint
+        fileURL = url; documentTitle = Self.displayTitle(for: url); lastSavedSHA256 = fileSHA256
+        return true
+    }
+
+    func load(from url: URL) throws { try loadFileData(Data(contentsOf: url), sourceURL: url) }
+
+    func loadFileData(_ data: Data, sourceURL url: URL) throws {
         let file = try JSONDecoder().decode(FlowchartFile.self, from: data)
         guard file.format == "MaltoseFlowchart" else { throw FlowchartFileError.unsupportedFormat }
         guard file.version == FlowchartFile.currentVersion else {
             throw FlowchartFileError.unsupportedVersion(file.version)
         }
         try Self.validate(file.document)
+        documentIdentity = UUID().uuidString
+        lastSavedSHA256 = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         nodes = file.document.nodes
         connections = file.document.connections
         selectedNodeIDs = []

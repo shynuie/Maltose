@@ -709,22 +709,16 @@ final class WorkspaceLayoutTests: XCTestCase {
 
     func testAutomaticNativeFullscreenUsesSystemSpace() async throws {
         try requireDesktop()
-        let manager = WorkspaceWindowManager()
-        manager.synchronize()
-        defer { manager.stop() }
-        for _ in 0..<150 {
-            if manager.transitioningScreenID == nil { break }
-            try await Task.sleep(for: .milliseconds(100))
-        }
-        XCTAssertNil(manager.transitioningScreenID)
-        XCTAssertTrue(manager.fullscreenFailures.isEmpty)
-        let eligibleScreens = NSScreen.screensHaveSeparateSpaces ? NSScreen.screens : Array(NSScreen.screens.prefix(1))
-        for screen in eligibleScreens {
-            let id = WorkspaceWindowManager.screenID(screen)
-            let window = try XCTUnwrap(manager.windows[id])
-            XCTAssertTrue(window.styleMask.contains(.fullScreen), "AppKit must confirm native fullscreen, not just a screen-sized frame")
-            XCTAssertTrue(manager.roots[id]?.nativeFullscreen == true)
-            XCTAssertTrue(window.isOpaque)
+        let snapshot = try await WorkspaceApplicationFixture.nativeFullscreenSnapshot()
+        XCTAssertTrue(snapshot.applicationRunning)
+        XCTAssertFalse(snapshot.transitioning, snapshot.diagnostics.joined(separator: "; "))
+        XCTAssertTrue(snapshot.failures.isEmpty, snapshot.diagnostics.joined(separator: "; "))
+        XCTAssertFalse(snapshot.eligibleScreens.isEmpty)
+        for id in snapshot.eligibleScreens {
+            let window = try XCTUnwrap(snapshot.windows.first { $0.screenID == id })
+            XCTAssertTrue(window.nativeFullscreen, "AppKit must confirm native fullscreen, not just a screen-sized frame")
+            XCTAssertTrue(window.rootNativeFullscreen)
+            XCTAssertTrue(window.opaque)
         }
     }
 

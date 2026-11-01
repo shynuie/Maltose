@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""直接測試 MyAgent 的 macOS Core Location helper。"""
+"""直接測試 Maltose 的 macOS Core Location helper。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Test the MyAgent location helper")
+    parser = argparse.ArgumentParser(description="Test the Maltose location helper")
     parser.add_argument(
         "--helper",
         type=Path,

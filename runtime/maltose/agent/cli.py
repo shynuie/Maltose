@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse
 import logging
 import shlex
+from contextlib import ExitStack
 from pathlib import Path
 
 from maltose.agent.agent import VoiceAgent
 from maltose.ui import MaltoseBridge
+from maltose.ui.native import NativeRuntimeBridge
+from maltose.ui.native_tools import NativePanelToolAdapter
+from maltose.codex.native_tools import NativeCodexToolAdapter
 from maltose.agent.brain import EchoBrain, OpenClawBrain
 from maltose.agent.config import AgentConfig, load_cli_defaults
 from maltose.agent.environment import EnvironmentTools
@@ -46,6 +50,7 @@ from maltose.knowledge.unified_retrieval import UnifiedKnowledgeService, Unified
 from maltose.logging import configure_logging
 from maltose.paths import default_config_path
 from maltose.runtime import EventHub, PresentationStore
+from maltose.runtime.ownership import ManagedWorker
 from maltose.web import WebServer
 from maltose.execution import (
     ArtifactPromoter,
@@ -89,6 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=default_config_path(),
         help="Unified TOML configuration; prefers maltose.toml, with legacy myagent.toml fallback.",
     )
+    parser.add_argument("--native-stdio", action="store_true", help="Run as a native Maltose managed child.")
+    parser.add_argument("--native-text-only", action="store_true", help="Disable audio for an explicitly selected text-only native session.")
     parser.add_argument("--maltose",action="store_true",help="Enable native Maltose discovery, pairing and runtime bridge.")
     parser.add_argument("--maltose-agent-id",default="agent.myagent")
     parser.add_argument("--maltose-name",default="Maltose")
@@ -282,6 +289,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable Document Knowledge Base tools for TaskBrain.",
     )
     parser.add_argument("--knowledge-documents-root", type=Path, default=Path("documents"))
+    parser.add_argument("--knowledge-queue", type=Path, default=Path("data/knowledge/indexing_queue.sqlite3"))
+    parser.add_argument("--knowledge-watcher-poll-interval", type=float, default=1.0)
+    parser.add_argument("--knowledge-indexing-max-attempts", type=int, default=3)
     parser.add_argument(
         "--knowledge-metadata",
         type=Path,
@@ -400,7 +410,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def main(*, native_owner_lost=None, native_control_ready=None) -> None:
+    with ExitStack() as resources:
+        _main(resources, native_owner_lost=native_owner_lost, native_control_ready=native_control_ready)
+
+
+def _main(resources: ExitStack, *, native_owner_lost=None, native_control_ready=None) -> None:
     configure_logging()
     parser = build_parser()
     config_probe = argparse.ArgumentParser(add_help=False)
@@ -408,6 +423,22 @@ def main() -> None:
     config_args, _ = config_probe.parse_known_args()
     parser.set_defaults(**load_cli_defaults(config_args.config))
     args = parser.parse_args()
+    if args.native_text_only and not args.native_stdio:
+        parser.error("--native-text-only requires --native-stdio")
+    if args.native_text_only:
+        args.wake_config = None
+    event_hub = EventHub()
+    if args.native_stdio:
+        from maltose.codex.native_service import NativeCollaborationService
+        collaboration = NativeCollaborationService(config_args.config.expanduser().absolute().parent, Path(args.taskbrain_codex_cwd))
+        native_bridge = NativeRuntimeBridge(event_hub, collaboration=collaboration, on_owner_lost=native_owner_lost)
+    else: native_bridge = None
+    runtime_session_id = native_bridge.session_id if native_bridge is not None else "cli"
+    if native_bridge is not None:
+        if native_control_ready is not None: native_control_ready(native_bridge.control)
+        resources.callback(native_bridge.close)
+        native_bridge.start()
+        native_bridge.wait_for_initialize()
 
     vad_settings = VADSettings(
         frame_ms=args.frame_ms,
@@ -444,6 +475,8 @@ def main() -> None:
             wake_word_detector = create_wake_word_detector(wake_config)
         except AlibabaKWSProcessError as error:
             parser.exit(2, f"喚醒詞服務啟動失敗：{error}\n")
+        close_detector = getattr(wake_word_detector, "close", None)
+        if callable(close_detector): resources.callback(close_detector)
 
     config = AgentConfig(
         standby_timeout=args.timeout,
@@ -469,14 +502,21 @@ def main() -> None:
         wake_ack_delay=args.wake_ack_delay,
         wake_buffer_ms=args.wake_buffer_ms,
     )
-    event_hub = EventHub()
     presentation = PresentationStore()
     maltose_bridge = MaltoseBridge(event_hub,agent_id=args.maltose_agent_id,name=args.maltose_name,directory=args.maltose_discovery_directory,state_root=args.maltose_state_root) if args.maltose else None
+    if maltose_bridge is not None: resources.callback(maltose_bridge.close)
 
     def publish_ui_block(block_type: str, payload: dict[str, object]) -> None:
         block = presentation.upsert(block_type, payload)
-        if args.web or args.maltose:
+        if args.web or args.maltose or args.native_stdio:
             event_hub.publish("ui_block", block)
+
+    def publish_approval(block_type: str, payload: dict[str, object]) -> None:
+        # Only approval managers receive this publisher. Model presentation tools
+        # receive publish_ui_block and cannot forge the privileged event type.
+        publish_ui_block(block_type, payload)
+        if args.native_stdio and block_type == "ui_confirmation":
+            event_hub.publish("native_approval", payload)
 
     def publish_task_progress(payload: dict[str, object]) -> None:
         publish_ui_block("ui_progress", payload)
@@ -518,6 +558,9 @@ def main() -> None:
             MCPToolAdapter(client, prefix=f"mcp_{index}_")
             for index, client in enumerate(mcp_clients)
         ]
+        if native_bridge is not None:
+            capability_adapters.append(NativePanelToolAdapter(native_bridge))
+            capability_adapters.append(NativeCodexToolAdapter(native_bridge))
         if maltose_bridge is not None:
             capability_adapters.append(maltose_bridge)
         if args.filesystem_enabled:
@@ -541,8 +584,8 @@ def main() -> None:
             filesystem_approvals = ApprovalManager(args.filesystem_approvals)
             filesystem_approval_ui = FilesystemApprovalUI(
                 filesystem_approvals,
-                session_id="cli",
-                publisher=publish_ui_block,
+                session_id=runtime_session_id,
+                publisher=publish_approval,
             )
             filesystem_policy = PolicyEngine(
                 filesystem_resolver,
@@ -553,7 +596,7 @@ def main() -> None:
                         filesystem_policy,
                         approval_manager=filesystem_approvals,
                         audit_log=AuditLog(args.filesystem_audit),
-                        session_id="cli",
+                        session_id=runtime_session_id,
                         trash_path=args.filesystem_trash,
                         approval_notifier=filesystem_approval_ui.publish_request,
                     )
@@ -566,23 +609,23 @@ def main() -> None:
             execution_approvals = ApprovalManager(args.execution_approvals)
             execution_approval_ui = ExecutionApprovalUI(
                 execution_approvals,
-                session_id="cli",
-                publisher=publish_ui_block,
+                session_id=runtime_session_id,
+                publisher=publish_approval,
             )
             execution_broker = ExecutionBroker(
                 DockerSandboxBackend(image=args.execution_image),
                 ExecutionPolicy(),
                 approval_manager=execution_approvals,
-                session_id="cli",
+                session_id=runtime_session_id,
                 pending_store=args.execution_pending,
-                event_publisher=publish_to_event_hub(event_hub) if args.web else None,
+                event_publisher=publish_to_event_hub(event_hub) if (args.web or args.native_stdio) else None,
                 audit_log=AuditLog(args.filesystem_audit),
                 approval_notifier=execution_approval_ui.publish_request,
                 artifact_promoter=(
                     ArtifactPromoter(
                         filesystem_service,
                         approval_manager=execution_approvals,
-                        session_id="cli",
+                        session_id=runtime_session_id,
                         approval_notifier=execution_approval_ui.publish_request,
                     )
                     if filesystem_service is not None else None
@@ -610,7 +653,7 @@ def main() -> None:
             knowledge_proposal_ui = KnowledgeProposalUI(
                 knowledge_proposals,
                 reviewer="user",
-                publisher=publish_ui_block,
+                publisher=publish_approval,
                 curated_store=curated_knowledge,
             )
             capability_adapters.append(
@@ -636,8 +679,10 @@ def main() -> None:
                 documents_root=args.knowledge_documents_root,
                 metadata_path=args.knowledge_metadata,
                 vectors_path=args.knowledge_vectors,
+                queue_path=args.knowledge_queue,
             ).resolved()
             knowledge_metadata = MetadataRepository(knowledge_config.metadata_path)
+            resources.callback(knowledge_metadata.close)
             knowledge_parsers = ParserRegistry([TextParser(), MarkdownParser(), PDFParser()])
             knowledge_vectors = LanceVectorRepository(knowledge_config.vectors_path)
             knowledge_indexer = DocumentIndexer(
@@ -688,8 +733,10 @@ def main() -> None:
         task_manager = TaskManager(
             TaskStore(args.taskbrain_tasks),
             max_workers=args.taskbrain_max_workers,
-            progress_publisher=publish_task_progress if (args.web or args.maltose) else None,
+            progress_publisher=publish_task_progress if (args.web or args.maltose or args.native_stdio) else None,
+            control_gate=native_bridge.control if native_bridge else None,
         )
+        resources.callback(task_manager.shutdown, wait=args.native_stdio)
         task_manager.register_worker(
             "codex_readonly",
             CodexReadOnlyWorker(
@@ -711,6 +758,7 @@ def main() -> None:
         for index, raw_command in enumerate(args.taskbrain_mcp_command):
             command = shlex.split(raw_command)
             client = MCPStdioClient(command, timeout=args.taskbrain_mcp_timeout)
+            resources.callback(client.close)
             mcp_clients.append(client)
         brain = TaskBrain(
             model=OpenAICompatibleTaskModel(
@@ -731,11 +779,13 @@ def main() -> None:
                 external_ip_url=args.external_ip_url,
                 timeout=args.environment_timeout,
             ),
-            ui_publisher=publish_ui_block if (args.web or args.maltose) else None,
-            ui_state_provider=presentation.snapshot if (args.web or args.maltose) else None,
+            ui_publisher=publish_ui_block if (args.web or args.maltose or args.native_stdio) else None,
+            ui_state_provider=presentation.snapshot if (args.web or args.maltose or args.native_stdio) else None,
+            presentation_tools_enabled=args.web or not args.native_stdio,
             audio_device_controller=audio_device_controller,
-            external_ui_context_provider=maltose_bridge.context if maltose_bridge else None,
+            external_ui_context_provider=native_bridge.context if native_bridge else maltose_bridge.context if maltose_bridge else None,
             runtime_publisher=event_hub.publish,
+            control_gate=native_bridge.control if native_bridge else None,
         )
     else:
         brain = EchoBrain(prefix=args.reply_prefix)
@@ -745,6 +795,7 @@ def main() -> None:
     speaker_store = None
     if args.speaker_recognition == "speechbrain":
         speaker_store = SpeakerProfileStore(args.speaker_profiles)
+        resources.callback(speaker_store.close)
         speaker_identifier = ProfileSpeakerIdentifier(
             speaker_store,
             SpeechBrainECAPAEncoder(savedir=args.speaker_model_dir),
@@ -765,37 +816,47 @@ def main() -> None:
         speaker_identity_manager=speaker_identity_manager,
         event_hub=event_hub,
         audio_device_controller=audio_device_controller,
-        observe_speech=args.maltose,
+        observe_speech=args.maltose or args.native_stdio,
+        voice_enabled=not args.native_text_only,
+        control_gate=native_bridge.control if native_bridge else None,
     )
+    if native_bridge is not None:
+        native_bridge.file_service = filesystem_service
+        native_bridge.attach(agent, brain)
     if maltose_bridge is not None:
         maltose_bridge.attach(agent,brain)
     web_server: WebServer | None = None
-    if args.web:
-        def handle_ui_action(action_id: str, value: object) -> None:
-            if action_id == "ui.close" and isinstance(value, dict):
-                block_id = value.get("block_id")
-                if isinstance(block_id, str):
-                    presentation.close(block_id)
-            if filesystem_approval_ui is not None and action_id in {
-                "filesystem.approve",
-                "filesystem.reject",
-            }:
-                filesystem_approval_ui.handle_action(action_id, value)
-            if execution_approval_ui is not None and action_id in {
-                "execution.approve",
-                "execution.reject",
-            }:
-                execution_approval_ui.handle_action(action_id, value)
-            if knowledge_proposal_ui is not None and action_id in {
-                "knowledge.approve",
-                "knowledge.reject",
-            }:
-                knowledge_proposal_ui.handle_action(action_id, value)
-            event_hub.publish(
-                "ui_action",
-                {"action_id": action_id, "value": value},
-            )
+    def handle_ui_action(action_id: str, value: object) -> None:
+        if action_id == "ui.close" and isinstance(value, dict):
+            block_id = value.get("block_id")
+            if isinstance(block_id, str):
+                presentation.close(block_id)
+        if action_id in {
+            "filesystem.approve",
+            "filesystem.reject",
+        }:
+            if filesystem_approval_ui is None: raise RuntimeError("Filesystem approvals are not enabled")
+            filesystem_approval_ui.handle_action(action_id, value)
+        if action_id in {
+            "execution.approve",
+            "execution.reject",
+        }:
+            if execution_approval_ui is None: raise RuntimeError("Execution approvals are not enabled")
+            execution_approval_ui.handle_action(action_id, value)
+        if action_id in {
+            "knowledge.approve",
+            "knowledge.reject",
+        }:
+            if knowledge_proposal_ui is None: raise RuntimeError("Knowledge proposal reviews are not enabled")
+            knowledge_proposal_ui.handle_action(action_id, value)
+        event_hub.publish(
+            "ui_action",
+            {"action_id": action_id, "value": value},
+        )
 
+    if native_bridge is not None:
+        native_bridge.action_handler = handle_ui_action
+    if args.web:
         web_server = WebServer(
             event_hub,
             input_handler=agent.submit_text,
@@ -808,21 +869,21 @@ def main() -> None:
             host=args.web_host,
             port=args.web_port,
         )
-    try:
-        if maltose_bridge is not None:
-            maltose_bridge.start()
-        if web_server is not None:
-            web_server.start()
-            logger.info("web_ui_available url=http://%s:%s", *web_server.address)
-        agent.run()
-    finally:
-        if maltose_bridge is not None:
-            maltose_bridge.close()
-        if web_server is not None:
-            web_server.close()
-        for client in mcp_clients:
-            client.close()
-        if task_manager is not None:
-            task_manager.shutdown(wait=False)
-        if speaker_store is not None:
-            speaker_store.close()
+    if native_bridge is not None and args.knowledge_enabled and args.brain == "taskbrain":
+        watcher = ManagedWorker("maltose.knowledge.cli", [
+            "--documents-root", str(knowledge_config.documents_root),
+            "--metadata", str(knowledge_config.metadata_path),
+            "--vectors", str(knowledge_config.vectors_path),
+            "--queue", str(knowledge_config.queue_path),
+            "--device", args.knowledge_embedding_device,
+            "watch", "--poll-interval", str(args.knowledge_watcher_poll_interval),
+            "--max-attempts", str(args.knowledge_indexing_max_attempts),
+        ], on_unexpected_exit=lambda code: event_hub.publish("runtime_worker_failed", {"name": "knowledge", "exitCode": code}))
+        resources.callback(watcher.close)
+    if maltose_bridge is not None:
+        maltose_bridge.start()
+    if web_server is not None:
+        resources.callback(web_server.close)
+        web_server.start()
+        logger.info("web_ui_available url=http://%s:%s", *web_server.address)
+    agent.run()

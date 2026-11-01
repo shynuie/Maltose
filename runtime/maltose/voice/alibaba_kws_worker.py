@@ -132,6 +132,10 @@ class AlibabaKWSRuntime:
 
 
 def main() -> None:
+    # SoundConnect can print from native code directly to fd 1. Reserve a
+    # separate descriptor for protocol frames before loading any model.
+    protocol = os.fdopen(os.dup(sys.stdout.fileno()), 'wb', buffering=0)
+    os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", type=Path, required=True)
     args = parser.parse_args()
@@ -144,22 +148,22 @@ def main() -> None:
             runtime.sample_rate,
             runtime._samples_per_block,
         )
-        write_message(sys.stdout.buffer, READY, json_bytes({"model_dir": str(args.model_dir), "sample_rate": 16000}))
+        write_message(protocol, READY, json_bytes({"model_dir": str(args.model_dir), "sample_rate": 16000}))
         while True:
             message = read_message(sys.stdin.buffer)
             if message is None:
                 break
             kind, payload = message
             if kind == PCM:
-                write_message(sys.stdout.buffer, RESPONSE, json_bytes(runtime.process(payload)))
+                write_message(protocol, RESPONSE, json_bytes(runtime.process(payload)))
             elif kind == RESET:
                 runtime.reset()
-                write_message(sys.stdout.buffer, RESPONSE, json_bytes({"reset": True}))
+                write_message(protocol, RESPONSE, json_bytes({"reset": True}))
             elif kind == HEALTH:
                 state = runtime.model._sc.kwsState()
                 logger.info("health_requested kws_state=%s buffered_bytes=%d", state, len(runtime._mono_buffer))
                 write_message(
-                    sys.stdout.buffer,
+                    protocol,
                     RESPONSE,
                     json_bytes({"healthy": True, "kws_state": state, "buffered_bytes": len(runtime._mono_buffer)}),
                 )
@@ -167,11 +171,11 @@ def main() -> None:
                 logger.info("shutdown_requested")
                 break
             else:
-                write_message(sys.stdout.buffer, ERROR, json_bytes({"error": f"unknown message kind {kind}"}))
+                write_message(protocol, ERROR, json_bytes({"error": f"unknown message kind {kind}"}))
     except Exception as exc:
         logger.exception("worker_failed")
         try:
-            write_message(sys.stdout.buffer, ERROR, json_bytes({"error": str(exc)}))
+            write_message(protocol, ERROR, json_bytes({"error": str(exc)}))
         except Exception:
             pass
         raise

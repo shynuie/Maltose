@@ -12,6 +12,87 @@ from maltose.voice.alibaba_kws import AlibabaKWSDetector,AlibabaKWSProcessError
 from maltose.voice.wake import load_wake_word_config
 
 class KWSStartupTests(unittest.TestCase):
+    def test_native_model_stdout_cannot_corrupt_worker_protocol(self):
+        with tempfile.TemporaryDirectory() as temp:
+            script=Path(temp)/'worker.py'
+            script.write_text('''import os
+from types import SimpleNamespace
+from maltose.voice import alibaba_kws_worker as worker
+class LoudRuntime:
+ def __init__(self, model_dir):
+  os.write(1,b'native library initialization output\\n')
+  self.sample_rate=16000;self._samples_per_block=1;self._mono_buffer=bytearray()
+  self.model=SimpleNamespace(_sc=SimpleNamespace(kwsState=lambda:0))
+ def process(self, payload):
+  os.write(1,b'native decoding output\\n');return {'hit':None,'blocks':0}
+ def reset(self):os.write(1,b'native reset output\\n')
+worker.AlibabaKWSRuntime=LoudRuntime
+worker.main()
+''')
+            with patch.dict(os.environ,{'MALTOSE_KWS_LOG':str(Path(temp)/'worker.log')}):
+                detector=AlibabaKWSDetector('/unused-model',python=sys.executable,worker_script=script)
+            try:
+                self.assertIsNone(detector.process_frame(b'\x00'*640,16000))
+                detector.reset();self.assertTrue(detector.health()['healthy'])
+            finally:detector.close()
+    def test_coalesced_frames_are_not_hidden_by_a_buffered_pipe(self):
+        with tempfile.TemporaryDirectory() as temp:
+            script=Path(temp)/'worker.py'
+            script.write_text('''import sys
+from maltose.kws_protocol import *
+def frame(kind, value):
+ payload=json_bytes(value); return HEADER.pack(kind,len(payload))+payload
+sys.stdout.buffer.write(frame(READY,{})+frame(RESPONSE,{'healthy':True}));sys.stdout.buffer.flush()
+while True:
+ message=read_message(sys.stdin.buffer)
+ if message is None or message[0]==SHUTDOWN:break
+''')
+            detector=AlibabaKWSDetector('/unused-model',python=sys.executable,worker_script=script,timeout_seconds=.1)
+            try:self.assertTrue(detector.health()['healthy'])
+            finally:detector.close()
+
+    def test_response_deadline_covers_partial_payload_not_just_first_byte(self):
+        with tempfile.TemporaryDirectory() as temp:
+            script=Path(temp)/'worker.py'
+            script.write_text('''import sys
+from maltose.kws_protocol import *
+write_message(sys.stdout.buffer,READY,json_bytes({}))
+while True:
+ message=read_message(sys.stdin.buffer)
+ if message is None or message[0]==SHUTDOWN:break
+ sys.stdout.buffer.write(HEADER.pack(RESPONSE,20)+b'{');sys.stdout.buffer.flush()
+''')
+            detector=AlibabaKWSDetector('/unused-model',python=sys.executable,worker_script=script,timeout_seconds=.05)
+            try:
+                with self.assertRaisesRegex(AlibabaKWSProcessError,'timed out'):detector.health()
+                self.assertIsNone(detector._process)
+            finally:detector.close()
+
+    def test_pcm_reset_and_health_transactions_do_not_consume_other_threads_replies(self):
+        from concurrent.futures import ThreadPoolExecutor
+        with tempfile.TemporaryDirectory() as temp:
+            script=Path(temp)/'worker.py'
+            script.write_text('''import sys,time
+from maltose.kws_protocol import *
+write_message(sys.stdout.buffer,READY,json_bytes({}))
+while True:
+ message=read_message(sys.stdin.buffer)
+ if message is None or message[0]==SHUTDOWN:break
+ kind,payload=message
+ response={'hit':{'keyword':payload.decode()}} if kind==PCM else {'healthy':True} if kind==HEALTH else {'reset':True}
+ data=json_bytes(response); frame=HEADER.pack(RESPONSE,len(data))+data
+ for byte in frame:
+  sys.stdout.buffer.write(bytes([byte]));sys.stdout.buffer.flush();time.sleep(.0001)
+''')
+            detector=AlibabaKWSDetector('/unused-model',python=sys.executable,worker_script=script,timeout_seconds=2)
+            def request(index):
+                if index%3==0:self.assertEqual(detector.process_frame(str(index).encode(),16000).keyword,str(index))
+                elif index%3==1:detector.reset()
+                else:self.assertTrue(detector.health()['healthy'])
+            try:
+                with ThreadPoolExecutor(max_workers=4) as workers:list(workers.map(request,range(24)))
+            finally:detector.close()
+
     def test_missing_interpreter_explains_rebuild_before_starting_worker(self):
         with patch('maltose.voice.alibaba_kws.subprocess.Popen') as popen:
             with self.assertRaisesRegex(AlibabaKWSProcessError,'setup_kws_runtime.py'):

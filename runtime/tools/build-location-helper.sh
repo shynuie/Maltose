@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$ROOT_DIR/tools/location_helper.app"
+APP_DIR="${MALTOSE_LOCATION_HELPER_DIR:-$ROOT_DIR/tools/location_helper.app}"
 mkdir -p "$APP_DIR/Contents/MacOS"
 
 cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
@@ -15,13 +15,13 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.myagent.location-helper</string>
     <key>CFBundleName</key>
-    <string>MyAgent Location Helper</string>
+    <string>Maltose Location Helper</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>MyAgent uses your approximate location when you explicitly request it.</string>
+    <string>Maltose uses your approximate location when you explicitly request it.</string>
     <key>NSLocationUsageDescription</key>
-    <string>MyAgent uses your approximate location when you explicitly request it.</string>
+    <string>Maltose uses your approximate location when you explicitly request it.</string>
 </dict>
 </plist>
 PLIST

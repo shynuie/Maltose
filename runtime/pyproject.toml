@@ -11,6 +11,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+codex = ["psutil==7.2.2"]
+desktop = ["psutil==7.2.2"]
 wake = [
     "pypinyin>=0.55.0",
     "sentencepiece>=0.2.0",

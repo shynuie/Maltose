@@ -7,6 +7,7 @@ never invokes a host shell and fails closed when Docker is unavailable.
 from __future__ import annotations
 
 import os
+import re
 import signal
 import shutil
 import subprocess
@@ -101,6 +102,23 @@ class DockerSandboxBackend:
         self._require_daemon()
         command = self.build_command(request, mounts=mounts, session_dir=session_dir)
         execution_id = uuid.uuid4().hex
+        container_name = 'maltose-exec-' + execution_id
+        command[2:2] = ['--name', container_name, '--label', 'dev.maltose.execution-id=' + execution_id]
+        from maltose.runtime.lifetime import current_lifetime
+        lifetime = current_lifetime()
+        execution_timeout = request.limits.timeout_seconds
+        if lifetime is not None:
+            creation_started = time.monotonic()
+            try:
+                container = lifetime.create_docker(execution_id, command)
+                execution_timeout -= time.monotonic() - creation_started
+                if execution_timeout <= 0:
+                    lifetime.cleanup_docker(execution_id)
+                    return ExecutionResult(execution_id=execution_id, status='timed_out', exit_code=None, stdout='',
+                        stderr='[execution timeout before container start]', approval_scope=request.approval_scope())
+                command = [resolved_binary, 'start', '--attach', container]
+            except Exception as error:
+                raise SandboxBackendUnavailable(str(error)) from error
         try:
             process = subprocess.Popen(
                 command,
@@ -112,11 +130,20 @@ class DockerSandboxBackend:
                 env={},
             )
         except OSError as exc:
+            if lifetime is not None: lifetime.cleanup_docker(execution_id)
             raise SandboxBackendUnavailable(f"Could not start Docker backend: {exc}") from exc
 
-        stdout, stderr, termination_status = _collect_output(
-            process, request.limits.max_output_bytes, request.limits.timeout_seconds
-        )
+        try:
+            stdout, stderr, termination_status = _collect_output(
+                process, request.limits.max_output_bytes, execution_timeout
+            )
+        finally:
+            # Killing the docker CLI does not stop the daemon-owned container.
+            # Do not release the execution activity while it can still write mounts.
+            if lifetime is not None:
+                try: lifetime.cleanup_docker(execution_id)
+                except Exception as error: raise SandboxBackendUnavailable(str(error)) from error
+            else: self._remove_owned_container(container_name, execution_id)
         return ExecutionResult(
             execution_id=execution_id,
             status=termination_status or ("completed" if process.returncode == 0 else "failed"),
@@ -128,6 +155,33 @@ class DockerSandboxBackend:
 
     def close(self) -> None:
         """Docker runs are disposable; active process cleanup is per execution."""
+
+    def _owned_container_identity(self, name: str, execution_id: str) -> str | None:
+        try:
+            result = subprocess.run([self._resolved_binary or self.docker_binary, 'container', 'ls', '--all', '--no-trunc',
+                '--filter', 'name=^/' + name + '$', '--filter', 'label=dev.maltose.execution-id=' + execution_id,
+                '--format', '{{.ID}}'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=3, check=False, text=True)
+            if result.returncode != 0: raise SandboxBackendUnavailable('Docker container cleanup could not be verified; inspect execution ' + execution_id)
+            identity = result.stdout.strip()
+            if identity and not re.fullmatch('[a-f0-9]{64}', identity):
+                raise SandboxBackendUnavailable('Docker cleanup returned an unexpected container identity')
+            return identity or None
+        except (OSError, subprocess.SubprocessError) as error:
+            raise SandboxBackendUnavailable('Docker container lookup was not confirmed: ' + execution_id) from error
+
+    def _remove_owned_container(self, name: str, execution_id: str, *, expected_identity: str | None = None) -> None:
+        try:
+            identity = self._owned_container_identity(name, execution_id)
+            if not identity: return
+            if expected_identity is not None and identity != expected_identity:
+                raise SandboxBackendUnavailable('Docker container identity changed; cleanup refused: ' + execution_id)
+            subprocess.run([self._resolved_binary or self.docker_binary, 'container', 'rm', '--force', '--volumes', identity],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=3, check=False)
+            if self._owned_container_identity(name, execution_id):
+                raise SandboxBackendUnavailable('Docker execution container is still present after cleanup: ' + execution_id)
+        except (OSError, subprocess.SubprocessError) as error:
+            raise SandboxBackendUnavailable('Docker container cleanup was not confirmed: ' + execution_id) from error
 
     def _require_daemon(self) -> None:
         try:

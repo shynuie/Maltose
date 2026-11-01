@@ -81,6 +81,15 @@ class WakeWordGate:
         self._detector.reset()
 
 
+class _OwnedWakeWordDetector:
+    """Normalization wrappers retain lifetime ownership of their detector."""
+    def close(self) -> None:
+        if getattr(self, "_closed", False): return
+        self._closed = True
+        close = getattr(self._detector, "close", None)
+        if callable(close): close()
+
+
 class FallbackWakeWordDetector:
     """Switch to a local fallback detector after worker failure."""
 
@@ -88,6 +97,8 @@ class FallbackWakeWordDetector:
         self._primary = primary
         self._fallback = fallback
         self._using_fallback = False
+        self._primary_closed = False
+        self._closed = False
 
     def process_frame(self, pcm_frame: bytes, sample_rate: int) -> WakeWordHit | None:
         if self._using_fallback:
@@ -100,7 +111,19 @@ class FallbackWakeWordDetector:
             close = getattr(self._primary, "close", None)
             if callable(close):
                 close()
+                self._primary_closed = True
             return self._fallback.process_frame(pcm_frame, sample_rate)
+
+    def close(self) -> None:
+        if self._closed: return
+        self._closed = True
+        try:
+            if not self._primary_closed:
+                close = getattr(self._primary, "close", None)
+                if callable(close): close()
+        finally:
+            close = getattr(self._fallback, "close", None)
+            if callable(close): close()
 
     def reset(self) -> None:
         if self._using_fallback:
@@ -109,7 +132,7 @@ class FallbackWakeWordDetector:
             self._primary.reset()
 
 
-class GainWakeWordDetector:
+class GainWakeWordDetector(_OwnedWakeWordDetector):
     def __init__(
         self,
         detector: WakeWordDetector,
@@ -135,7 +158,7 @@ class GainWakeWordDetector:
         self._detector.reset()
 
 
-class SmoothRMSGainWakeWordDetector:
+class SmoothRMSGainWakeWordDetector(_OwnedWakeWordDetector):
     """Apply stateful digital gain based on short-term RMS level."""
 
     def __init__(
@@ -186,7 +209,7 @@ class SmoothRMSGainWakeWordDetector:
         self._detector.reset()
 
 
-class HighPassWakeWordDetector:
+class HighPassWakeWordDetector(_OwnedWakeWordDetector):
     """Remove DC and low-frequency energy before passing audio downstream."""
 
     def __init__(
@@ -223,7 +246,7 @@ class HighPassWakeWordDetector:
         self._detector.reset()
 
 
-class SpectralGateWakeWordDetector:
+class SpectralGateWakeWordDetector(_OwnedWakeWordDetector):
     def __init__(
         self,
         detector: WakeWordDetector,
@@ -295,11 +318,15 @@ def create_wake_word_detector(config: WakeWordConfig) -> WakeWordDetector | None
             python=config.alibaba.python,
         )
         if config.fallback_config is not None:
-            fallback_config = load_wake_word_config(config.fallback_config)
-            fallback_config = replace(fallback_config, normalize_audio=False)
-            fallback = create_wake_word_detector(fallback_config)
-            if fallback is None:
-                raise ValueError("Alibaba KWS fallback config is disabled")
+            try:
+                fallback_config = load_wake_word_config(config.fallback_config)
+                fallback_config = replace(fallback_config, normalize_audio=False)
+                fallback = create_wake_word_detector(fallback_config)
+                if fallback is None:
+                    raise ValueError("Alibaba KWS fallback config is disabled")
+            except BaseException:
+                detector.close()
+                raise
             detector = FallbackWakeWordDetector(detector, fallback)
     elif config.provider == "sherpa-onnx":
         if config.sherpa_onnx is None:
@@ -308,6 +335,15 @@ def create_wake_word_detector(config: WakeWordConfig) -> WakeWordDetector | None
     else:
         raise ValueError(f"Unsupported wake word provider: {config.provider}")
 
+    try:
+        return _normalize_wake_word_detector(config, detector)
+    except BaseException:
+        close = getattr(detector, "close", None)
+        if callable(close): close()
+        raise
+
+
+def _normalize_wake_word_detector(config: WakeWordConfig, detector: WakeWordDetector) -> WakeWordDetector:
     if not config.normalize_audio or config.normalization_mode == "none":
         return detector
 

@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from contextlib import nullcontext
+from maltose.runtime.control import AutonomyControl, AutonomyPaused
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ class TaskStatus:
     PENDING = "pending"
     RUNNING = "running"
     WAITING = "waiting"
+    HELD = "held"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -42,6 +45,7 @@ class ScheduleStatus:
     ACTIVE = "active"
     PAUSED = "paused"
     COMPLETED = "completed"
+    HELD = "held"
     CANCELLED = "cancelled"
 
 
@@ -178,6 +182,7 @@ class TaskStore:
                 "CREATE INDEX IF NOT EXISTS idx_tasks_user_updated "
                 "ON tasks(user_id, updated_at DESC)"
             )
+
             self._connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS schedules (
@@ -206,6 +211,17 @@ class TaskStore:
     def close(self) -> None:
         with self._lock:
             self._connection.close()
+
+    def hold_deferred_work(self) -> dict[str, int]:
+        """Called only after the execution gate has drained, before a new intent."""
+        with self._lock, self._connection:
+            tasks = self._connection.execute(
+                "UPDATE tasks SET status = ?, updated_at = ? WHERE status IN (?, ?, ?)",
+                (TaskStatus.HELD, _now(), TaskStatus.PENDING, TaskStatus.WAITING, TaskStatus.RUNNING)).rowcount
+            schedules = self._connection.execute(
+                "UPDATE schedules SET status = ?, updated_at = ? WHERE status = ?",
+                (ScheduleStatus.HELD, _now(), ScheduleStatus.ACTIVE)).rowcount
+        return {'tasks': tasks, 'schedules': schedules}
 
     def create(
         self,
@@ -514,6 +530,7 @@ class TaskManager:
         max_tasks_per_plan: int = 8,
         workers: dict[str, TaskWorker] | None = None,
         progress_publisher: Callable[[dict[str, Any]], None] | None = None,
+        control_gate: AutonomyControl | None = None,
     ) -> None:
         if max_workers < 1:
             raise ValueError("max_workers must be positive.")
@@ -523,6 +540,10 @@ class TaskManager:
         self.max_tasks_per_plan = max_tasks_per_plan
         self._workers = workers or {}
         self._progress_publisher = progress_publisher
+        self.control_gate = control_gate
+        if control_gate and not control_gate.active: self.store.hold_deferred_work()
+        self._task_epochs: dict[str, int] = {}
+        self._attempts: dict[str, str] = {}
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="myagent-task"
         )
@@ -546,10 +567,11 @@ class TaskManager:
         recurrence: str = "once", timezone_name: str = "UTC",
         input: dict[str, Any] | None = None, user_id: str = "default",
     ) -> dict[str, Any]:
-        return self.store.create_schedule(
-            title, worker_type, run_at, recurrence=recurrence,
-            timezone_name=timezone_name, input=input, user_id=user_id,
-        ).as_dict()
+        with self.control_gate.activity('schedule_create') if self.control_gate else nullcontext():
+            return self.store.create_schedule(
+                title, worker_type, run_at, recurrence=recurrence,
+                timezone_name=timezone_name, input=input, user_id=user_id,
+            ).as_dict()
 
     def list_schedules(self, user_id: str = "default", limit: int = 20) -> list[dict[str, Any]]:
         return [item.as_dict() for item in self.store.list_schedules(user_id, limit)]
@@ -561,8 +583,9 @@ class TaskManager:
         return schedule.as_dict()
 
     def resume_schedule(self, schedule_id: str, user_id: str | None = None) -> dict[str, Any]:
+        if self.control_gate: self.control_gate.checkpoint()
         schedule = self.store.get_schedule(schedule_id, user_id=user_id)
-        if schedule.status == ScheduleStatus.PAUSED:
+        if schedule.status in {ScheduleStatus.PAUSED, ScheduleStatus.HELD}:
             schedule = self.store.update_schedule(schedule_id, status=ScheduleStatus.ACTIVE)
         return schedule.as_dict()
 
@@ -581,6 +604,15 @@ class TaskManager:
                 logger.exception("schedule_poll_failed")
 
     def _run_schedule(self, schedule: ScheduleRecord) -> None:
+        try:
+            with self.control_gate.activity('schedule_dispatch') if self.control_gate else nullcontext():
+                self._dispatch_schedule(schedule)
+        except AutonomyPaused:
+            self.store.update_schedule(schedule.id, status=ScheduleStatus.HELD)
+
+    def _dispatch_schedule(self, schedule: ScheduleRecord) -> None:
+        # A row fetched before the gate closed may have been held while draining.
+        if self.store.get_schedule(schedule.id).status != ScheduleStatus.ACTIVE: return
         now = schedule.next_run_at or _now()
         try:
             self.create_plan(
@@ -594,6 +626,7 @@ class TaskManager:
             else:
                 next_run = _next_schedule_time(now, schedule.recurrence, schedule.timezone)
                 self.store.update_schedule(schedule.id, last_run_at=now, next_run_at=next_run)
+        except AutonomyPaused: raise
         except Exception as exc:
             self.store.update_schedule(schedule.id, error=str(exc), last_run_at=now)
             logger.exception("schedule_run_failed schedule_id=%s", schedule.id)
@@ -605,6 +638,10 @@ class TaskManager:
     def create_plan(
         self, tasks: list[dict[str, Any]], *, user_id: str = "default"
     ) -> list[TaskRecord]:
+        with self.control_gate.activity('plan_dispatch') if self.control_gate else nullcontext():
+            return self._create_plan(tasks, user_id=user_id)
+
+    def _create_plan(self, tasks: list[dict[str, Any]], *, user_id: str) -> list[TaskRecord]:
         if not tasks:
             raise ValueError("Task plan cannot be empty.")
         if len(tasks) > self.max_tasks_per_plan:
@@ -646,17 +683,28 @@ class TaskManager:
                     task_id=task_id,
                 )
             )
+            if self.control_gate: self._task_epochs[task_id] = self.control_gate.epoch
         for record in records:
             self._schedule_if_ready(record.id)
         return records
 
     def _schedule_if_ready(self, task_id: str) -> None:
+        try:
+            epoch = self._task_epochs.get(task_id, self.control_gate.epoch if self.control_gate else None)
+            with self.control_gate.activity('task_dispatch', expected_epoch=epoch) if self.control_gate else nullcontext():
+                self._dispatch_if_ready(task_id, epoch)
+        except AutonomyPaused:
+            task = self.store.get(task_id)
+            if task.status in {TaskStatus.PENDING, TaskStatus.WAITING}:
+                self.store.update(task_id, status=TaskStatus.HELD)
+
+    def _dispatch_if_ready(self, task_id: str, epoch: int | None) -> None:
         with self._lock:
             task = self.store.get(task_id)
             if task.status != TaskStatus.PENDING:
                 return
             dependencies = self.store.dependencies(task_id)
-            if any(dep.status in {TaskStatus.PENDING, TaskStatus.RUNNING, TaskStatus.WAITING} for dep in dependencies):
+            if any(dep.status in {TaskStatus.PENDING, TaskStatus.RUNNING, TaskStatus.WAITING, TaskStatus.HELD} for dep in dependencies):
                 self.store.update(task_id, status=TaskStatus.WAITING)
                 return
             if any(dep.status in {TaskStatus.FAILED, TaskStatus.CANCELLED} for dep in dependencies):
@@ -679,9 +727,28 @@ class TaskManager:
             running = self.store.update(task_id, status=TaskStatus.RUNNING, progress=1)
             self._publish_progress(running)
             self._progress_marks[task_id] = 0
-            self._futures[task_id] = self._executor.submit(self._run, task_id, worker)
+            attempt = uuid.uuid4().hex
+            self._attempts[task_id] = attempt
+            self._futures[task_id] = self._executor.submit(self._run, task_id, worker, epoch, attempt)
 
-    def _run(self, task_id: str, worker: TaskWorker) -> None:
+    def _run(self, task_id: str, worker: TaskWorker, epoch: int | None, attempt: str) -> None:
+        try:
+            with self.control_gate.activity('background_task', expected_epoch=epoch) if self.control_gate else nullcontext():
+                with self._lock:
+                    if self._attempts.get(task_id) != attempt or self.store.get(task_id).status != TaskStatus.RUNNING: return
+                self._run_admitted(task_id, worker)
+        except AutonomyPaused:
+            with self._lock:
+                if self._attempts.get(task_id) == attempt and self.store.get(task_id).status == TaskStatus.RUNNING:
+                    self.store.update(task_id, status=TaskStatus.HELD)
+        finally:
+            with self._lock:
+                if self._attempts.get(task_id) == attempt:
+                    self._futures.pop(task_id, None)
+                    self._progress_marks.pop(task_id, None)
+                    self._attempts.pop(task_id, None)
+
+    def _run_admitted(self, task_id: str, worker: TaskWorker) -> None:
         try:
             task = self.store.get(task_id)
             result = worker.run(task, lambda progress: self._report_progress(task_id, progress))
@@ -696,9 +763,6 @@ class TaskManager:
             self._publish_progress(failed)
             self._queue_notification(failed)
         finally:
-            with self._lock:
-                self._futures.pop(task_id, None)
-                self._progress_marks.pop(task_id, None)
             self._schedule_dependents(task_id)
 
     def _report_progress(self, task_id: str, progress: int) -> None:
@@ -786,6 +850,7 @@ class TaskManager:
                 TaskStatus.PENDING,
                 TaskStatus.RUNNING,
                 TaskStatus.WAITING,
+                TaskStatus.HELD,
             }
         ][:limit]
 
@@ -799,9 +864,11 @@ class TaskManager:
         return self.store.update(task_id, status=TaskStatus.CANCELLED, error="Cancelled by user.").as_dict()
 
     def retry(self, task_id: str, user_id: str | None = None) -> dict[str, Any]:
+        if self.control_gate: self.control_gate.checkpoint()
         task = self.store.get(task_id, user_id=user_id)
-        if task.status not in {TaskStatus.FAILED, TaskStatus.CANCELLED}:
-            raise ValueError("Only failed or cancelled tasks can be retried.")
+        if task.status not in {TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.HELD}:
+            raise ValueError("Only failed, cancelled or held tasks can be retried.")
+        if self.control_gate: self._task_epochs[task_id] = self.control_gate.epoch
         self.store.update(task_id, status=TaskStatus.PENDING, progress=0, error="")
         self._schedule_if_ready(task_id)
         return self.store.get(task_id).as_dict()

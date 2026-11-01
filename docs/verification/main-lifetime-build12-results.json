@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "gitHead": "28dded81596402410812954f623e426631a6ff6b",
+  "workingTreeContainsUncommittedChanges": true,
+  "package": {
+    "version": "0.7.0",
+    "build": "12",
+    "bundleFiles": 144,
+    "runtimeFiles": 128,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "artifact": ".cache/unification/releases/Maltose-0.7.0-12.app",
+  "executableSHA256": "c3ace9a866caf26f8600c90d3699227ab5e004a8b150709e7080896b00f1a5cd",
+  "installedOrFormalAppSwitched": false,
+  "runningFormalBuild": "11",
+  "tests": {
+    "python": {
+      "tests": 397,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "docker": true,
+      "elapsedSeconds": 31.292
+    },
+    "swift": {
+      "tests": 141,
+      "failures": 0,
+      "skipped": 15,
+      "skipReason": "desktop locked; GUI tests not enabled",
+      "liveMain": true,
+      "liveCodex": true,
+      "elapsedSeconds": 154.282
+    },
+    "focusedNativeAndCodexOwnership": {
+      "tests": 21,
+      "failures": 0,
+      "elapsedSeconds": 12.665
+    }
+  },
+  "nativeBusyOwnerEOFBeforeFix": {
+    "exitedAfterOwnerEOF": false,
+    "observedSeconds": 8,
+    "formalAppAffected": false,
+    "microphoneUsed": false
+  },
+  "nativeBusyLifetimeCases": {
+    "ownerEOFWithDetachedTERMResistantWorker": "passed",
+    "ownerCrashWithInputStillOpen": "passed",
+    "rootGroupCrashWithDetachedWorker": "passed",
+    "guardianLossVisibleExit70": "passed",
+    "restartWithoutReplay": "passed",
+    "unrelatedProcessPreserved": "passed"
+  },
+  "additionalDockerResistantCrashProbe": {
+    "schemaVersion": 1,
+    "fault": "native-root-group-crash-during-docker",
+    "containerIgnoresTermination": true,
+    "formalAppAffected": false,
+    "microphoneUsed": false,
+    "allObservedProcessesStopped": true,
+    "containerAbsent": false,
+    "heartbeatStopped": false,
+    "fixtureTeardownConfirmed": true
+  },
+  "allExternalLockRecordsIdentical": true,
+  "totalLockedPackages": 164,
+  "humanVoiceAndNativeAppCrashAcceptanceComplete": false,
+  "finalGoalComplete": false
+}

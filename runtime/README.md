@@ -1,5 +1,7 @@
 # Maltose
 
+此目錄是整合後的 Python 主 Agent。日常產品入口為根目錄的 [Maltose.app 說明](../README.md)，由原生 App 管理主 Agent 與 watcher，正式資料位於 Application Support。下方 `./start`／Web UI 是開發與相容入口；勿與 App 同時對同一份正式資料啟動。舊 MyAgent 名稱及設定在相容或歷史文件中保留，整合進度見 [產品計畫](../plans/maltose-unification-and-codex.md)。
+
 Architecture overview: open [ARCHITECTURE.html](ARCHITECTURE.html) for a
 standalone visual flow diagram, or read [ARCHITECTURE.md](ARCHITECTURE.md) for
 the Markdown/Mermaid version.
@@ -24,6 +26,8 @@ Development planning and architecture progress are centralized under
 [dev/](dev/README.md), with the project roadmap in
 [dev/major_plan.md](dev/major_plan.md) and feature-level plans in
 `dev/features/`.
+
+原生主 Agent 與 Codex 的獨立程序守護分別使用 `desktop`／`codex` extra（皆鎖定既有 psutil 7.2.2）。根目錄的 setup scripts 已納入；自行建立開發環境時將 `--extra desktop --extra codex` 與既有語音 extras 一起安裝。
 
 ## Quick Start
 

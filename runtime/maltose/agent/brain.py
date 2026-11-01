@@ -13,6 +13,7 @@ class TurnContext:
     user_id: str | None = None
     speaker_score: float | None = None
     speaker_status: str = "unknown"
+    input_source: str | None = None
 
 
 class AgentBrain(Protocol):

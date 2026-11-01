@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,45 @@ from maltose.execution.backend import MountSpec
 
 
 class DockerBackendTests(unittest.TestCase):
+    @patch('maltose.execution.docker_backend.subprocess.run')
+    def test_cleanup_refuses_unknown_identity_and_never_removes_an_unscoped_container(self, run):
+        backend = DockerSandboxBackend(image='python:3.12-slim')
+        run.return_value = subprocess.CompletedProcess([],0,stdout='not-a-container-id',stderr='')
+        with self.assertRaises(SandboxBackendUnavailable): backend._remove_owned_container('maltose-exec-fixture','fixture')
+        self.assertEqual(run.call_count,1)
+        command = run.call_args.args[0]
+        self.assertIn('name=^/maltose-exec-fixture$',command)
+        self.assertIn('label=dev.maltose.execution-id=fixture',command)
+        self.assertNotIn('rm',command)
+
+    @patch('maltose.execution.docker_backend.subprocess.run')
+    def test_cleanup_error_never_claims_the_container_is_gone(self, run):
+        backend = DockerSandboxBackend(image='python:3.12-slim')
+        run.return_value = subprocess.CompletedProcess([],1,stdout='',stderr='engine unavailable')
+        with self.assertRaises(SandboxBackendUnavailable): backend._remove_owned_container('maltose-exec-fixture','fixture')
+
+    @patch('maltose.execution.docker_backend.subprocess.run')
+    def test_cleanup_refuses_replacement_even_if_name_and_label_match(self, run):
+        backend= DockerSandboxBackend(image='python:3.12-slim')
+        run.return_value = subprocess.CompletedProcess([],0,stdout='d'*64,stderr='')
+        with self.assertRaisesRegex(SandboxBackendUnavailable,'identity changed'):
+            backend._remove_owned_container('maltose-exec-fixture','fixture',expected_identity='c'*64)
+        self.assertEqual(run.call_count,1,'Changed IDs must never reach Docker rm')
+
+    def test_native_creation_that_exhausts_budget_never_starts_container_work(self):
+        from unittest.mock import Mock
+        backend=DockerSandboxBackend(image='python:3.12-slim')
+        lifetime=Mock();lifetime.create_docker.return_value='c'*64
+        with tempfile.TemporaryDirectory() as directory, \
+             patch('maltose.execution.docker_backend.shutil.which',return_value='/installed/docker'), \
+             patch.object(backend,'_require_daemon'), \
+             patch('maltose.runtime.lifetime.current_lifetime',return_value=lifetime), \
+             patch('maltose.execution.docker_backend.time.monotonic',side_effect=[0,31]), \
+             patch('maltose.execution.docker_backend.subprocess.Popen') as launch:
+            result=backend.execute(ExecutionRequest(('python','--version')),mounts=(),session_dir=Path(directory))
+        self.assertEqual(result.status,'timed_out');launch.assert_not_called()
+        lifetime.cleanup_docker.assert_called_once_with(result.execution_id)
+
     def test_storage_driver_is_parsed_from_docker_info(self) -> None:
         info = "Containers: 3\nStorage Driver: btrfs\nDocker Root Dir: /var/lib/docker\n"
         self.assertEqual(_storage_driver(info), "btrfs")

@@ -63,6 +63,7 @@ import SwiftUI
         tipsDropdown = NSHostingView(rootView: WorkspaceTipsDropdown())
         settingsPlaceholder = NSHostingView(rootView: WorkspaceSettingsPlaceholder())
         super.init(frame: .zero)
+        chrome.onSubmitText = { [weak manager] text in manager?.submitText(text) ?? false }
         chrome.onPresentationChange = { [weak self] in self?.arrange(animated: true) }
         model.onTestCommand = { [weak manager] in manager?.runAgentInteractionTest() }
         autoresizingMask = [.width, .height]
@@ -509,6 +510,14 @@ import SwiftUI
         gridZoom = min(1, max(0, value))
         arrange(animated: false)
     }
+
+    func restoreUnconfirmedDraft(_ text: String) {
+        chrome.draft = chrome.draft.isEmpty ? text : text + "\n\n" + chrome.draft
+        chrome.status = "訊息是否接收尚未確認，內容已放回草稿；重送前請先查看對話。"
+    }
+
+    func setRuntimeStatus(_ value: String) { chrome.status = value }
+    func setAgentRecipient(_ value: String) { chrome.recipient = value }
 
     func setAgentTestStatus(_ value: String) { chrome.status = value }
 

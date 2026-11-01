@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import time
 import tempfile
 import unittest
@@ -12,8 +13,8 @@ from maltose.execution.models import ExecutionLimits, ExecutionRequest
 
 
 @unittest.skipUnless(
-    os.environ.get("MYAGENT_RUN_DOCKER_INTEGRATION") == "1",
-    "set MYAGENT_RUN_DOCKER_INTEGRATION=1 to run Docker integration tests",
+    os.environ.get("MALTOSE_RUN_DOCKER_INTEGRATION", os.environ.get("MYAGENT_RUN_DOCKER_INTEGRATION")) == "1",
+    "set MALTOSE_RUN_DOCKER_INTEGRATION=1 to run Docker integration tests",
 )
 class DockerIntegrationTests(unittest.TestCase):
     def test_network_off_container_can_write_only_to_workspace_mount(self) -> None:
@@ -72,17 +73,37 @@ class DockerIntegrationTests(unittest.TestCase):
     def test_timeout_kills_container_process(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             backend = DockerSandboxBackend(image="python:3.12-slim")
+            workspace = Path(directory) / 'workspace'; workspace.mkdir()
+            unrelated = subprocess.run(['docker','run','--rm','--detach','--network','none','--read-only',
+                '--cap-drop','ALL','--security-opt','no-new-privileges:true','--pull','never',
+                'python:3.12-slim','python','-c','import time; time.sleep(300)'],
+                check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True).stdout.strip()
+            self.addCleanup(lambda: subprocess.run(['docker','container','rm','--force',unrelated],
+                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5))
             started = time.monotonic()
             result = backend.execute(
                 ExecutionRequest(
-                    ("python", "-c", "import time; time.sleep(30)"),
+                    ("python", "-c", "import signal,time,subprocess; from pathlib import Path; "
+                     "signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+                     "subprocess.Popen(['python','-c','import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(300)']); "
+                     "p=Path('/workspace/heartbeat');\nwhile True: p.write_text(str(time.monotonic())); time.sleep(.02)"),
                     limits=ExecutionLimits(timeout_seconds=1, max_output_bytes=1024),
                 ),
-                mounts=(),
+                mounts=(MountSpec(workspace.resolve(), '/workspace', read_only=False),),
                 session_dir=Path(directory).resolve(),
             )
             self.assertEqual(result.status, "timed_out")
             self.assertLess(time.monotonic() - started, 8)
+            heartbeat = workspace / 'heartbeat'; self.assertTrue(heartbeat.exists())
+            final = heartbeat.read_bytes(); time.sleep(.2)
+            self.assertEqual(heartbeat.read_bytes(), final, 'Container or its child continued writing after timeout')
+            remaining = subprocess.run(['docker','container','ls','--all','--filter',
+                'label=dev.maltose.execution-id='+result.execution_id,'--format','{{.ID}}'],
+                check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            self.assertEqual(remaining.stdout.strip(),'')
+            alive = subprocess.run(['docker','container','inspect','--format','{{.State.Running}}',unrelated],
+                check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            self.assertEqual(alive.stdout.strip(),'true','Cleanup must not stop unrelated containers')
 
     def test_pid_limit_stops_process_fanout(self) -> None:
         script = (

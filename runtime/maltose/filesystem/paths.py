@@ -92,6 +92,10 @@ class PathResolver:
         except KeyError as exc:
             raise PermissionError(f"Unknown filesystem root: {root_name}") from exc
 
+    def configured_roots(self) -> tuple[FilesystemRoot, ...]:
+        """Return immutable configured boundaries for native adapter path mapping."""
+        return tuple(self._roots.values())
+
     def root(self, root_name: str) -> FilesystemRoot:
         """Return a configured root without resolving a user path."""
         return self._get_root(root_name)

@@ -3,6 +3,8 @@ import SwiftUI
 @MainActor final class WorkspaceChromeModel: ObservableObject {
     var onPresentationChange: (() -> Void)?
     var onTestCommand: (() -> Void)?
+    var onSubmitText: ((String) -> Bool)?
+    @Published var recipient = "Maltose"
     @Published var panelCount = 0
     @Published var status = "就緒"
     @Published var tipsExpanded = false { didSet { if oldValue != tipsExpanded { onPresentationChange?() } } }
@@ -10,9 +12,12 @@ import SwiftUI
     @Published var draft = ""
 
     func submitDraft() {
-        guard draft.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "test" else { return }
-        draft = ""
-        onTestCommand?()
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        if text.lowercased() == "test" {
+            draft = ""; onTestCommand?(); return
+        }
+        if onSubmitText?(draft) == true { draft = "" }
     }
 
     func closeOverlays() {
@@ -65,6 +70,7 @@ struct WorkspaceBottomChrome: View {
             Image(systemName: "command")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.white.opacity(0.48))
+            Text(model.recipient).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
             TextField("輸入想法或指令…", text: $model.draft, axis: .vertical)
                 .lineLimit(1...3)
                 .textFieldStyle(.plain)

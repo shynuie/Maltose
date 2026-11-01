@@ -1,4 +1,6 @@
-# MyAgent Architecture
+# Maltose Python Runtime Architecture
+
+> 本文保留匯入時的 Python Agent 架構說明；下方 `MyAgent`、`myagent/` 與舊啟動名稱屬來源歷史。現行套件為 `maltose/`，設定優先使用 `maltose.toml`，舊名稱經明確相容層讀取。App 程序、共用面板及 Codex 協作的現行架構見 [產品架構](../docs/architecture/README.md)，進度與驗收見 [產品整合計畫](../plans/maltose-unification-and-codex.md)。本頁不能替代原生 App 的啟動說明。
 
 ## Overview
 

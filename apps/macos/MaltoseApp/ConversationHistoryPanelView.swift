@@ -3,16 +3,26 @@ import SwiftUI
 
 struct ConversationSession: Identifiable {
     struct Message: Identifiable {
-        enum Speaker: Equatable { case user, assistant }
+        enum Speaker: String, Codable {
+            case user, assistant, codex, system
+            var title: String {
+                switch self { case .user: "你"; case .assistant: "MALTOSE"; case .codex: "CODEX"; case .system: "系統" }
+            }
+        }
         let id: String
         let speaker: Speaker
-        let text: String
+        var text: String
+        var origin: String? = nil
+        var taskID: String? = nil
+        var threadID: String? = nil
+        var turnID: String? = nil
     }
 
     let id: String
-    let title: String
-    let updatedAt: String
-    let messages: [Message]
+    var title: String
+    var updatedAt: String
+    var messages: [Message]
+    var messageRevision: UInt64 = 0
     var preview: String { messages.last?.text ?? "" }
 }
 
@@ -20,7 +30,19 @@ struct ConversationSession: Identifiable {
     @Published private(set) var presentationMode: WorkspaceMode = .grid
     @Published private(set) var currentSessionID: String
 
-    let sessions: [ConversationSession]
+    @Published private(set) var sessions: [ConversationSession]
+    private var journal: RuntimeConversationJournal?
+    private var lastSequences: [String: Int] = [:]
+    private var liveSessionID: String?
+    private var liveMode = false
+    private var scrollStates: [String: ConversationAutoScrollState] = [:]
+
+    func scrollState(for sessionID: String) -> ConversationAutoScrollState {
+        if let existing = scrollStates[sessionID] { return existing }
+        let state = ConversationAutoScrollState()
+        scrollStates[sessionID] = state
+        return state
+    }
 
     init(sessions: [ConversationSession] = ConversationHistoryModel.samples) {
         self.sessions = sessions
@@ -33,6 +55,7 @@ struct ConversationSession: Identifiable {
 
     var allowsSessionSelection: Bool { presentationMode == .focused }
     var usesWideLayout: Bool { presentationMode != .grid }
+    var contentSourceLabel: String { liveMode ? "對話紀錄" : "示意內容" }
 
     func configure(mode: WorkspaceMode) { presentationMode = mode }
 
@@ -40,6 +63,76 @@ struct ConversationSession: Identifiable {
         guard allowsSessionSelection else { return }
         currentSessionID = session.id
     }
+
+    struct RuntimeEnvelope: Decodable {
+        struct Event: Decodable { var type: String; var payload: [String: UserViewValue]; var timestamp: String }
+        var schemaVersion: Int
+        var sessionID: String
+        var conversationID: String?
+        var sequence: Int
+        var event: Event
+    }
+
+    func enableLiveStorage(at url: URL) throws {
+        let storage = RuntimeConversationJournal(url: url)
+        let previous = liveMode ? sessions : []
+        let previousSequences = liveMode ? lastSequences : [:]
+        let previousCurrent = liveMode ? currentSessionID : ""
+        let previousLive = liveSessionID
+        liveMode = true
+        sessions = []; currentSessionID = ""; lastSequences = [:]
+        do {
+            try storage.open { try self.applyRuntimeEvent($0, persist: false) }
+            journal?.close(); journal = storage
+        } catch {
+            sessions = previous; currentSessionID = previousCurrent
+            lastSequences = previousSequences; liveSessionID = previousLive
+            storage.close(); throw error
+        }
+    }
+
+    func applyRuntimeEvent(_ data: Data, persist: Bool = true) throws {
+        let envelope = try JSONDecoder().decode(RuntimeEnvelope.self, from: data)
+        guard envelope.schemaVersion == 1, envelope.sequence > 0, !envelope.sessionID.isEmpty else {
+            throw RuntimeLaunchError.unavailable("對話事件版本或識別碼不正確。")
+        }
+        guard envelope.sequence > (lastSequences[envelope.sessionID] ?? 0) else { return }
+        let type = envelope.event.type
+        if persist { try journal?.append(data, durable: ["user_message", "assistant_end", "assistant_message", "error"].contains(type)) }
+        lastSequences[envelope.sessionID] = envelope.sequence
+        guard ["user_message", "assistant_start", "assistant_delta", "assistant_end", "assistant_message", "error"].contains(type) else { return }
+        let id = envelope.conversationID ?? envelope.sessionID
+        if !sessions.contains(where: { $0.id == id }) {
+            sessions.insert(.init(id: id, title: "Maltose 對話", updatedAt: "剛剛", messages: []), at: 0)
+            currentSessionID = id
+        }
+        liveSessionID = id
+        guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
+        func string(_ key: String) -> String {
+            if case let .string(value) = envelope.event.payload[key] { return value }; return ""
+        }
+        let content = string("content")
+        let streamID = string("message_id")
+        let messageID = streamID.isEmpty ? "\(envelope.sessionID)-\(envelope.sequence)" : "\(id)-\(streamID)"
+        if let item = sessions[index].messages.firstIndex(where: { $0.id == messageID }) {
+            if type == "assistant_delta" { sessions[index].messages[item].text += content }
+            else { sessions[index].messages[item].text = content }
+        } else {
+            let speaker: ConversationSession.Message.Speaker = type == "user_message" ? .user : type == "error" ? .system : string("author") == "codex" ? .codex : .assistant
+            let source = string("source")
+            sessions[index].messages.append(.init(id: messageID, speaker: speaker, text: content,
+                origin: !source.isEmpty ? source : "maltose-runtime", taskID: string("taskID").isEmpty ? nil : string("taskID"),
+                threadID: string("threadID").isEmpty ? nil : string("threadID"), turnID: string("turnID").isEmpty ? nil : string("turnID")))
+        }
+        if type == "user_message", sessions[index].title == "Maltose 對話" {
+            sessions[index].title = String(content.prefix(30))
+        }
+        sessions[index].updatedAt = envelope.event.timestamp
+        sessions[index].messageRevision &+= 1
+    }
+
+    func showLiveSession() { if let liveSessionID { currentSessionID = liveSessionID } }
+    func closeLiveStorage() { journal?.close(); journal = nil }
 
     static let samples: [ConversationSession] = [
         .init(id: "workspace-layout", title: "工作空間的面板排列方式", updatedAt: "剛剛", messages: [
@@ -146,7 +239,8 @@ struct ConversationHistoryPanelView: View {
 
     private func transcript(_ session: ConversationSession, availableWidth: CGFloat, focused: Bool) -> some View {
         let textLayout = ConversationHistoryLayout(width: availableWidth, focused: focused)
-        return ConversationTranscript(session: session, fontSize: textLayout.fontSize)
+        return ConversationTranscript(session: session, fontSize: textLayout.fontSize, sourceLabel: model.contentSourceLabel,
+                                      scrollState: model.scrollState(for: session.id))
             .frame(width: textLayout.contentWidth, height: nil)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, textLayout.verticalPadding)
@@ -181,6 +275,9 @@ private struct SessionRow: View {
 private struct ConversationTranscript: View {
     let session: ConversationSession
     let fontSize: CGFloat
+    let sourceLabel: String
+    let scrollState: ConversationAutoScrollState
+    private let bottomID = "conversation-transcript-bottom"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -188,7 +285,7 @@ private struct ConversationTranscript: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(session.title).font(.system(size: fontSize * 1.22, weight: .semibold)).lineLimit(2)
                     Spacer(minLength: 8)
-                    Text("示意內容").font(.system(size: max(9, fontSize * 0.66), design: .monospaced))
+                    Text(sourceLabel).font(.system(size: max(9, fontSize * 0.66), design: .monospaced))
                         .tracking(1).foregroundStyle(.white.opacity(0.36)).lineLimit(1)
                 }
                 Text("最近更新 · \(session.updatedAt)")
@@ -207,10 +304,14 @@ private struct ConversationTranscript: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.bottom, 24)
+                    .background(ConversationScrollObserver(state: scrollState))
+                    Color.clear.frame(height: 1).id(bottomID)
                 }
                 .scrollIndicators(.hidden)
-                .onAppear { scrollToLatest(using: proxy, session: session) }
-                .onChange(of: session.id) { _, _ in scrollToLatest(using: proxy, session: session) }
+                .onAppear { scrollToLatest(using: proxy) }
+                .onChange(of: session.id) { _, _ in scrollToLatest(using: proxy) }
+                .onChange(of: session.messageRevision) { _, _ in scrollToLatest(using: proxy) }
+                .onChange(of: fontSize) { _, _ in scrollToLatest(using: proxy) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -218,9 +319,13 @@ private struct ConversationTranscript: View {
         .foregroundStyle(Color(white: 0.88))
     }
 
-    private func scrollToLatest(using proxy: ScrollViewProxy, session: ConversationSession) {
-        guard let latestID = session.messages.last?.id else { return }
-        DispatchQueue.main.async { proxy.scrollTo(latestID, anchor: .bottom) }
+    private func scrollToLatest(using proxy: ScrollViewProxy) {
+        guard scrollState.shouldFollow() else { return }
+        DispatchQueue.main.async {
+            // Recheck after layout: the user may have scrolled since this was queued.
+            guard scrollState.shouldFollow() else { return }
+            proxy.scrollTo(bottomID, anchor: .bottom)
+        }
     }
 }
 
@@ -235,7 +340,7 @@ private struct ConversationMessageView: View {
         HStack(alignment: .top, spacing: 12) {
             if message.speaker == .user { Spacer(minLength: 28) }
             VStack(alignment: .leading, spacing: 8) {
-                Text(message.speaker == .user ? "你" : "MALTOSE")
+                Text(message.speaker.title)
                     .font(.system(size: fontSize * 0.68, weight: .medium, design: .monospaced))
                     .tracking(1.2).foregroundStyle(.white.opacity(0.42))
                 ConversationMarkdownContent(source: message.text, fontSize: fontSize)

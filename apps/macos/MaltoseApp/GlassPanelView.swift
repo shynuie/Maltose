@@ -37,7 +37,7 @@ extension NSPasteboard.PasteboardType {
     init(panel: WorkspacePanel, manager: WorkspaceWindowManager? = nil) {
         self.surfaceID = panel.id
         self.manager = manager
-        let historyModel = panel.kind == .conversationHistory ? ConversationHistoryModel() : nil
+        let historyModel = panel.kind == .conversationHistory ? (manager?.liveConversationModel ?? ConversationHistoryModel()) : nil
         let documentModel = panel.kind == .document ? MarkdownDocumentModel() : nil
         let chartModel = panel.kind == .chart ? CSVLineChartModel() : nil
         let imageGalleryModel = panel.kind == .imageGallery ? ImageGalleryModel() : nil

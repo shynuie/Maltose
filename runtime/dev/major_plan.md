@@ -5,12 +5,12 @@
 ## 文件狀態
 
 - 狀態：`in_progress`
-- 最後更新：2026-09-29
+- 最後更新：2026-11-01
 - 詳細文件規則：[dev/README.md](README.md)
 
 ## 專案方向
 
-MyAgent 是一個以語音互動為主的個人 Agent，核心開發方向如下：
+Maltose 是一個以語音互動為主的個人 Agent，核心開發方向如下：
 
 1. 穩定的 voice loop：wake、STT、speaker identity、interruptible TTS 與 session lifecycle。
 2. 可驗證的 TaskBrain：工具呼叫、Memory、個人資料與任務流程保持清楚邊界。
@@ -27,7 +27,8 @@ MyAgent 是一個以語音互動為主的個人 Agent，核心開發方向如下
 | Voice interaction loop | `in_progress` | [voice_dev_plan.md](features/voice_dev_plan.md) | TTS audio render/play pipeline |
 | KWS sensitivity and audio front-end | `in_progress` | [kws_dev_plan.md](features/kws_dev_plan.md) | dataset、offline replay、AGC/NS evaluation |
 | TaskBrain / Memory | `in_progress` | 待建立獨立 feature plan | 整理 Memory、tools 與 session 的長期邊界 |
-| Maltose native UI integration | `in_progress` | [maltose_ui_dev_plan.md](features/maltose_ui_dev_plan.md) | runtime events、Awareness、批准配對與獨立 uv sidecar |
+| Maltose App / main Agent / Codex | `in_progress` | [maltose_unification_dev_plan.md](features/maltose_unification_dev_plan.md) | 已解鎖；先完成聊天捲動追加需求，再續做真人語音、專案重新定位與最終 App 驗收 |
+| Legacy Host / MUP integration（歷史） | `done` | [maltose_ui_dev_plan.md](features/maltose_ui_dev_plan.md) | 保留舊方案與相容實測；現行 App 使用上列產品整合入口 |
 | Web UI / Agent Runtime | `in_progress` | [web_ui_dev_plan.md](features/web_ui_dev_plan.md) | runtime events、local Web UI、统一输入边界 |
 | Filesystem Sandbox | `done` | [filesystem_sandbox_dev_plan.md](features/filesystem_sandbox_dev_plan.md) | PathResolver、policy、approval、KDB bridge 與受控 file tools |
 | Command Execution Sandbox | `in_progress` | [command_execution_sandbox_dev_plan.md](features/command_execution_sandbox_dev_plan.md) | restricted network backend、跨平台 hardening 與 package-install smoke test |

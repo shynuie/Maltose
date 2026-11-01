@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "version": "0.7.0",
+  "build": "15",
+  "package": {
+    "version": "0.7.0",
+    "build": "15",
+    "bundleFiles": 145,
+    "runtimeFiles": 129,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "focusedTests": {
+    "tests": 10,
+    "failures": 0,
+    "skipped": 0
+  },
+  "fullSwift": {
+    "tests": 148,
+    "skipped": 2,
+    "failedTestCases": 1,
+    "failedAssertions": 4,
+    "elapsedSeconds": 180.02
+  },
+  "installedCodexFollowup": {
+    "tests": 2,
+    "failures": 0,
+    "skipped": 0
+  },
+  "fullscreenFollowup": {
+    "tests": 1,
+    "failedAssertions": 7,
+    "elapsedSeconds": 27.205
+  },
+  "backupFilesVerified": 4444,
+  "normalQuitOwnedProcesses": 4,
+  "formalBuild": "15",
+  "finderLaunchObserved": true,
+  "realMainTextReplyObserved": true,
+  "latestReplyVisibleAtBottom": true,
+  "actualWheelInputVerified": false,
+  "humanVoiceAcceptanceComplete": false,
+  "fullGoalComplete": false,
+  "executableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f"
+}

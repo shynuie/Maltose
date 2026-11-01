@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "gitHead": "28dded81596402410812954f623e426631a6ff6b",
+  "workingTreeContainsUncommittedChanges": true,
+  "package": {
+    "version": "0.7.0",
+    "build": "11",
+    "bundleFiles": 142,
+    "runtimeFiles": 126,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false,
+    "legacyAliasAbsentDuringVerification": true,
+    "guardianImportWithManagedDependencies": "passed",
+    "verificationScope": "static package audit; agent and microphone were not started by package verifier"
+  },
+  "executableSHA256": "09dc4a8341c1cda84638b5ee3943eacfa804da0af343e09bff14cb2e19a762fa",
+  "tests": {
+    "swift": {
+      "tests": 141,
+      "skipped": 0,
+      "failures": 0,
+      "liveMain": true,
+      "liveCodex": true,
+      "gui": true,
+      "physicalScreens": 2,
+      "finishedLocal": "2026-11-01 13:11:42",
+      "elapsedSeconds": 191.471
+    },
+    "python": {
+      "tests": 393,
+      "skipped": 0,
+      "failures": 0,
+      "docker": true
+    }
+  },
+  "dependencyVersionsUnchanged": {
+    "lockedPackages": 164,
+    "managedMain": 116,
+    "managedKWS": 66,
+    "development": 117
+  },
+  "lifetimeEvidence": "codex-lifetime-results.json",
+  "nativeGUIAndVoiceAcceptanceComplete": false,
+  "finalGoalComplete": false,
+  "desktopAcceptance": {
+    "finderLaunch": true,
+    "launchedPackagedExecutable": true,
+    "formalDataUsed": true,
+    "preLaunchBackupVerifiedFiles": 3407,
+    "mainReady": true,
+    "realModelTextReply": true,
+    "nativeAudioActiveStreams": 1,
+    "normalQuit": "pending",
+    "reopen": "pending",
+    "nativeAppCrash": "pending",
+    "humanVoice": "pending",
+    "report": "build11-desktop-acceptance.md"
+  }
+}
