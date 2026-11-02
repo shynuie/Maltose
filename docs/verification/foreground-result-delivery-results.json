@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "sourceCapability": {
+    "foregroundResultVersion": 1,
+    "defaultEnabled": true
+  },
+  "pythonFull": {
+    "passed": 503,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 47.775,
+    "log": "/tmp/maltose-foreground-full-python.log"
+  },
+  "nativeFull": {
+    "passed": 221,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 446.692,
+    "log": "/tmp/maltose-foreground-full-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true,
+    "docker": true
+  },
+  "actualCrashRecovery": {
+    "beforeUIWrite": true,
+    "afterUIWriteBeforeACK": true,
+    "nativeStoreAndRuntimeRebuilt": true,
+    "taskReexecuted": false,
+    "oldSpeechReplayed": false,
+    "identityPromoted": false
+  },
+  "acceptance": {
+    "lostInputNotificationAndACK": true,
+    "newHumanAtBothWriters": true,
+    "actualPauseHeldStop": true,
+    "purePlanCompletion": true,
+    "selfReportedTestsRejected": true,
+    "foregroundWorkerAndContinuationTogether": true
+  },
+  "formalBuild": "15",
+  "formalExecutableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+  "trialBuild": "17",
+  "trialExecutableSHA256": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+  "newPackageCreated": false,
+  "newCommitCreated": false,
+  "remaining": [
+    "General foreground partial/failed continuation using actual foreground triggers",
+    "Independent answer then authorized task resumption",
+    "Unknown running execution reconciliation",
+    "Scheduled task provenance",
+    "Paused Codex recap speech",
+    "All direct panel mutation grants",
+    "Remaining autonomous panels and multi-panel composition",
+    "Speech preferences UI",
+    "Human voice/gesture acceptance",
+    "Final deployment"
+  ],
+  "fullGoalComplete": false
+}

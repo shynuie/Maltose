@@ -1,12 +1,32 @@
 .build/
+# Variant build directories used after project relocation
+/.build-*/
 .cache/
 node_modules/
 .venv/
 __pycache__/
 .pytest_cache/
 *.egg-info/
-packages/*/dist/
-apps/macos/MaltoseApp/Resources/renderer/
 dist/
-*.sqlite*
 .DS_Store
+
+# Maltose runtime: local state and environments are never source artifacts
+.env
+.env.*
+*.env
+*.env.*
+runtime/.venvs/
+runtime/maltose.toml
+runtime/myagent.toml
+runtime/training_server
+runtime/data/
+runtime/documents/
+runtime/models/
+runtime/recordings/
+/data/logs/
+/data/memory/
+/data/tasks/
+/data/speaker/
+/data/knowledge/
+# Migrated local wake settings; use example files for new installations
+/runtime/wake.toml

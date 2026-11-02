@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "gitHead": "28dded81596402410812954f623e426631a6ff6b",
+  "testedWorkingTreeContainsUncommittedChanges": true,
+  "nativeSources": {
+    "files": 30,
+    "sha256": "d489cc932de6bbde25120035b6651b271960327f4f55a289153675d4819de2c1"
+  },
+  "runtimeSources": {
+    "files": 123,
+    "sha256": "9123e5dc3aba83581c5eb30bd8bb5cd560d20abd58bf5c63f27d74ffc0da3a62"
+  },
+  "tests": {
+    "swift": {
+      "discovered": 137,
+      "skipped": 15,
+      "failures": 0,
+      "guiEnabled": false,
+      "liveCodexEnabled": true,
+      "liveMainEnabled": true
+    },
+    "python": {
+      "discovered": 378,
+      "skipped": 0,
+      "failures": 0,
+      "dockerEnabled": true
+    }
+  },
+  "package": {
+    "version": "0.7.0",
+    "build": "9",
+    "bundleFiles": 141,
+    "runtimeFiles": 125,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "executableSHA256": "bac47254bc1f5347fba72880feb992755ba31e1572468f983b6c48dfbaccdd40",
+  "finalGoalComplete": false,
+  "pending": [
+    "native fullscreen and cross-screen",
+    "new Finder launch lifecycle",
+    "voice identity and device matrix",
+    "fault recovery matrix",
+    "final project relocation"
+  ]
+}

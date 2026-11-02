@@ -1,3 +1,5 @@
+> 歷史文件：本頁描述舊版 Host／MyAgent 整合。現行工作區沒有啟動這些服務；主 Agent 使用受管理的私有 stdio 連線，兩個 Agent 的面板操作共用 [面板介面](architecture/workspace-agent-interface.md)。目前啟動方式見 [README](../README.md)，整合範圍與進度見 [產品整合計畫](../plans/maltose-unification-and-codex.md)。下方指令僅保留舊方案的使用紀錄。
+
 # MyAgent 與 Maltose UI 使用方式
 
 這一版已接上 `/Users/Marvin/Workspace/MyAgent`，使用原生 Host 0.4.0；MUP 協定仍為 v0.3。

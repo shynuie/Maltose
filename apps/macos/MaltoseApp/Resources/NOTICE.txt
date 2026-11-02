@@ -1,1 +1,0 @@
-Offline renderer is packaged here by scripts/bundle-renderer.sh.

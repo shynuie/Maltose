@@ -1,0 +1,9 @@
+# Isolated legacy KWS only; never sync into the main Python 3.12 environment.
+modelscope[datasets]==1.40.1
+torch==2.14.0
+py_sound_connect==0.2.1
+numpy<2
+
+# Imported by the actual far-field pipeline.
+PyYAML
+soundfile

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "version": "0.7.0",
+  "build": "16",
+  "trialApp": "dist/trials/build16/Maltose.app",
+  "package": {
+    "version": "0.7.0",
+    "build": "16",
+    "bundleFiles": 151,
+    "runtimeFiles": 135,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "python": {
+    "passed": 489,
+    "skipped": 0,
+    "seconds": 43.306
+  },
+  "nativeFocused": {
+    "passed": 18,
+    "skipped": 0,
+    "seconds": 29.658,
+    "configuredMainPlanningPassed": true
+  },
+  "uiSmoke": {
+    "uiOnlyLaunch": "passed",
+    "windowCount": 2,
+    "applicationRunning": true,
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "foregroundResultVersion": 0,
+  "formalBuildUnchanged": "15",
+  "formalExecutableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+  "trialExecutableSHA256": "e8e700233cfc6addcd5e670200b07a73fcf42b966f8135d0f89ef7df9db76590",
+  "fullNativeSuiteRerun": false,
+  "humanVoiceAcceptanceComplete": false,
+  "fullGoalComplete": false
+}

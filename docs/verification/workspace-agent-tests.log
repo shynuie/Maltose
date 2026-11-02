@@ -1,0 +1,134 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[2/6] Write swift-version--58304C5D6DBC2206.txt
+[4/8] Compiling MaltoseApp WorkspaceWindowManager.swift
+[5/8] Emitting module MaltoseApp
+[5/10] Write Objects.LinkFileList
+[6/10] Linking MaltoseApp
+[7/10] Applying MaltoseApp
+[9/12] Compiling MaltoseUITests WorkspaceAgentTests.swift
+[10/12] Emitting module MaltoseUITests
+[10/12] Write Objects.LinkFileList
+[11/12] Linking MaltoseWorkspacePackageTests
+Build complete! (4.26s)
+Test Suite 'All tests' started at 2026-11-01 01:21:43.887.
+Test Suite 'MaltoseWorkspacePackageTests.xctest' started at 2026-11-01 01:21:43.889.
+Test Suite 'WorkspaceAgentContractTests' started at 2026-11-01 01:21:43.889.
+Test Case '-[MaltoseUITests.WorkspaceAgentContractTests testMalformedRequestsVersionsAndUnavailableWorkspaceReturnStructuredErrors]' started.
+Test Case '-[MaltoseUITests.WorkspaceAgentContractTests testMalformedRequestsVersionsAndUnavailableWorkspaceReturnStructuredErrors]' passed (0.003 seconds).
+Test Case '-[MaltoseUITests.WorkspaceAgentContractTests testWireContractUsesNamedArgumentsAndPreservesRequestID]' started.
+Test Case '-[MaltoseUITests.WorkspaceAgentContractTests testWireContractUsesNamedArgumentsAndPreservesRequestID]' passed (0.001 seconds).
+Test Suite 'WorkspaceAgentContractTests' passed at 2026-11-01 01:21:43.893.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'WorkspaceAgentNativeTests' started at 2026-11-01 01:21:43.893.
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testAgentMovesReuseNativePanelsAndPruneSourceSelection]' started.
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testAgentMovesReuseNativePanelsAndPruneSourceSelection]' passed (0.855 seconds).
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testEveryAdvertisedOperationCanBeSimulatedThroughTheSharedModels]' started.
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testEveryAdvertisedOperationCanBeSimulatedThroughTheSharedModels]' passed (0.607 seconds).
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testInvalidCommandsDoNotPartiallyMutateWorkspaceOrContent]' started.
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testInvalidCommandsDoNotPartiallyMutateWorkspaceOrContent]' passed (0.359 seconds).
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testSimulatorExecutesTheSameJSONInterfaceAndKeepsCaptureAvailable]' started.
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testSimulatorExecutesTheSameJSONInterfaceAndKeepsCaptureAvailable]' passed (0.334 seconds).
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testSingletonPanelsCanBeClosedAndRecreatedWithoutDuplicatingModels]' started.
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testSingletonPanelsCanBeClosedAndRecreatedWithoutDuplicatingModels]' passed (0.327 seconds).
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testUserViewPrioritizesMainPanelAndSummarizesGridSidebarAndHiddenPanels]' started.
+Test Case '-[MaltoseUITests.WorkspaceAgentNativeTests testUserViewPrioritizesMainPanelAndSummarizesGridSidebarAndHiddenPanels]' passed (0.459 seconds).
+Test Suite 'WorkspaceAgentNativeTests' passed at 2026-11-01 01:21:46.834.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 2.940 (2.940) seconds
+Test Suite 'WorkspaceLayoutTests' started at 2026-11-01 01:21:46.834.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testBrowserAddressAcceptsWebURLsDomainsAndSearchesButRejectsOtherSchemes]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testBrowserAddressAcceptsWebURLsDomainsAndSearchesButRejectsOtherSchemes]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testChartAgentCanConfigureAreaFillBetweenNamedSeries]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testChartAgentCanConfigureAreaFillBetweenNamedSeries]' passed (0.004 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testChatPanelUsesIdentitySizedGlobalFootprint]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testChatPanelUsesIdentitySizedGlobalFootprint]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testClickingWorkspaceSpaceClearsPanelSelectionWithoutChangingPrimaryMode]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testClickingWorkspaceSpaceClearsPanelSelectionWithoutChangingPrimaryMode]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testClosingOrMovingPrimaryKeepsRemainingPanelsUsable]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testClosingOrMovingPrimaryKeepsRemainingPanelsUsable]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testConversationHistoryTextSizingUsesFortyAndTwentyCharacterTargets]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testConversationHistoryTextSizingUsesFortyAndTwentyCharacterTargets]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testConversationSessionSelectionIsLimitedToFocusedPanelAndPersistsAsCurrent]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testConversationSessionSelectionIsLimitedToFocusedPanelAndPersistsAsCurrent]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testCSVLineChartParserKeepsSeriesAndRowNotesIncludingQuotedCommas]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testCSVLineChartParserKeepsSeriesAndRowNotesIncludingQuotedCommas]' passed (0.001 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testFlowchartFileRejectsUnrecognizedJSON]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testFlowchartFileRejectsUnrecognizedJSON]' passed (0.002 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testFlowchartFilesRoundTripAndTrackUnsavedChanges]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testFlowchartFilesRoundTripAndTrackUnsavedChanges]' passed (0.001 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testFlowchartSupportsEditingConnectingMovingAndDeletingNodes]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testFlowchartSupportsEditingConnectingMovingAndDeletingNodes]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testFlowchartViewportIsBoundedAndResettable]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testFlowchartViewportIsBoundedAndResettable]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalGridHandlesEmptyAndPartialRowsWithoutStretching]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalGridHandlesEmptyAndPartialRowsWithoutStretching]' passed (0.001 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalGridSupportsTwoRowIdentityPanelWithoutResizingOtherPanels]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalGridSupportsTwoRowIdentityPanelWithoutResizingOtherPanels]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalGridUsesSixteenNinePanelsAndTenColumnBounds]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalGridUsesSixteenNinePanelsAndTenColumnBounds]' passed (0.003 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalScrollRoutingConsumesOnlyGridEvents]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalScrollRoutingConsumesOnlyGridEvents]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalZoomAndScrollClampAtBothEdges]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGlobalZoomAndScrollClampAtBothEdges]' passed (0.001 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGridFitsScreenShapesWithoutOverlapAndKeepsEqualSizes]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testGridFitsScreenShapesWithoutOverlapAndKeepsEqualSizes]' passed (0.008 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testIdentityPanelCanBeMovedManuallyAndRegularPanelsReflowAroundIt]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testIdentityPanelCanBeMovedManuallyAndRegularPanelsReflowAroundIt]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testImageGalleryAcceptsWebImageURLsAndRejectsUnsupportedSchemes]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testImageGalleryAcceptsWebImageURLsAndRejectsUnsupportedSchemes]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testImageGalleryStartsWithEmptyPreviousSlotAndSixSamples]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testImageGalleryStartsWithEmptyPreviousSlotAndSixSamples]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testInitialGlobalColumnsFollowWindowAspectRatio]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testInitialGlobalColumnsFollowWindowAspectRatio]' passed (0.001 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testMarkdownDocumentKeepsProportionalImagesWhenGlobalTextIsHidden]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testMarkdownDocumentKeepsProportionalImagesWhenGlobalTextIsHidden]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testMarkdownParserRecognizesCoreDocumentBlocks]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testMarkdownParserRecognizesCoreDocumentBlocks]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testMarqueeSelectionUsesPanelIntersectionAndCommandAddsToSelection]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testMarqueeSelectionUsesPanelIntersectionAndCommandAddsToSelection]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testMovingAlongTheEdgeDoesNotAccumulateDwellTime]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testMovingAlongTheEdgeDoesNotAccumulateDwellTime]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testOnlyIdentityAndChatPanelKindsAreSingletons]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testOnlyIdentityAndChatPanelKindsAreSingletons]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testPanelHighlightSupportsCommandMultiSelectAndPrunesMovedItems]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testPanelHighlightSupportsCommandMultiSelectAndPrunesMovedItems]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testPinnedIdentityStaysPutWhileRegularPanelsFlowAroundItsCells]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testPinnedIdentityStaysPutWhileRegularPanelsFlowAroundItsCells]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testPreviewIncludesYouTubeAndGoogleNewsBrowserPanels]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testPreviewIncludesYouTubeAndGoogleNewsBrowserPanels]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testRefreshDoesNotDiscardUserOrderOrSwitchTheSelectedPanel]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testRefreshDoesNotDiscardUserOrderOrSwitchTheSelectedPanel]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testSubmittingTestCommandInvokesAgentInteractionSimulation]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testSubmittingTestCommandInvokesAgentInteractionSimulation]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testThumbnailFitsTheWholeContentWithoutChangingItsAspectRatio]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testThumbnailFitsTheWholeContentWithoutChangingItsAspectRatio]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testUserViewSendDisplaysCapturedSnapshotAsJSON]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testUserViewSendDisplaysCapturedSnapshotAsJSON]' passed (0.019 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testUserViewSnapshotPreservesStructuredPanelDetails]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testUserViewSnapshotPreservesStructuredPanelDetails]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testWheelNormalizationAndGestureModifierRemainStableThroughMomentum]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testWheelNormalizationAndGestureModifierRemainStableThroughMomentum]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testZoomAnchorRestoresTheSamePanelPositionInTheViewport]' started.
+Test Case '-[MaltoseUITests.WorkspaceLayoutTests testZoomAnchorRestoresTheSamePanelPositionInTheViewport]' passed (0.001 seconds).
+Test Suite 'WorkspaceLayoutTests' passed at 2026-11-01 01:21:46.881.
+	 Executed 37 tests, with 0 failures (0 unexpected) in 0.045 (0.048) seconds
+Test Suite 'WorkspaceNativeTests' started at 2026-11-01 01:21:46.882.
+Test Case '-[MaltoseUITests.WorkspaceNativeTests testAutomaticNativeFullscreenUsesSystemSpace]' started.
+Test Case '-[MaltoseUITests.WorkspaceNativeTests testAutomaticNativeFullscreenUsesSystemSpace]' passed (12.484 seconds).
+Test Case '-[MaltoseUITests.WorkspaceNativeTests testChromeDraftAndDropdownStateRemainLocalAndIndependent]' started.
+Test Case '-[MaltoseUITests.WorkspaceNativeTests testChromeDraftAndDropdownStateRemainLocalAndIndependent]' passed (0.000 seconds).
+Test Case '-[MaltoseUITests.WorkspaceNativeTests testPureUIContentSurvivesLayoutAndCrossScreenMoves]' started.
+Test Case '-[MaltoseUITests.WorkspaceNativeTests testPureUIContentSurvivesLayoutAndCrossScreenMoves]' passed (1.039 seconds).
+Test Case '-[MaltoseUITests.WorkspaceNativeTests testThirtyPanelGridScrollsBetweenFixedChromeZones]' started.
+Test Case '-[MaltoseUITests.WorkspaceNativeTests testThirtyPanelGridScrollsBetweenFixedChromeZones]' passed (0.742 seconds).
+Test Suite 'WorkspaceNativeTests' passed at 2026-11-01 01:22:01.147.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 14.265 (14.266) seconds
+Test Suite 'MaltoseWorkspacePackageTests.xctest' passed at 2026-11-01 01:22:01.147.
+	 Executed 49 tests, with 0 failures (0 unexpected) in 17.254 (17.259) seconds
+Test Suite 'All tests' passed at 2026-11-01 01:22:01.147.
+	 Executed 49 tests, with 0 failures (0 unexpected) in 17.254 (17.260) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

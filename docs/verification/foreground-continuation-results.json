@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "sourceCapability": {
+    "foregroundContinuationVersion": 1,
+    "defaultEnabled": true
+  },
+  "pythonFull": {
+    "passed": 511,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 48.455,
+    "log": "/tmp/maltose-foreground-cont-full-python.log"
+  },
+  "nativeFull": {
+    "passed": 229,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 508.489,
+    "log": "/tmp/maltose-foreground-cont-full-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true,
+    "docker": true
+  },
+  "acceptance": {
+    "actualForegroundForeignKey": true,
+    "noSyntheticWorkerOrOwner": true,
+    "keyboard": true,
+    "controlledUnknownVoice": true,
+    "controlledIdentifiedVoice": true,
+    "missingSourceReadAndSynthesis": true,
+    "configuredMainSelectsActualMissingRead": true,
+    "knownReadFailureContinuation": true,
+    "purePlanStops": true,
+    "concreteDecisionStops": true,
+    "eightWorkThenOneClarification": true,
+    "newHumanAndCodexStopOldWork": true
+  },
+  "actualCrashRecovery": {
+    "unenteredAdmission": true,
+    "generatedBeforeNativeWrite": true,
+    "nativeWriteBeforeACK": true,
+    "nativeStoreAndRuntimeRebuilt": true,
+    "generatedModelOrToolsReexecuted": false,
+    "runningBecomesUncertain": true,
+    "oldSpeechEventsReplayed": false,
+    "identityPromoted": false
+  },
+  "focused": {
+    "pythonForeground": {
+      "passed": 16,
+      "seconds": 0.113,
+      "log": "/tmp/maltose-foreground-cont-python-final-focused.log"
+    },
+    "pythonLegacy": {
+      "passed": 8,
+      "seconds": 0.039,
+      "log": "/tmp/maltose-foreground-cont-legacy-durable-python.log"
+    },
+    "nativeRecoveryAndControl": {
+      "passed": 4,
+      "seconds": 36.743,
+      "log": "/tmp/maltose-foreground-cont-control-native-final.log"
+    }
+  },
+  "intermediateFailures": [
+    {
+      "log": "/tmp/maltose-foreground-cont-native-focused.log",
+      "cases": 4,
+      "failedCases": 1,
+      "failedAssertions": 2,
+      "unexpected": 1,
+      "cause": "Known missing read raised FileNotFoundError and aborted foreground generation; fixed by returning a known failed read receipt to TaskBrain without read proof or new permission."
+    },
+    {
+      "log": "/tmp/maltose-foreground-cont-recovery-native.log",
+      "cause": "Async call in synchronous XCTest autoclosure; awaited response before assertions."
+    }
+  ],
+  "staticChecks": {
+    "pythonASTFiles": 225,
+    "verificationJSON": true,
+    "localMarkdownLinks": true,
+    "gitDiffCheck": true
+  },
+  "formalBuild": "15",
+  "formalExecutableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+  "trialBuild": "17",
+  "trialExecutableSHA256": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+  "newPackageCreated": false,
+  "newCommitCreated": false,
+  "humanMicrophoneOrListeningAcceptance": false,
+  "remaining": [
+    "Independent answer then authorized task resumption",
+    "Unknown running execution reconciliation and explicit retry UI",
+    "Scheduled task provenance",
+    "Paused Codex recap speech",
+    "All direct panel mutation grants",
+    "Remaining autonomous panels and multi-panel composition",
+    "Speech preferences UI",
+    "Controlled user feedback for context capacity errors",
+    "Human voice/gesture acceptance",
+    "Final deployment"
+  ],
+  "fullGoalComplete": false
+}

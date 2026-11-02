@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "sourceCapability": {
+    "visualPlanningVersion": 1,
+    "defaultEnabled": true
+  },
+  "sourceSnapshot": {
+    "files": 285,
+    "sha256": "05a2e80887faa2b168e39eca8faade1b4c67d0e5aaf372289ae087d2b7f1ffeb"
+  },
+  "pythonFull": {
+    "passed": 525,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 43.659,
+    "log": "/tmp/maltose-visual-full-python-final.log"
+  },
+  "nativeFull": {
+    "passed": 238,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 568.03,
+    "log": "/tmp/maltose-visual-canonical-full-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true,
+    "docker": true
+  },
+  "acceptance": {
+    "passedFinalCases": [
+      "testConfiguredMainAutonomouslyChartsProvidedHalfYearSurveyWithSeparateMethodsAndSources",
+      "testConfiguredPresentationPlannerBuildsNativeChartFromExactSourcesWhenMainOmitsChart",
+      "testConfiguredPresentationPlannerHonorsExplicitTextOnlyWithoutCreatingChart",
+      "testVisualPlanningSIGKILLBeforeDecisionAfterSealAndAfterUIWriteNeverReexecutesOriginalWork",
+      "testNewInputBeforeVisualChoiceKeepsOriginalCanonicalFactsWithoutCallingPresentationModelOrPublishingOldView",
+      "testForegroundAndBackgroundReceiptsCoexistWithoutStealingWorkerScopeOrRepeatingLostAssessment"
+    ],
+    "originalAnswerSavedBeforePlanning": true,
+    "modelSelectsOnlyExactFieldReferences": true,
+    "sourceValuesAndAllGroupsBuiltByCode": true,
+    "missingValuesNotZeroOrInvented": true,
+    "originalHumanAndCompletePublicFileTablesOnly": true,
+    "modelProseSearchMemoryKDBExcluded": true,
+    "immutableContextAndDecision": true,
+    "noSyntheticWorkerNotificationOrMemoryOwner": true,
+    "newInputKeepsOriginalCanonicalFacts": true,
+    "explicitTextOnlyHonored": true
+  },
+  "actualCrashRecovery": {
+    "duringChoice": true,
+    "afterDecisionBeforeNativePrepare": true,
+    "afterUIBeforeACK": true,
+    "nativeStoreRuntimeAndPanelsRebuilt": true,
+    "originalWorkReexecuted": false,
+    "sealedChoiceReexecuted": false,
+    "unsealedToolFreeChoiceOnlyMayRepeat": true,
+    "oldSpeechReplayed": false,
+    "originalProducerRetained": true
+  },
+  "focused": {
+    "python": {
+      "passed": 10,
+      "log": "/tmp/maltose-visual-canonical-python.log"
+    },
+    "native": {
+      "passed": 6,
+      "seconds": 68.138,
+      "log": "/tmp/maltose-visual-canonical-native.log"
+    }
+  },
+  "intermediateFailures": [
+    {
+      "log": "/tmp/maltose-visual-python-focused.log",
+      "failures": 5,
+      "errors": 1,
+      "cause": "Fixture model.complete was a bool, not a callable; production correctly declined unsafe presentation"
+    },
+    {
+      "log": "/tmp/maltose-visual-recovery-native.log",
+      "failedCases": 1,
+      "failedAssertions": 7,
+      "cause": "Fixture missing time import and used publication ID instead of actual message ID"
+    },
+    {
+      "log": "/tmp/maltose-visual-text-only-native.log",
+      "failedCases": 1,
+      "failedAssertions": 2,
+      "unexpected": 1,
+      "cause": "Test wrongly required a document although text-only chat is supported"
+    },
+    {
+      "log": "/tmp/maltose-visual-full-native.log",
+      "total": 237,
+      "passed": 236,
+      "failedCases": 1,
+      "failedAssertions": 2,
+      "seconds": 561.914,
+      "cause": "Transient outcomes.count==1 startup barrier missed Main plus assessment; replaced with durable source and delivery facts"
+    }
+  ],
+  "stableStartupEvidence": {
+    "assessments": 1,
+    "beforeWorkerRelease": true,
+    "mainReports": 1,
+    "outcomes": 2
+  },
+  "staticChecks": {
+    "pythonASTFiles": 227,
+    "sourceSnapshotUnchangedDuringFinalFull": true,
+    "verificationJSON": true,
+    "localMarkdownLinks": true,
+    "gitDiffCheck": true
+  },
+  "formalBuild": "15",
+  "formalExecutableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+  "trialBuild": "17",
+  "trialExecutableSHA256": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+  "newPackageCreated": false,
+  "newCommitCreated": false,
+  "humanMicrophoneOrListeningAcceptance": false,
+  "remaining": [
+    "Foreground publication or review superseded during an independent answer",
+    "Undelivered worker results across an independent answer",
+    "Unknown execution reconciliation and explicit retry UI",
+    "Scheduled task provenance",
+    "Paused Codex recap speech",
+    "All agent panel mutation grants",
+    "Other source shapes, engines and autonomous panels",
+    "Speech preferences UI and capacity feedback",
+    "Human voice and gesture acceptance",
+    "Final packaging and deployment"
+  ],
+  "fullGoalComplete": false
+}

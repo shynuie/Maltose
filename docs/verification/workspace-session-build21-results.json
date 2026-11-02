@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "status": "ready",
+  "build": "21",
+  "version": "0.7.0",
+  "trialApp": "dist/trials/build21/Maltose.app",
+  "sourceSnapshot": {
+    "manifest": "/tmp/maltose-build21-source.json",
+    "files": 306,
+    "sha256": "33cf1bffcab418c027e04c2dce583ed618d6552095efbfd2a530545a4f01926d",
+    "pythonAST": 234
+  },
+  "focusedNative": {
+    "tests": 29,
+    "passedCases": 29,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 41.594,
+    "log": "/tmp/maltose-workspace-session-focused-v4.log"
+  },
+  "pythonBaseline": {
+    "passed": 577,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 42.625,
+    "log": "/tmp/maltose-work-panels-python-full.log",
+    "docker": true,
+    "rerun": false,
+    "sourceUnchanged": true,
+    "previousBuild": "20"
+  },
+  "scope": [
+    "First launch opens identity, chat and lower-right work journal; subsequent launches restore the last open panel set and workspace layout",
+    "Identity and chat cannot be closed through shared UI or Agent operations; no new authorization prompts",
+    "Unfinished-task startup snapshots and task-state transitions open a singleton progress panel without stealing focus",
+    "Progress and activity content scroll independently in global grid, focused and sidebar-primary modes; Control-wheel grid zoom remains"
+  ],
+  "limitations": [
+    "Generic automatic serialization of all panel content is outside this change; delivered document/chart content continues to use its existing journal",
+    "Activity entries remain current-launch only; task progress uses the existing task store",
+    "Human voice/gesture acceptance and formal App switch remain pending"
+  ],
+  "earlierAttempts": [
+    "Initial new test default argument used the wrong Swift array type reference; fixed before test execution.",
+    "The first placement attempt put the journal in the lower-left cell because both chat and identity span two rows; now uses an initial movable lower-right grid position."
+  ],
+  "formalDeployed": false,
+  "committed": false,
+  "previousBuildsUnchanged": {
+    "15": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+    "17": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+    "18": "89b52da65224411e83555c5ccef76d2b0315cc3be3857c72f4db15048e82dbdf",
+    "19": "9c000b96c227c9cbfad2c2ee1904c773427e851bfbd3af754425e386c4839553",
+    "20": "f7d044c551cc6cb22af5bba47e8ddf774df4b93ed07a22cbe965a8a7a0aceda5"
+  },
+  "nativeFull": {
+    "tests": 292,
+    "passedCases": 292,
+    "failures": 0,
+    "unexpectedFailures": 0,
+    "skipped": 0,
+    "seconds": 923.428,
+    "log": "/tmp/maltose-workspace-session-native-full.log",
+    "gui": true,
+    "configuredMain": true,
+    "authenticatedCodex": true,
+    "docker": true
+  },
+  "sourcesUnchangedDuringFullSuite": true,
+  "previousResearchAssessmentCase": {
+    "status": "passed_in_full_suite",
+    "seconds": 11.706,
+    "rerun": false
+  },
+  "releaseBuildSeconds": 59.65,
+  "packageVerification": {
+    "version": "0.7.0",
+    "build": "21",
+    "bundleFiles": 156,
+    "runtimeFiles": 140,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "uiSmoke": {
+    "uiOnlyLaunch": "passed",
+    "applicationRunning": true,
+    "windowCount": 2,
+    "nativeFullscreen": false,
+    "agentStarted": false,
+    "microphoneUsed": false,
+    "normalExit": true,
+    "initialPanelKinds": [
+      "agentActivity",
+      "agentIdentity",
+      "conversationHistory"
+    ],
+    "progressPanelInitiallyClosed": true
+  },
+  "executableSHA256": "32f774b2f09e24c2930868b66452277ba95122fac3fb10e5b5b3329b3e4beaf2",
+  "packageLog": "/tmp/maltose-build21-package.log"
+}

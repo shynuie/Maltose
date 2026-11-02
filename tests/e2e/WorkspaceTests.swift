@@ -1,0 +1,763 @@
+import XCTest
+import AppKit
+@testable import MaltoseApp
+
+final class WorkspaceLayoutTests: XCTestCase {
+    func testClosingOrMovingPrimaryKeepsRemainingPanelsUsable() {
+        var state = WorkspaceLayoutState()
+        state.reconcile(["a", "b", "c"])
+        state.toggle("b")
+        XCTAssertEqual(state.mode, .focused)
+        state.reconcile(["a", "c"])
+        XCTAssertEqual(state.primaryID, "a")
+        XCTAssertEqual(state.mode, .focused)
+        state.toggle("a")
+        XCTAssertEqual(state.mode, .grid)
+        state.reconcile([])
+        XCTAssertNil(state.primaryID)
+        XCTAssertEqual(state.mode, .grid)
+    }
+
+    func testRefreshDoesNotDiscardUserOrderOrSwitchTheSelectedPanel() {
+        var state = WorkspaceLayoutState(panelIDs: ["c", "a"], primaryID: "c", mode: .sidebar)
+        state.reconcile(["a", "b", "c"])
+        XCTAssertEqual(state.panelIDs, ["c", "a", "b"])
+        XCTAssertEqual(state.primaryID, "c")
+        state.select("b")
+        XCTAssertEqual(state.mode, .sidebar)
+        state.toggle("b")
+        XCTAssertEqual(state.mode, .grid)
+        state.toggle("missing")
+        XCTAssertEqual(state.mode, .grid)
+    }
+
+    func testPanelHighlightSupportsCommandMultiSelectAndPrunesMovedItems() {
+        var state = WorkspaceLayoutState()
+        state.reconcile(["a", "b", "c"])
+        state.highlight("b", extending: false)
+        XCTAssertEqual(state.selectedIDs, ["b"])
+        state.highlight("a", extending: true)
+        XCTAssertEqual(state.selectedIDs, ["a", "b"])
+        state.highlight("a", extending: true)
+        XCTAssertEqual(state.selectedIDs, ["b"])
+        state.reconcile(["b", "c"])
+        XCTAssertEqual(state.selectedIDs, ["b"])
+    }
+
+    func testMarqueeSelectionUsesPanelIntersectionAndCommandAddsToSelection() {
+        var state = WorkspaceLayoutState(panelIDs: ["a", "b", "c"], primaryID: "c", selectedIDs: ["c"])
+        let frames = [
+            "a": CGRect(x: 0, y: 0, width: 40, height: 40),
+            "b": CGRect(x: 50, y: 0, width: 40, height: 40),
+            "c": CGRect(x: 100, y: 0, width: 40, height: 40)
+        ]
+
+        state.selectPanels(intersecting: CGRect(x: 35, y: 10, width: 25, height: 20), frames: frames)
+        XCTAssertEqual(state.selectedIDs, ["a", "b"])
+        XCTAssertEqual(state.primaryID, "a")
+
+        state.selectPanels(intersecting: CGRect(x: 95, y: 10, width: 20, height: 20), frames: frames, extending: true)
+        XCTAssertEqual(state.selectedIDs, ["a", "b", "c"])
+    }
+
+    func testClickingWorkspaceSpaceClearsPanelSelectionWithoutChangingPrimaryMode() {
+        var state = WorkspaceLayoutState(panelIDs: ["a", "b", "c"], primaryID: "b",
+                                         selectedIDs: ["a", "b"], mode: .focused)
+        state.clearSelection()
+        XCTAssertTrue(state.selectedIDs.isEmpty)
+        XCTAssertEqual(state.primaryID, "b")
+        XCTAssertEqual(state.mode, .focused)
+    }
+
+    func testMovingAlongTheEdgeDoesNotAccumulateDwellTime() {
+        var dwell = SidebarDwell()
+        dwell.update(point: CGPoint(x: 8, y: 100), eligible: true, now: 0)
+        XCTAssertFalse(dwell.isReady(at: 0.99))
+        dwell.update(point: CGPoint(x: 8, y: 101), eligible: true, now: 0.9)
+        XCTAssertFalse(dwell.isReady(at: 1.1))
+        XCTAssertTrue(dwell.isReady(at: 1.91))
+        dwell.update(point: CGPoint(x: 100, y: 101), eligible: false, now: 2)
+        XCTAssertFalse(dwell.isReady(at: 10))
+        dwell.update(point: CGPoint(x: 8, y: 100), eligible: true, now: 10)
+        dwell.cancel()
+        XCTAssertFalse(dwell.isReady(at: 12))
+    }
+
+    func testGridFitsScreenShapesWithoutOverlapAndKeepsEqualSizes() {
+        for size in [CGSize(width: 1440, height: 900), CGSize(width: 900, height: 1440), CGSize(width: 3440, height: 1440)] {
+            let bounds = CGRect(origin: .zero, size: size)
+            for count in 1...32 {
+                let frames = WorkspaceGeometry.legacyGrid(count: count, in: bounds)
+                XCTAssertEqual(frames.count, count)
+                for (index, frame) in frames.enumerated() {
+                    XCTAssertTrue(bounds.contains(frame), "\(size), count \(count)")
+                    XCTAssertEqual(frame.size, frames[0].size)
+                    for other in frames.dropFirst(index + 1) { XCTAssertFalse(frame.intersects(other)) }
+                }
+            }
+        }
+    }
+
+    func testThumbnailFitsTheWholeContentWithoutChangingItsAspectRatio() {
+        let bounds = CGRect(x: 12, y: 12, width: 240, height: 140)
+        for size in [CGSize(width: 1600, height: 900), CGSize(width: 600, height: 1200)] {
+            let rect = WorkspaceGeometry.fittedPreview(content: size, in: bounds)
+            XCTAssertTrue(bounds.contains(rect))
+            XCTAssertEqual(rect.width / rect.height, size.width / size.height, accuracy: 0.0001)
+            XCTAssertEqual(rect.midX, bounds.midX)
+            XCTAssertEqual(rect.midY, bounds.midY)
+        }
+    }
+
+    func testGlobalGridUsesSixteenNinePanelsAndTenColumnBounds() {
+        for viewport in [CGSize(width: 1440, height: 700), CGSize(width: 900, height: 1200), CGSize(width: 3400, height: 900)] {
+            let small = WorkspaceGeometry.globalGrid(count: 31, viewport: viewport, zoom: 0)
+            let large = WorkspaceGeometry.globalGrid(count: 31, viewport: viewport, zoom: 1)
+            XCTAssertEqual(small.columns, 10)
+            XCTAssertEqual(large.columns, 2)
+            for grid in [small, large] {
+                XCTAssertEqual(grid.frames.count, 31)
+                XCTAssertEqual(grid.panelSize.width / grid.panelSize.height, 16.0 / 9.0, accuracy: 0.0001)
+                XCTAssertEqual(grid.rows, Int(ceil(31.0 / Double(grid.columns))))
+                for (index, frame) in grid.frames.enumerated() {
+                    XCTAssertGreaterThan(frame.width, 0)
+                    XCTAssertGreaterThan(frame.height, 0)
+                    XCTAssertEqual(frame.size, grid.panelSize)
+                    if index >= grid.columns {
+                        XCTAssertEqual(frame.minX, grid.frames[index % grid.columns].minX, accuracy: 0.001)
+                    }
+                    for other in grid.frames.dropFirst(index + 1) { XCTAssertFalse(frame.intersects(other)) }
+                }
+                XCTAssertGreaterThanOrEqual(grid.documentSize.height, viewport.height)
+                XCTAssertGreaterThanOrEqual(grid.documentSize.height, grid.frames.last!.maxY)
+            }
+        }
+    }
+
+    func testGlobalGridSupportsTwoRowIdentityPanelWithoutResizingOtherPanels() {
+        let grid = WorkspaceGeometry.globalGrid(count: 3, viewport: CGSize(width: 1400, height: 900),
+                                                zoom: 1, rowSpans: [2, 1, 1])
+
+        XCTAssertEqual(grid.columns, 2)
+        XCTAssertEqual(grid.rows, 2)
+        XCTAssertEqual(grid.frames[0].minX, grid.frames[1].minX - grid.panelSize.width - 16, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[0].height, grid.panelSize.height * 2 + 16, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[1].height, grid.panelSize.height, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[2].minY, grid.frames[1].minY + grid.panelSize.height + 16, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[2].minX, grid.frames[1].minX, accuracy: 0.01)
+    }
+
+    func testChatPanelUsesIdentitySizedGlobalFootprint() {
+        let identity = WorkspacePanel.samples.first { $0.kind == .agentIdentity }
+        let chat = WorkspacePanel.samples.first { $0.kind == .conversationHistory }
+
+        XCTAssertEqual(identity?.globalGridRowSpan, 2)
+        XCTAssertEqual(chat?.globalGridRowSpan, identity?.globalGridRowSpan)
+    }
+
+    func testPinnedIdentityStaysPutWhileRegularPanelsFlowAroundItsCells() {
+        var state = WorkspaceLayoutState(panelIDs: ["agent-identity", "one", "two", "three"])
+        XCTAssertTrue(state.repositionPanels(["three"], to: WorkspaceGridPosition(row: 0, column: 0), columns: 3))
+        XCTAssertEqual(state.panelIDs, ["agent-identity", "three", "one", "two"])
+        XCTAssertEqual(state.identityPosition, WorkspaceGridPosition(row: 0, column: 0))
+
+        let zoom = WorkspaceGeometry.initialGlobalZoom(viewportWidth: 1200, initialColumns: 3)
+        let grid = WorkspaceGeometry.globalGrid(count: state.panelIDs.count,
+                                                viewport: CGSize(width: 1200, height: 900),
+                                                zoom: zoom,
+                                                rowSpans: [2, 1, 1, 1],
+                                                pinnedPositions: [0: state.identityPosition])
+        XCTAssertEqual(grid.frames[0].minX, grid.frames[1].minX - grid.panelSize.width - WorkspaceGeometry.gap, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[0].minY, grid.frames[1].minY, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[2].minY, grid.frames[1].minY, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[3].minY, grid.frames[2].minY + grid.panelSize.height + WorkspaceGeometry.gap, accuracy: 0.01)
+    }
+
+    func testIdentityPanelCanBeMovedManuallyAndRegularPanelsReflowAroundIt() {
+        var state = WorkspaceLayoutState(panelIDs: ["agent-identity", "one", "two"])
+        XCTAssertTrue(state.repositionPanels(["agent-identity"], to: WorkspaceGridPosition(row: 1, column: 1), columns: 3))
+        XCTAssertEqual(state.identityPosition, WorkspaceGridPosition(row: 1, column: 1))
+
+        let zoom = WorkspaceGeometry.initialGlobalZoom(viewportWidth: 1200, initialColumns: 3)
+        let grid = WorkspaceGeometry.globalGrid(count: state.panelIDs.count,
+                                                viewport: CGSize(width: 1200, height: 900),
+                                                zoom: zoom,
+                                                rowSpans: [2, 1, 1],
+                                                pinnedPositions: [0: state.identityPosition])
+        XCTAssertGreaterThan(grid.frames[0].minY, grid.frames[1].minY)
+        XCTAssertEqual(grid.frames[1].minY, grid.frames[2].minY, accuracy: 0.01)
+        XCTAssertEqual(grid.frames[0].height, grid.panelSize.height * 2 + WorkspaceGeometry.gap, accuracy: 0.01)
+    }
+
+    func testInitialGlobalColumnsFollowWindowAspectRatio() {
+        let wideWindow = CGSize(width: 1920, height: 1080)
+        let tallWindow = CGSize(width: 1080, height: 1920)
+        let wideColumns = WorkspaceGeometry.defaultGlobalColumns(forWindowAspectRatio: wideWindow.width / wideWindow.height)
+        let tallColumns = WorkspaceGeometry.defaultGlobalColumns(forWindowAspectRatio: tallWindow.width / tallWindow.height)
+        XCTAssertEqual(wideColumns, 4)
+        XCTAssertEqual(tallColumns, 2)
+
+        let wideViewport = wideWindow
+        let tallViewport = tallWindow
+        let wideGrid = WorkspaceGeometry.globalGrid(count: 20, viewport: wideViewport,
+                                                    zoom: WorkspaceGeometry.initialGlobalZoom(viewportWidth: wideViewport.width, initialColumns: wideColumns))
+        let tallGrid = WorkspaceGeometry.globalGrid(count: 20, viewport: tallViewport,
+                                                    zoom: WorkspaceGeometry.initialGlobalZoom(viewportWidth: tallViewport.width, initialColumns: tallColumns))
+        XCTAssertEqual(wideGrid.columns, 4)
+        XCTAssertEqual(tallGrid.columns, 2)
+    }
+
+    func testGlobalGridHandlesEmptyAndPartialRowsWithoutStretching() {
+        let viewport = CGSize(width: 1600, height: 800)
+        for count in [0, 1, 2, 9, 10, 11, 30] {
+            let grid = WorkspaceGeometry.globalGrid(count: count, viewport: viewport, zoom: 0.42)
+            XCTAssertEqual(grid.frames.count, count)
+            XCTAssertTrue((2...10).contains(grid.columns))
+            if count > 0 {
+                XCTAssertTrue(grid.frames.allSatisfy { abs($0.width - grid.panelSize.width) < 0.001 && abs($0.height - grid.panelSize.height) < 0.001 })
+                XCTAssertGreaterThanOrEqual(grid.documentSize.height, grid.frames.last!.maxY)
+            } else {
+                XCTAssertEqual(grid.rows, 0)
+            }
+        }
+        let narrowGrid = WorkspaceGeometry.globalGrid(count: 10, viewport: CGSize(width: 100, height: 500), zoom: 0)
+        let inset = WorkspaceGeometry.globalGlassInset(for: narrowGrid.panelSize)
+        XCTAssertGreaterThan(narrowGrid.panelSize.width - 2 * inset, 0)
+        XCTAssertGreaterThan(narrowGrid.panelSize.height - 2 * inset, 0)
+    }
+
+    func testGlobalZoomAndScrollClampAtBothEdges() {
+        XCTAssertEqual(WorkspaceGeometry.zoomed(0.5, deltaY: 1000), 1)
+        XCTAssertEqual(WorkspaceGeometry.zoomed(0.5, deltaY: -1000), 0)
+        XCTAssertGreaterThan(WorkspaceGeometry.zoomed(0.5, deltaY: 1), 0.5)
+        XCTAssertLessThan(WorkspaceGeometry.zoomed(0.5, deltaY: -1), 0.5)
+        let grid = WorkspaceGeometry.globalGrid(count: 40, viewport: CGSize(width: 1400, height: 600), zoom: 0.5)
+        XCTAssertEqual(WorkspaceGeometry.clampedScrollOffset(-50, grid: grid, viewportHeight: 600), 0)
+        XCTAssertEqual(WorkspaceGeometry.clampedScrollOffset(100_000, grid: grid, viewportHeight: 600), grid.documentSize.height - 600)
+    }
+
+    func testZoomAnchorRestoresTheSamePanelPositionInTheViewport() {
+        let grid = WorkspaceGeometry.globalGrid(count: 40, viewport: CGSize(width: 1400, height: 600), zoom: 0.5)
+        let resized = CGRect(x: 300, y: 920, width: 480, height: 270)
+        let offset = WorkspaceGeometry.anchoredScrollOffset(frame: resized, relativeY: 0.4, viewportY: 260, grid: grid, viewportHeight: 600)
+        XCTAssertEqual(resized.minY + resized.height * 0.4 - offset, 260, accuracy: 0.001)
+        XCTAssertEqual(WorkspaceGeometry.anchoredScrollOffset(frame: resized, relativeY: 0.4, viewportY: 2_000, grid: grid, viewportHeight: 600), 0)
+    }
+
+    func testGlobalScrollRoutingConsumesOnlyGridEvents() {
+        XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: false, controlPressed: false, deltaY: -4), .scroll(-4))
+        XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: false, controlPressed: true, deltaY: 4), .zoom(4))
+        XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: false,
+                                                    isInsideScrollablePanel: true, controlPressed: false, deltaY: -4), .passThrough)
+        XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: false,
+                                                    isInsideScrollablePanel: true, controlPressed: true, deltaY: 4), .zoom(4))
+        XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: false, isCovered: false, controlPressed: true, deltaY: 4), .passThrough)
+        XCTAssertEqual(WorkspaceScrollAction.route(mode: .grid, isInsideGrid: true, isCovered: true, controlPressed: false, deltaY: 4), .passThrough)
+        XCTAssertEqual(WorkspaceScrollAction.route(mode: .focused, isInsideGrid: true, isCovered: false, controlPressed: true, deltaY: 4), .passThrough)
+    }
+
+    func testConversationHistoryTextSizingUsesFortyAndTwentyCharacterTargets() {
+        let focused = ConversationHistoryLayout(width: 1400, focused: true)
+        XCTAssertTrue(focused.showsText)
+        XCTAssertEqual(focused.fontSize, 16)
+        XCTAssertEqual(focused.contentWidth, 640)
+
+        let globalLarge = ConversationHistoryLayout(width: 800, focused: false)
+        XCTAssertTrue(globalLarge.showsText)
+        XCTAssertEqual(globalLarge.fontSize, 18)
+        XCTAssertEqual(globalLarge.contentWidth, 800)
+
+        let globalCompact = ConversationHistoryLayout(width: 280, focused: false)
+        XCTAssertTrue(globalCompact.showsText)
+        XCTAssertEqual(globalCompact.fontSize, 14)
+        XCTAssertEqual(globalCompact.contentWidth, 280)
+
+        let globalWide = ConversationHistoryLayout(width: 1_200, focused: false)
+        XCTAssertEqual(globalWide.fontSize, ConversationHistoryLayout.maximumGlobalFontSize)
+        XCTAssertEqual(globalWide.contentWidth, 1_200)
+
+        XCTAssertFalse(ConversationHistoryLayout(width: 199, focused: false).showsText)
+        XCTAssertTrue(ConversationHistoryLayout(width: 199, focused: true).showsText)
+    }
+
+    func testMarkdownDocumentKeepsProportionalImagesWhenGlobalTextIsHidden() {
+        let focused = MarkdownDocumentLayout(width: 1400, focused: true)
+        XCTAssertTrue(focused.showsText)
+        XCTAssertEqual(focused.fontSize, 16)
+        XCTAssertEqual(focused.textColumnWidth, 640)
+        XCTAssertEqual(focused.imageWidth, 640)
+
+        let globalLarge = MarkdownDocumentLayout(width: 800, focused: false)
+        XCTAssertTrue(globalLarge.showsText)
+        XCTAssertEqual(globalLarge.fontSize, 18)
+        XCTAssertEqual(globalLarge.textColumnWidth, 800)
+        XCTAssertEqual(globalLarge.imageWidth, 800)
+
+        let globalTooNarrow = MarkdownDocumentLayout(width: 199, focused: false)
+        XCTAssertFalse(globalTooNarrow.showsText)
+        XCTAssertEqual(globalTooNarrow.imageWidth, 199)
+
+        let globalCompact = MarkdownDocumentLayout(width: 280, focused: false)
+        XCTAssertEqual(globalCompact.textColumnWidth, 280)
+        XCTAssertEqual(globalCompact.imageWidth, globalCompact.textColumnWidth)
+
+        let globalWide = MarkdownDocumentLayout(width: 1_200, focused: false)
+        XCTAssertEqual(globalWide.fontSize, MarkdownDocumentLayout.maximumGlobalFontSize)
+        XCTAssertEqual(globalWide.textColumnWidth, 1_200)
+        XCTAssertEqual(globalWide.imageWidth, globalWide.textColumnWidth)
+    }
+
+    func testMarkdownParserRecognizesCoreDocumentBlocks() {
+        let blocks = MarkdownDocumentParser.parse("""
+        # Title
+
+        Text with **emphasis**.
+
+        ![Landscape](sample-landscape.svg)
+
+        | A | B |
+        | --- | --- |
+        | 1 | 2 |
+        | 3 | 4 |
+
+        ```swift
+        let value = 1
+        ```
+        """)
+
+        XCTAssertEqual(blocks.count, 5)
+        guard case .heading = blocks[0].content,
+              case .paragraph = blocks[1].content,
+              case .image = blocks[2].content,
+              case .table = blocks[3].content,
+              case let .code(language, _) = blocks[4].content else {
+            return XCTFail("Expected heading, paragraph, image, table, and code blocks")
+        }
+        XCTAssertEqual(language, "swift")
+        if case let .table(rows) = blocks[3].content {
+            XCTAssertEqual(rows.count, 3, "The parsed table should retain its header and both data rows")
+        }
+    }
+
+    func testCSVLineChartParserKeepsSeriesAndRowNotesIncludingQuotedCommas() throws {
+        let data = try CSVLineChartParser.parse(#"""
+        time,latency,throughput,note
+        09:00,12.5,34,"warmup, then steady"
+        09:10,15.0,,"note with ""quotes"""
+        """#)
+
+        XCTAssertEqual(data.xTitle, "time")
+        XCTAssertEqual(data.seriesNames, ["latency", "throughput"])
+        XCTAssertEqual(data.rows.count, 2)
+        XCTAssertEqual(data.rows[0].xLabel, "09:00")
+        XCTAssertEqual(data.rows[0].values[0], 12.5)
+        XCTAssertEqual(data.rows[0].values[1], 34)
+        XCTAssertEqual(data.rows[0].note, "warmup, then steady")
+        XCTAssertEqual(data.rows[1].values[1], nil)
+        XCTAssertEqual(data.rows[1].note, "note with \"quotes\"")
+    }
+
+    func testOnlyIdentityAndChatPanelKindsAreSingletons() {
+        XCTAssertFalse(WorkspacePanel.Kind.agentIdentity.allowsMultipleInstances)
+        XCTAssertFalse(WorkspacePanel.Kind.conversationHistory.allowsMultipleInstances)
+        XCTAssertFalse(WorkspacePanel.Kind.agentCoreTest.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.canvas.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.notes.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.chart.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.table.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.document.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.imageGallery.allowsMultipleInstances)
+        XCTAssertTrue(WorkspacePanel.Kind.browser.allowsMultipleInstances)
+    }
+
+    @MainActor func testImageGalleryStartsWithEmptyPreviousSlotAndSixSamples() {
+        let model = ImageGalleryModel()
+        XCTAssertEqual(model.images.count, 6)
+        XCTAssertEqual(model.selectedIndex, 0)
+        XCTAssertNil(model.previousIndex)
+        XCTAssertEqual(model.nextIndex, 1)
+
+        model.configure(mode: .focused)
+        model.selectImage(at: 2)
+        XCTAssertEqual(model.previousIndex, 1)
+        XCTAssertEqual(model.nextIndex, 3)
+        model.expandImage(at: 1)
+        XCTAssertEqual(model.selectedIndex, 1)
+        XCTAssertEqual(model.expandedIndex, 1)
+        model.beginMagnification()
+        model.updateMagnification(2)
+        model.beginPan()
+        model.updatePan(CGSize(width: 500, height: 500))
+        model.endPan(viewport: CGSize(width: 160, height: 90), content: CGSize(width: 160, height: 90))
+        XCTAssertEqual(model.panOffset.width, 80, accuracy: 0.01)
+        XCTAssertEqual(model.panOffset.height, 45, accuracy: 0.01)
+        model.collapse()
+        model.selectImage(at: 5)
+        XCTAssertNil(model.nextIndex)
+    }
+
+    @MainActor func testFlowchartSupportsEditingConnectingMovingAndDeletingNodes() {
+        let model = FlowchartCanvasModel()
+        XCTAssertEqual(model.nodes.count, 6)
+        XCTAssertEqual(model.connections.count, 6)
+
+        let first = model.addNode(.process, at: FlowchartPoint(x: 0, y: 220))
+        let second = model.addNode(.decision, at: FlowchartPoint(x: 230, y: 220))
+        model.updateText("讀取輸入", for: first)
+        XCTAssertEqual(model.nodes.first(where: { $0.id == first })?.text, "讀取輸入")
+        XCTAssertTrue(model.connect(from: first, to: second, label: "有效"))
+        XCTAssertFalse(model.connect(from: first, to: second), "Duplicate edges should be ignored")
+        XCTAssertFalse(model.connect(from: first, to: first), "Self-connections should be ignored")
+
+        let originalPosition = model.nodes.first(where: { $0.id == first })!.position
+        model.selectNode(first)
+        model.selectNode(second, extending: true)
+        XCTAssertEqual(model.selectedNodeIDs, [first, second])
+        model.moveNodes(model.selectedNodeIDs, by: CGSize(width: 20, height: -10))
+        XCTAssertEqual(model.nodes.first(where: { $0.id == first })?.position,
+                       FlowchartPoint(x: originalPosition.x + 20, y: originalPosition.y - 10))
+
+        model.deleteSelection()
+        XCTAssertFalse(model.nodes.contains(where: { $0.id == first || $0.id == second }))
+        XCTAssertFalse(model.connections.contains(where: { $0.fromNodeID == first || $0.toNodeID == first || $0.fromNodeID == second || $0.toNodeID == second }))
+        XCTAssertTrue(model.selectedNodeIDs.isEmpty)
+    }
+
+    @MainActor func testFlowchartViewportIsBoundedAndResettable() {
+        let model = FlowchartCanvasModel(document: FlowchartDocument(nodes: [], connections: []))
+        XCTAssertTrue(model.nodes.isEmpty)
+        XCTAssertTrue(model.connections.isEmpty)
+        model.setZoom(10)
+        XCTAssertEqual(model.zoom, 2.5)
+        model.setZoom(0)
+        XCTAssertEqual(model.zoom, 0.35)
+        model.pan(by: CGSize(width: 45, height: -12))
+        XCTAssertEqual(model.panOffset, CGSize(width: 45, height: -12))
+        model.resetViewport()
+        XCTAssertEqual(model.zoom, 0.72)
+        XCTAssertEqual(model.panOffset, .zero)
+    }
+
+    @MainActor func testFlowchartFilesRoundTripAndTrackUnsavedChanges() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("maltose-flowchart-\(UUID().uuidString).maltoseflow.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let model = FlowchartCanvasModel()
+        XCTAssertTrue(model.isDirty, "The built-in example should be offered for saving")
+        let firstNode = try XCTUnwrap(model.nodes.first)
+        model.updateText("更新後的流程起點", for: firstNode.id)
+        try model.save(to: url)
+        XCTAssertFalse(model.isDirty)
+
+        let loaded = FlowchartCanvasModel(document: FlowchartDocument(nodes: [], connections: []))
+        try loaded.load(from: url)
+        XCTAssertEqual(loaded.documentTitle, model.documentTitle)
+        XCTAssertEqual(loaded.document, model.document)
+        XCTAssertFalse(loaded.isDirty)
+
+        loaded.updateText("未儲存修改", for: firstNode.id)
+        XCTAssertTrue(loaded.isDirty)
+        loaded.newDocument()
+        XCTAssertTrue(loaded.nodes.isEmpty)
+        XCTAssertNil(loaded.fileURL)
+        XCTAssertFalse(loaded.isDirty)
+    }
+
+    @MainActor func testFlowchartFileRejectsUnrecognizedJSON() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("maltose-flowchart-invalid-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("{}".utf8).write(to: url)
+        let model = FlowchartCanvasModel(document: FlowchartDocument(nodes: [], connections: []))
+        XCTAssertThrowsError(try model.load(from: url))
+        XCTAssertTrue(model.nodes.isEmpty, "A failed open should leave the current document untouched")
+    }
+
+    func testUserViewSnapshotPreservesStructuredPanelDetails() throws {
+        let snapshot = UserViewSnapshot(schemaVersion: 1,
+                                        capturedAt: "2026-11-01T00:00:00Z",
+                                        activeScreenID: "screen-1",
+                                        workspaces: [UserWorkspaceView(screenID: "screen-1",
+                                                                       screenName: "內建顯示器",
+                                                                       mode: "面板全屏",
+                                                                       isActive: true,
+                                                                       primaryPanelID: "chat",
+                                                                       selectedPanelIDs: ["chat"],
+                                                                       visiblePanelIDs: ["chat"],
+                                                                       offscreenPanelIDs: [],
+                                                                       overlays: [],
+                                                                       globalGrid: [:],
+                                                                       panels: [UserPanelView(panelID: "chat",
+                                                                                              kind: "conversation",
+                                                                                              title: "聊天",
+                                                                                              presentation: "mainPanel",
+                                                                                              isSelected: true,
+                                                                                              details: ["recentMessages": .strings(["使用者：你好"]),
+                                                                                                        "textVisibleAtCurrentSize": .boolean(true),
+                                                                                                        "messageCount": .number(1)])])])
+        let data = try JSONEncoder().encode(snapshot)
+        let decoded = try JSONDecoder().decode(UserViewSnapshot.self, from: data)
+        XCTAssertEqual(decoded, snapshot)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains("recentMessages"))
+        XCTAssertTrue(json.contains("使用者：你好"))
+    }
+
+    @MainActor func testUserViewSendDisplaysCapturedSnapshotAsJSON() async {
+        let expected = UserViewSnapshot(schemaVersion: 1, capturedAt: "now", activeScreenID: nil, workspaces: [])
+        let model = UserViewTestModel { expected }
+        await model.sendAndWait()
+        XCTAssertFalse(model.isSending)
+        XCTAssertNil(model.lastError)
+        XCTAssertTrue(model.response.contains("\"schemaVersion\""))
+        XCTAssertTrue(model.response.contains("now"))
+    }
+
+    @MainActor func testImageGalleryAcceptsWebImageURLsAndRejectsUnsupportedSchemes() {
+        let model = ImageGalleryModel(images: [])
+        XCTAssertTrue(model.addRemoteImage("https://example.com/image.png"))
+        XCTAssertFalse(model.addRemoteImage("file:///tmp/image.png"))
+        XCTAssertFalse(model.addRemoteImage("not a url"))
+        XCTAssertEqual(model.images.count, 1)
+        XCTAssertEqual(model.selectedIndex, 0)
+    }
+
+    @MainActor func testBrowserAddressAcceptsWebURLsDomainsAndSearchesButRejectsOtherSchemes() throws {
+        XCTAssertEqual(BrowserPanelModel.destination(for: "https://example.com/news")?.absoluteString,
+                       "https://example.com/news")
+        XCTAssertEqual(BrowserPanelModel.destination(for: "example.com/news")?.absoluteString,
+                       "https://example.com/news")
+        let search = try XCTUnwrap(BrowserPanelModel.destination(for: "最新科技新聞"))
+        XCTAssertEqual(search.host, "duckduckgo.com")
+        XCTAssertEqual(URLComponents(url: search, resolvingAgainstBaseURL: false)?.queryItems?.first?.value,
+                       "最新科技新聞")
+        XCTAssertNil(BrowserPanelModel.destination(for: "file:///etc/passwd"))
+        XCTAssertNil(BrowserPanelModel.destination(for: ""))
+    }
+
+    func testPreviewIncludesYouTubeAndGoogleNewsBrowserPanels() {
+        let browsers = WorkspacePanel.samples.filter { $0.kind == .browser }
+        XCTAssertEqual(browsers.map(\.id), ["browser-youtube", "browser-news"])
+        XCTAssertEqual(browsers[0].initialBrowserAddress,
+                       "https://www.youtube.com/watch?v=Z2Z9V-4DMGw&list=RDGMEMhCgTQvcskbGUxqI4Sn2QYwVMZ2Z9V-4DMGw&start_radio=1")
+        XCTAssertEqual(browsers[1].initialBrowserAddress,
+                       "https://news.google.com/home?hl=zh-TW&gl=TW&ceid=TW:zh-Hant")
+    }
+
+    @MainActor func testChartAgentCanConfigureAreaFillBetweenNamedSeries() {
+        let model = CSVLineChartModel()
+        model.setHoveredPoint(rowIndex: 0, seriesIndex: 0)
+        XCTAssertEqual(model.hoveredPoint?.xLabel, "09:00")
+        XCTAssertEqual(model.hoveredPoint?.seriesName, "工作量")
+        XCTAssertEqual(model.hoveredPoint?.note, "開始整理資料")
+        model.setHoveredPoint(rowIndex: nil, seriesIndex: nil)
+        XCTAssertNil(model.hoveredPoint)
+        model.configureAgentBands([
+            CSVLineChartBandRequest(firstSeriesName: "工作量", secondSeriesName: "完成率", opacity: 1.5),
+            CSVLineChartBandRequest(firstSeriesName: "unknown", secondSeriesName: "完成率"),
+            CSVLineChartBandRequest(firstSeriesName: "工作量", secondSeriesName: "工作量")
+        ])
+
+        XCTAssertEqual(model.filledBands, [CSVLineChartBand(firstSeries: 0, secondSeries: 1): 1])
+    }
+
+    @MainActor func testSubmittingTestCommandInvokesAgentInteractionSimulation() {
+        let model = WorkspaceChromeModel()
+        var didRun = false
+        model.onTestCommand = { didRun = true }
+        model.draft = "test"
+
+        model.submitDraft()
+
+        XCTAssertTrue(didRun)
+        XCTAssertEqual(model.draft, "")
+    }
+
+    @MainActor func testConversationSessionSelectionIsLimitedToFocusedPanelAndPersistsAsCurrent() {
+        let model = ConversationHistoryModel()
+        let firstSession = model.sessions[0]
+        let secondSession = model.sessions[1]
+        XCTAssertEqual(firstSession.id, "workspace-layout")
+
+        model.selectSession(secondSession)
+        XCTAssertEqual(model.currentSessionID, firstSession.id)
+
+        model.configure(mode: .focused)
+        model.selectSession(secondSession)
+        XCTAssertEqual(model.currentSessionID, secondSession.id)
+
+        model.configure(mode: .grid)
+        XCTAssertEqual(model.currentSession?.title, secondSession.title)
+        model.selectSession(firstSession)
+        XCTAssertEqual(model.currentSessionID, secondSession.id)
+
+        model.configure(mode: .sidebar)
+        XCTAssertTrue(model.usesWideLayout)
+        XCTAssertFalse(model.allowsSessionSelection)
+    }
+
+    func testWheelNormalizationAndGestureModifierRemainStableThroughMomentum() {
+        XCTAssertEqual(WorkspaceGeometry.normalizedWheelDelta(3, precise: false), 36)
+        XCTAssertEqual(WorkspaceGeometry.normalizedWheelDelta(120, precise: true), 80)
+        XCTAssertEqual(WorkspaceGeometry.normalizedWheelDelta(-120, precise: true), -80)
+        var gesture = WorkspaceWheelGesture()
+        XCTAssertTrue(gesture.controlModifier(currentlyPressed: true, began: true, isActive: true, ended: false))
+        XCTAssertTrue(gesture.controlModifier(currentlyPressed: false, began: false, isActive: true, ended: false))
+        XCTAssertTrue(gesture.controlModifier(currentlyPressed: false, began: false, isActive: true, ended: true))
+        XCTAssertFalse(gesture.controlModifier(currentlyPressed: false, began: false, isActive: false, ended: false))
+    }
+}
+
+@MainActor final class WorkspaceNativeTests: XCTestCase {
+    private func requireDesktop() throws {
+        guard ProcessInfo.processInfo.environment["MALTOSE_GUI_TESTS"] == "1" else { throw XCTSkip("Set MALTOSE_GUI_TESTS=1 in a macOS desktop session") }
+        _ = NSApplication.shared
+        guard !NSScreen.screens.isEmpty else { throw XCTSkip("No WindowServer screen is available") }
+    }
+
+    private func textEditor(in view: NSView) -> NSTextView? {
+        if let text = view as? NSTextView { return text }
+        return view.subviews.lazy.compactMap { self.textEditor(in: $0) }.first
+    }
+
+    func testPureUIContentSurvivesLayoutAndCrossScreenMoves() async throws {
+        try requireDesktop()
+        let manager = WorkspaceWindowManager(automaticallyFullscreen: false)
+        manager.synchronize()
+        defer { manager.stop() }
+        XCTAssertEqual(manager.windows.count, NSScreen.screens.count)
+        for screen in NSScreen.screens {
+            let window = try XCTUnwrap(manager.windows[WorkspaceWindowManager.screenID(screen)])
+            XCTAssertEqual(window.frame, screen.frame)
+            XCTAssertFalse(window.isMovable)
+            XCTAssertFalse(window.isOpaque, "Windowed fallback should expose the translucent black backdrop")
+            XCTAssertTrue(window.collectionBehavior.contains(.fullScreenPrimary) || window.collectionBehavior.contains(.fullScreenAuxiliary))
+        }
+        let panel = try XCTUnwrap(manager.panels["notes"])
+        let originalContent = panel.contentView
+        panel.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(200))
+        let editor = try XCTUnwrap(textEditor(in: originalContent))
+        editor.string = "A draft that must survive layout changes"
+        editor.didChangeText()
+        let screen = try XCTUnwrap(manager.assignments["notes"])
+        let root = try XCTUnwrap(manager.roots[screen])
+        let topFrame = root.topChromeFrame
+        let bottomFrame = root.bottomChromeFrame
+        manager.togglePanel("notes")
+        root.arrange(animated: false)
+        root.layoutSubtreeIfNeeded()
+        XCTAssertEqual(root.state.mode, .focused)
+        XCTAssertTrue(root.chromeIsVisible)
+        XCTAssertEqual(root.topChromeFrame, topFrame)
+        XCTAssertEqual(root.bottomChromeFrame, bottomFrame)
+        let focusedPanelFrame = panel.convert(panel.bounds, to: root)
+        XCTAssertEqual(focusedPanelFrame.minY, root.workspaceFrame.minY, accuracy: 0.001)
+        XCTAssertLessThanOrEqual(focusedPanelFrame.maxY, root.workspaceFrame.maxY)
+        XCTAssertEqual(panel.glassInset, 24)
+        XCTAssertEqual(originalContent.superview?.frame.minX, 24)
+        root.state.mode = .sidebar
+        manager.selectPanel("chart")
+        root.arrange(animated: false)
+        root.layoutSubtreeIfNeeded()
+        let chart = try XCTUnwrap(manager.panels["chart"])
+        XCTAssertTrue(root.chromeIsVisible)
+        XCTAssertEqual(root.topChromeFrame, topFrame)
+        XCTAssertEqual(root.bottomChromeFrame, bottomFrame)
+        XCTAssertGreaterThanOrEqual(root.sidebar.frame.minY, root.workspaceFrame.minY)
+        XCTAssertLessThanOrEqual(root.sidebar.frame.maxY, root.workspaceFrame.maxY)
+        let sidebarMainFrame = chart.convert(chart.bounds, to: root)
+        XCTAssertEqual(sidebarMainFrame.minY, root.workspaceFrame.minY, accuracy: 0.001)
+        XCTAssertLessThanOrEqual(sidebarMainFrame.maxY, root.workspaceFrame.maxY)
+        XCTAssertTrue(panel.isPreview)
+        XCTAssertTrue(panel.contentView === originalContent)
+        let previewSize = try XCTUnwrap(originalContent.superview?.frame.size)
+        XCTAssertEqual(previewSize.width / previewSize.height, panel.fullContentSize.width / panel.fullContentSize.height, accuracy: 0.001)
+        manager.togglePanel("chart")
+        root.arrange(animated: false)
+        root.layoutSubtreeIfNeeded()
+        let expectedGlobalInset = WorkspaceGeometry.globalGlassInset(for: panel.bounds.size)
+        XCTAssertEqual(panel.glassInset, expectedGlobalInset, accuracy: 0.001)
+        XCTAssertGreaterThan(originalContent.superview?.frame.width ?? 0, 0)
+        XCTAssertTrue(panel.hitTest(NSPoint(x: panel.frame.minX + 4, y: panel.frame.minY + 4)) === panel)
+        XCTAssertFalse(panel.hitTest(NSPoint(x: panel.frame.midX, y: panel.frame.midY)) === panel)
+        manager.beginDrag("notes"); manager.endDrag()
+        XCTAssertEqual(manager.assignments["notes"], screen)
+        if let other = manager.roots.keys.first(where: { $0 != screen }) {
+            manager.beginDrag("notes")
+            XCTAssertTrue(manager.moveDraggedPanel(to: other))
+            manager.endDrag()
+            XCTAssertTrue(panel.window === manager.windows[other])
+
+            root.state.highlight("chart", extending: false)
+            root.state.highlight("table", extending: true)
+            root.arrange(animated: false)
+            manager.beginDrag("chart")
+            XCTAssertEqual(Set(manager.draggingIDs), ["chart", "table"])
+            XCTAssertTrue(manager.moveDraggedPanels(to: other))
+            XCTAssertEqual(manager.assignments["chart"], other)
+            XCTAssertEqual(manager.assignments["table"], other)
+            XCTAssertTrue(manager.panels["chart"]?.isSelected == true)
+            XCTAssertTrue(manager.panels["table"]?.isSelected == true)
+            manager.endDrag()
+        }
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(panel.contentView === originalContent)
+        XCTAssertEqual(editor.string, "A draft that must survive layout changes")
+    }
+
+    func testAutomaticNativeFullscreenUsesSystemSpace() async throws {
+        try requireDesktop()
+        let snapshot = try await WorkspaceApplicationFixture.nativeFullscreenSnapshot()
+        XCTAssertTrue(snapshot.applicationRunning)
+        XCTAssertFalse(snapshot.transitioning, snapshot.diagnostics.joined(separator: "; "))
+        XCTAssertTrue(snapshot.failures.isEmpty, snapshot.diagnostics.joined(separator: "; "))
+        XCTAssertFalse(snapshot.eligibleScreens.isEmpty)
+        for id in snapshot.eligibleScreens {
+            let window = try XCTUnwrap(snapshot.windows.first { $0.screenID == id })
+            XCTAssertTrue(window.nativeFullscreen, "AppKit must confirm native fullscreen, not just a screen-sized frame")
+            XCTAssertTrue(window.rootNativeFullscreen)
+            XCTAssertTrue(window.opaque)
+        }
+    }
+
+    func testChromeDraftAndDropdownStateRemainLocalAndIndependent() throws {
+        try requireDesktop()
+        let model = WorkspaceChromeModel()
+        model.draft = "Keep this while scrolling"
+        model.tipsExpanded = true
+        model.panelCount = 30
+        XCTAssertTrue(model.tipsExpanded)
+        XCTAssertEqual(model.draft, "Keep this while scrolling")
+        XCTAssertEqual(model.panelCount, 30)
+        model.settingsPresented = true
+        XCTAssertEqual(model.draft, "Keep this while scrolling")
+    }
+
+    func testThirtyPanelGridScrollsBetweenFixedChromeZones() throws {
+        try requireDesktop()
+        let manager = WorkspaceWindowManager(catalog: WorkspacePanel.previewSamples(count: 30), automaticallyFullscreen: false)
+        manager.synchronize()
+        defer { manager.stop() }
+        let screenID = try XCTUnwrap(manager.assignments.values.first)
+        let window = try XCTUnwrap(manager.windows[screenID])
+        let root = try XCTUnwrap(manager.roots[screenID])
+        window.displayIfNeeded()
+        root.layoutSubtreeIfNeeded()
+        root.setGlobalZoom(1)
+        let grid = root.globalGridGeometry
+        XCTAssertEqual(grid.frames.count, 30)
+        XCTAssertEqual(grid.columns, 2)
+        XCTAssertGreaterThan(grid.documentSize.height, root.globalViewportFrame.height)
+        let topBefore = root.topChromeFrame
+        let bottomBefore = root.bottomChromeFrame
+        root.scrollGlobalGrid(by: 500)
+        XCTAssertGreaterThan(root.globalScrollOffset, 0)
+        XCTAssertEqual(root.topChromeFrame, topBefore)
+        XCTAssertEqual(root.bottomChromeFrame, bottomBefore)
+        root.scrollGlobalGrid(by: 1_000_000)
+        XCTAssertEqual(root.globalScrollOffset, grid.documentSize.height - root.globalViewportFrame.height, accuracy: 1)
+        XCTAssertEqual(manager.panels.count, 30)
+    }
+}

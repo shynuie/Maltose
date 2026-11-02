@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "scope": "Explicit Chinese/year-first source dates and native calendar-month spacing",
+  "sourceFiles": {
+    "runtime/maltose/visual_planning.py": "be92112abd51fa6970d23d025359f0bc72481d9289f1b896cc90794f998b4782",
+    "runtime/tests/test_visual_planning.py": "be7f0c6061336807424c1035934f285143a242a31cc92d7384631e385d1aed65",
+    "apps/macos/MaltoseApp/CSVLineChartPanelView.swift": "a3df074520119c706a88a0f5892dfe0a5d897794568cf4af624b47d7e10224a8",
+    "tests/e2e/AgentSessionCoordinatorTests.swift": "21d635e962cd396d05fda297bab191d04c5bbcd1123205507e39587464e2a0a9",
+    "tests/e2e/ResultPresentationTests.swift": "db76074e1a0cdc6eb3903da62cec501dfa47c8a2d9e931e95f289d65ee585e21"
+  },
+  "pythonFocused": {
+    "passed": 14,
+    "failed": 0,
+    "seconds": 0.147
+  },
+  "pythonFull": {
+    "passed": 529,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 42.954,
+    "log": "/tmp/maltose-calendar-full-python.log"
+  },
+  "nativeFocused": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 17.955,
+    "log": "/tmp/maltose-calendar-combined-focused-native.log"
+  },
+  "nativeFull": {
+    "passed": 240,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 577.725,
+    "log": "/tmp/maltose-calendar-full-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true,
+    "docker": true
+  },
+  "acceptance": {
+    "originalSourceCellsPreserved": true,
+    "monthlyPrecisionPreserved": true,
+    "yearNotInferred": true,
+    "ambiguousOrInvalidDatesRejected": true,
+    "conflictingCalendarAliasesRejected": true,
+    "noZeroInterpolationOrExtraRows": true,
+    "calendarGapsPreserved": true,
+    "configuredMainOmittedChartRecovered": true,
+    "originalValuesAndAllGroupsChecked": true,
+    "savedPlanReplaysWithoutModelOrTaskRerun": true
+  },
+  "intermediateFailures": [
+    {
+      "log": "/tmp/maltose-calendar-focused-native.log",
+      "failedCases": 1,
+      "failedAssertions": 1,
+      "cause": "Old shared assertion required day-level labels for new month-level source fixture.",
+      "resolution": "Check exact labels at source precision; retain all value, method, source and panel assertions."
+    }
+  ],
+  "deployment": {
+    "packaged": false,
+    "deployed": false,
+    "committed": false,
+    "formalExecutableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+    "trial17ExecutableSHA256": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301"
+  },
+  "remaining": [
+    "Full web pages and non-table source extraction",
+    "All direct-panel mutation grants",
+    "Other P2-P5 workflow/presentation and human acceptance cases"
+  ],
+  "sourceFilesUnchangedDuringFull": true,
+  "validation": {
+    "pythonASTFiles": 227,
+    "gitDiffCheck": true
+  }
+}

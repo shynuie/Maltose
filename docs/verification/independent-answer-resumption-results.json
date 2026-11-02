@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "sourceCapability": {
+    "taskResumptionVersion": 1,
+    "defaultEnabled": true
+  },
+  "sourceSnapshot": {
+    "files": 283,
+    "sha256": "7c5326ce1feb4d945076067a3e6cceb28f11acc38c3bc42dcc65179f685594bb"
+  },
+  "pythonFull": {
+    "passed": 515,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 44.672,
+    "log": "/tmp/maltose-resumption-full-python-final.log"
+  },
+  "nativeFull": {
+    "total": 234,
+    "passed": 233,
+    "failedCases": 1,
+    "failedAssertions": 2,
+    "unexpectedAssertions": 1,
+    "skipped": 0,
+    "seconds": 616.73,
+    "log": "/tmp/maltose-resumption-full-native-final.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true,
+    "docker": true,
+    "failedCase": "testConfiguredMainAutonomouslyChartsProvidedHalfYearSurveyWithSeparateMethodsAndSources"
+  },
+  "focused": {
+    "pythonForeground": {
+      "passed": 19,
+      "seconds": 0.131,
+      "log": "/tmp/maltose-resumption-python-final-focused.log"
+    },
+    "pythonReview": {
+      "passed": 12,
+      "seconds": 0.011,
+      "log": "/tmp/maltose-resumption-review-refs-python.log"
+    },
+    "nativeRecovery": {
+      "passed": 6,
+      "seconds": 57.249,
+      "log": "/tmp/maltose-resumption-native-final-focused.log"
+    },
+    "nativeChain": {
+      "passed": 1,
+      "seconds": 2.475,
+      "log": "/tmp/maltose-resumption-chain-native-fixed.log"
+    },
+    "nativeFinalGuards": {
+      "passed": 25,
+      "seconds": 56.242,
+      "log": "/tmp/maltose-resumption-final-guards-native.log"
+    }
+  },
+  "passedFinalCases": [
+    "testConfiguredMainActuallyResumesOriginalForegroundTaskAfterIndependentAnswer",
+    "testDeliveredIndependentAnswerResumesOriginalForegroundTaskWithoutChangingRequirementsOrMemoryIdentity",
+    "testIndependentAnswerCannotResumeBeforeACKAfterScopeChangesOrWithUnknownWork",
+    "testResumedForegroundGeneratedOutputSurvivesSIGKILLAndWholeStoreRebuildWithoutRepeatingWork",
+    "testIndependentAnswerResumptionCarriesProofAcrossMultipleMissingSteps",
+    "testConfiguredMainForegroundPlanDeliveryCanCompleteButTextClaimCannotProveImplementationOrTests"
+  ],
+  "acceptance": [
+    "Original requirements unchanged; actual answer ACK precedes resumption",
+    "Original foreground FK and delivered answer proof persist across multiple steps",
+    "No Memory identity promotion or synthetic worker",
+    "Needs-input/new-task/held/version/unknown/Codex checks",
+    "Immutable original answer kind and interlude",
+    "Actual SIGKILL and store rebuild only replay generated delivery",
+    "Criterion references resolve exact human text; unknown/duplicate/missing keys rejected"
+  ],
+  "intermediateFailureLogs": [
+    "/tmp/maltose-resumption-native-admission.log",
+    "/tmp/maltose-resumption-native-admission-fixed.log",
+    "/tmp/maltose-resumption-chain-native.log",
+    "/tmp/maltose-resumption-full-native.log"
+  ],
+  "nextPriority": "Durable tool-free presentation planning for omitted suitable charts using original source field/group references",
+  "formalBuild": "15",
+  "formalExecutableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+  "trialBuild": "17",
+  "trialExecutableSHA256": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+  "newPackageCreated": false,
+  "newCommitCreated": false,
+  "humanMicrophoneOrListeningAcceptance": false,
+  "remaining": [
+    "Stable autonomous chart selection when the model omits chart",
+    "Foreground body delivered but review/ACK superseded by new question",
+    "Foreground execution without saved generated result",
+    "Worker results returned or undelivered during independent answer",
+    "Unknown execution reconciliation and explicit retry UI",
+    "Scheduled task provenance",
+    "Paused Codex recap speech",
+    "All panel mutation grants",
+    "Remaining autonomous panels and composition",
+    "Speech preferences UI",
+    "Context capacity feedback",
+    "Human voice/gesture acceptance",
+    "Final deployment"
+  ],
+  "fullGoalComplete": false,
+  "staticChecks": {
+    "pythonASTFiles": 225,
+    "sourceSnapshotUnchangedDuringFinalFull": true,
+    "localMarkdownLinks": true,
+    "verificationJSON": true,
+    "formalAndTrialHashesUnchanged": true
+  }
+}

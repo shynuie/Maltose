@@ -1,0 +1,275 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "capability": {
+    "publicWebSourceVersion": 1,
+    "requiresWorkflowVersion": 1,
+    "requiresForegroundResultVersion": 1,
+    "defaultEnabled": true
+  },
+  "sourceSnapshot": {
+    "files": 297,
+    "pythonAST": 231,
+    "sha256": "785fe28ac424614f192c0ec766f35b2981f34283ec9cf5067d4d88c55d5f2e5b",
+    "manifest": "/tmp/maltose-public-source-final-repair-source.json",
+    "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map",
+    "verifiedUnchangedAfterNativeFull": true,
+    "allPythonUnchangedSincePythonFull": true
+  },
+  "pythonFocused": {
+    "passed": 14,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 0.635,
+    "log": "/tmp/maltose-public-source-scope-focused-python.log"
+  },
+  "nativeFocused": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 79.81,
+    "log": "/tmp/maltose-public-source-repair-proof-focused-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true
+  },
+  "pythonFull": {
+    "status": "passed",
+    "log": "/tmp/maltose-public-source-final-repair-full-python.log",
+    "docker": true,
+    "passed": 560,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 46.384
+  },
+  "nativeFull": {
+    "status": "passed",
+    "log": "/tmp/maltose-public-source-final-repair-full-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true,
+    "docker": true,
+    "cases": 271,
+    "passed": 271,
+    "failedCases": 0,
+    "failures": 0,
+    "assertionFailures": 0,
+    "unexpected": 0,
+    "skipped": 0,
+    "seconds": 684.834
+  },
+  "previousSourceFull": {
+    "sourceSHA256": "8a175e8b93bfc59867f118dc95c3413135e7f32ac8e708d93fc0cff3641fe962",
+    "python": {
+      "passed": 558,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 46.566,
+      "log": "/tmp/maltose-public-source-final-full-python.log"
+    },
+    "native": {
+      "cases": 270,
+      "passed": 269,
+      "failedCases": 1,
+      "assertionFailures": 1,
+      "unexpected": 1,
+      "skipped": 0,
+      "seconds": 792.916,
+      "log": "/tmp/maltose-public-source-final-full-native.log",
+      "failures": 2
+    },
+    "reason": "Configured Main inferred .invalid fixture URL unavailable without attempting source tool. Kept fixture and network guard unchanged; clarified source-read instruction to rely on actual read receipts before asserting access failure or requesting human input."
+  },
+  "verifiedBehaviors": [
+    "Actual unauthenticated HTTP source response retains requested/final URLs, fetch time, raw/text/table hashes and completeness granularity",
+    "DNS and every redirect reject non-public addresses; socket pinned to checked IP; HTTPS verifies original host; no ambient credentials or proxies",
+    "Immutable sourceID pagination and table selection do not silently refetch or cross actual input scope",
+    "Only exact complete original table receipts qualify for fallback chart selection; search snippets and truncated/model-generated data do not",
+    "Native existing chart preserved; new result chart separates methods, retains six months, null observations and month precision",
+    "Unplanned question uses actual input observations without fake ProductTask, Memory owner or worker",
+    "Native sourceRead proof checks source and table hashes without treating publisher claims or unread pages as verified",
+    "Publication delivery evidence names owned result pane scope; other tool writes still require their own receipts",
+    "Primary omission fallback and planned task completion use configured actual presentation/review models over real stdio/native store",
+    "Configured primary independently chooses actual source-read tools and a new chart in focused integration; intermediate full-suite refusal preserved below",
+    "Long tool witnesses use collision-free local aliases; invalid schema or witness output gets at most one tool-free re-review over unchanged original evidence, with exact validation and pause propagation"
+  ],
+  "boundaries": [
+    "Static HTML/CSV/TSV/plain text only; no authenticated sessions, PDF extraction or JavaScript rendering",
+    "No complete merged/unclosed/oversized table claim; no automatic multi-table merge or universal web research acceptance",
+    "Main and admitted Main continuation capability; no newly registered Codex SDK/background worker public-reader tool",
+    "Fixture uses isolated HTTP server and test-only DNS/socket mapping; no production allow-private switch and no live-poll verification claim",
+    "Source snapshots are bounded input-scoped memory caches; durable generated delivery recovery reuses saved result/receipts without refetching work",
+    "No general unknown-operation reconciliation UI, recurring update grants, full human voice acceptance, packaging, deployment or commit in this batch",
+    "Configured Main can still prematurely return partial without invoking a source tool; .invalid fixture failures are preserved, and general unbound-task work continuation remains a later workflow acceptance item."
+  ],
+  "liveProductionTransport": {
+    "url": "https://www.python.org/about/",
+    "ok": true,
+    "receiptValid": true,
+    "rawBytes": 41265,
+    "pageCount": 3,
+    "tableCount": 0,
+    "verifiedDNSAndTLS": true,
+    "note": "Actual production transport read; separate from local chart fixture. Does not imply every text page read or a live polling source verified."
+  },
+  "intermediateFailures": [
+    {
+      "kind": "transport",
+      "reason": "HTTP/1.0 server closed socket after final chunk; touching its timeout again caused Bad file descriptor",
+      "fix": "Check response.isclosed before touching socket for next read"
+    },
+    {
+      "kind": "timeout classification",
+      "reason": "Socket TimeoutError could occur before watchdog flag was set",
+      "fix": "Classify TimeoutError explicitly as source_timeout; incomplete body never creates a source"
+    },
+    {
+      "kind": "fixture",
+      "reason": "Controlled answer lacked requested trend; native delivery flags were also misread as old-pane overwrite",
+      "fix": "Fixture includes actual exact A/B trends; native publication evidence now supplies actual owned result panel scope"
+    },
+    {
+      "kind": "configured primary",
+      "reason": "Primary declined .invalid source without using reader, including first complete-suite failure",
+      "fix": "Clarify available source tool must be attempted before asserting access failure; retain original fixture and production guards"
+    },
+    {
+      "kind": "configured task review",
+      "reason": "One UUID-based tool witness ID was transcribed incorrectly; prior shortening covered only IDs longer than 64 characters",
+      "fix": "Extend existing collision-free request-local aliases to IDs longer than 32 characters, then restore exact original keys only after validation. Unknown aliases, miscopied keys and original long IDs outside offered alias list remain rejected."
+    },
+    {
+      "kind": "configured review schema",
+      "reason": "Reviewer wrote e4videnceIDs in one check despite valid tests and evidence",
+      "fix": "One bounded tool-free re-review over unchanged original context. Bad response is untrusted repair data, never accepted or rewritten in place; second failure remains explicit partial. Pause propagates and work is not re-executed by repair."
+    },
+    {
+      "kind": "forced native format-repair fixture",
+      "cases": 8,
+      "failedCases": 2,
+      "failures": 4,
+      "unexpected": 2,
+      "seconds": 192.072,
+      "log": "/tmp/maltose-public-source-final-repair-focused-native.log",
+      "reason": "Repair returned valid semantic partial but helper required completed; independent configured Main returned premature partial on .invalid fixture",
+      "fix": "Format repair verifies a valid native assessment, not forced task completion; public fixture uses explicit synthetic example.org mapping. General premature Main stop remains a further workflow acceptance item."
+    },
+    {
+      "kind": "forced native fixture assumption",
+      "cases": 8,
+      "failedCases": 1,
+      "failures": 2,
+      "unexpected": 1,
+      "seconds": 122.755,
+      "log": "/tmp/maltose-public-source-final-repair-canonical-focused-native.log",
+      "reason": "Fault injector indexed checks[0] on a valid partial with checks=[] before it could return a response",
+      "fix": "Inject wrong top-level checks key regardless of list length; compare saved native summary/status/explanation with actual second provider response, allowing valid partial. Exact source fetch/input/task/review counts and unchanged original chart remain required."
+    }
+  ],
+  "artifacts": {
+    "unchangedExecutableSHA256": {
+      "dist/Maltose.app/Contents/MacOS/MaltoseApp": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+      "dist/trials/build17/Maltose.app/Contents/MacOS/MaltoseApp": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301"
+    },
+    "formalBuild": 15,
+    "trialBuild": 17,
+    "repackaged": false,
+    "deployed": false,
+    "committed": false
+  },
+  "remainingGoalStatus": "active",
+  "intermediateSourceFull": {
+    "sourceSnapshot": {
+      "files": 297,
+      "pythonAST": 231,
+      "sha256": "05297026f359879a9d6118121dd8ad05bb8184f2f43df95f9e02d63d82eab151",
+      "manifest": "/tmp/maltose-public-source-read-attempt-source.json",
+      "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map"
+    },
+    "python": {
+      "status": "passed",
+      "log": "/tmp/maltose-public-source-read-attempt-full-python.log",
+      "docker": true,
+      "passed": 558,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 47.098
+    },
+    "native": {
+      "cases": 270,
+      "passed": 269,
+      "failedCases": 1,
+      "failures": 2,
+      "assertionFailures": 1,
+      "unexpected": 1,
+      "skipped": 0,
+      "seconds": 791.526,
+      "log": "/tmp/maltose-public-source-read-attempt-full-native.log"
+    },
+    "reason": "Configured background review copied one 37-character tool witness ID with the suffix of a different ID. Exact validation correctly refused it; original results and read proofs remained stored.",
+    "response": ".cache/main-live/maltose-session-947F89A5-1A80-496E-AECC-B56CA10510FF/config/worker-assessment-response.json"
+  },
+  "shortWitnessFocusedPython": {
+    "passed": 27,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 0.641,
+    "log": "/tmp/maltose-public-source-short-witness-focused-python.log"
+  },
+  "shortWitnessSourceFull": {
+    "sourceSnapshot": {
+      "files": 297,
+      "pythonAST": 231,
+      "sha256": "4c88d8437a32516db5a015d81eab6af194517988fc5540bf6435bdd837dffb1a",
+      "manifest": "/tmp/maltose-public-source-short-witness-source.json",
+      "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map"
+    },
+    "python": {
+      "status": "passed",
+      "log": "/tmp/maltose-public-source-short-witness-full-python.log",
+      "docker": true,
+      "passed": 559,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 47.832
+    },
+    "native": {
+      "cases": 270,
+      "passed": 269,
+      "failedCases": 1,
+      "failures": 2,
+      "assertionFailures": 2,
+      "unexpected": 0,
+      "skipped": 0,
+      "seconds": 693.446,
+      "log": "/tmp/maltose-public-source-short-witness-full-native.log"
+    },
+    "reason": "Live Codex receipt and short witness IDs were valid; reviewer emitted e4videnceIDs instead of evidenceIDs, so exact schema validation refused completion.",
+    "response": ".cache/main-live/maltose-session-F3E8FCF9-9381-4884-85D9-95CA6D9B4362/assessment-responses.jsonl"
+  },
+  "assessmentRepairFocusedPython": {
+    "passed": 28,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 0.66,
+    "log": "/tmp/maltose-public-source-assessment-repair-focused-python.log"
+  },
+  "assessmentRepairInitialNative": {
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 63.205,
+    "log": "/tmp/maltose-public-source-assessment-repair-focused-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true
+  },
+  "closingChecks": {
+    "sourceFilesUnchanged": 297,
+    "pythonAST": 231,
+    "verificationJSON": 18,
+    "canonicalMarkdown": 5,
+    "localLinks": true,
+    "diffCheck": true
+  }
+}

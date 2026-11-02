@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "version": "0.7.0",
+  "build": "17",
+  "trialApp": "dist/trials/build17/Maltose.app",
+  "package": {
+    "version": "0.7.0",
+    "build": "17",
+    "bundleFiles": 151,
+    "runtimeFiles": 135,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "pythonFinalFull": {
+    "passed": 495,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 50.235
+  },
+  "nativeBroadBeforeFinalJournalAndSearchPatch": {
+    "passed": 212,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 389.121
+  },
+  "nativeFinalFocused": {
+    "passed": 15,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 25.033,
+    "realModelAutonomousChartSeconds": 12.128,
+    "realModelSearchPositiveAndNegativeSeconds": 7.371
+  },
+  "pythonFinalPresentation": {
+    "passed": 27,
+    "seconds": 0.07
+  },
+  "uiSmoke": {
+    "uiOnlyLaunch": "passed",
+    "windowCount": 2,
+    "applicationRunning": true,
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "foregroundResultVersion": 0,
+  "formalBuildUnchanged": "15",
+  "previousTrialUnchanged": "16",
+  "executableSHA256": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+  "formalExecutableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+  "humanVoiceAcceptanceComplete": false,
+  "fullGoalComplete": false
+}

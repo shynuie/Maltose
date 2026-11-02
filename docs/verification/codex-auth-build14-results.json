@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-01",
+  "gitHead": "28dded81596402410812954f623e426631a6ff6b",
+  "workingTreeContainsUncommittedChanges": true,
+  "codexVersion": "0.155.1",
+  "package": {
+    "version": "0.7.0",
+    "build": "14",
+    "bundleFiles": 145,
+    "runtimeFiles": 129,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "artifact": ".cache/unification/releases/Maltose-0.7.0-14.app",
+  "formalBundleAtDist": "11",
+  "formalBundleWasNotReplaced": true,
+  "executableSHA256": "ee711196e221ea003c55b8d555643fc03e8b703f86d7c058b2e63d2ce5cfb9a3",
+  "authenticationFailure": {
+    "installedCLI": true,
+    "temporaryHome": true,
+    "credentialStore": "file",
+    "accountNullVerifiedBeforeUserRequest": true,
+    "requiresOpenaiAuth": true,
+    "taskCreated": false,
+    "originalInputRetained": true,
+    "retryDuplicatedInput": false,
+    "mainStayedPaused": true,
+    "loginStarted": false,
+    "logoutInvoked": false,
+    "authFileAbsentAtObservation": true
+  },
+  "unavailableExecutable": {
+    "inputRetained": true,
+    "taskCreated": false,
+    "mainStayedPaused": true,
+    "explicitFreshMainIntentAccepted": true,
+    "oldCodexInputDeferred": true,
+    "fixtureSourceUnchanged": true
+  },
+  "tests": {
+    "fullSwiftBeforeGuidanceTextCorrection": {
+      "tests": 143,
+      "failures": 0,
+      "skipped": 15,
+      "elapsedSeconds": 152.646,
+      "liveMain": true,
+      "liveCodex": true
+    },
+    "focusedAfterGuidanceTextCorrection": {
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0,
+      "elapsedSeconds": 1.612
+    },
+    "unchangedPython": {
+      "tests": 408,
+      "failures": 0,
+      "skipped": 0,
+      "rerunThisTurn": false,
+      "evidence": "native-docker-lifetime-results.json"
+    }
+  },
+  "packagedRuntimeIdenticalToBuild13": true,
+  "guiAcceptanceComplete": false,
+  "humanVoiceAcceptanceComplete": false,
+  "finalGoalComplete": false
+}

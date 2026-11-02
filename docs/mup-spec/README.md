@@ -1,5 +1,7 @@
 # MUP v0.3
 
+> 歷史／相容協定：本頁描述舊 Host 的 WebSocket 接入，不是目前 Maltose.app 的主 Agent 或 Codex 連線。現行架構見 [架構入口](../architecture/README.md)，面板合約見 [共用面板介面](../architecture/workspace-agent-interface.md)，工作範圍與進度見 [產品整合計畫](../../plans/maltose-unification-and-codex.md)。下方規則保留其原協定範圍。
+
 來源：`packages/mup-protocol/*.schema.json`，draft 2020-12。執行 `python3 scripts/generate-schemas.py` 更新來源與 Swift/Python 內嵌副本，再執行 `python3 scripts/generate-ts-schema.py` 更新 TypeScript。
 
 1. WebSocket 只能連 `ws://127.0.0.1:<port>`；原生 app 由 OS 分配空閒 port 並發布私有 discovery 紀錄；只接受 text JSON，1 MiB，拒絕有 Origin 的瀏覽器握手。
