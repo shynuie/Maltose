@@ -43,6 +43,8 @@ class NativeCodexToolAdapter:
                 source='delegation', author='maltose', recipient='codex',
                 inputSource='native' if native else 'voice',
                 speaker=dict(userID=brain._active_user_id if verified else None, status='identified' if verified else 'unknown'))
+            source_input_id = getattr(brain, '_active_input_id', None)
+            if source_input_id: payload['sourceInputID'] = source_input_id
             # Persist before publishing or closing admission. Do not wait for App RPCs
             # inside this tool: the current tool/conversation must be able to drain.
             self.bridge.collaboration.save_input(payload)

@@ -57,7 +57,8 @@ extension NSPasteboard.PasteboardType {
                                                  imageGalleryModel: imageGalleryModel,
                                                  browserModel: browserModel,
                                                  flowchartModel: flowchartModel,
-                                                 sampleContentModel: sampleContentModel)
+                                                 sampleContentModel: sampleContentModel,
+                                                 workMonitor: manager?.workMonitor)
         if #available(macOS 26.0, *) {
             let effect = NSGlassEffectView()
             effect.style = .clear

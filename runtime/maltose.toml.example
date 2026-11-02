@@ -1,4 +1,4 @@
-# Copy this file to myagent.toml and adjust paths/device settings.
+# Copy this file to maltose.toml and adjust paths/device settings.
 
 [agent]
 brain = "taskbrain"
@@ -17,6 +17,13 @@ stt_target_peak = 12000
 stt_min_peak = 6000
 stt_max_gain = 4.0
 interruptible_tts = true
+
+[presentation]
+# auto: speak short summaries for voice input; keyboard input stays silent.
+# summary: speak short summaries for all inputs; mute: no result speech.
+# Explicit 「念給我聽」 / 「詳細說」 applies to one response only.
+speech_mode = "auto"
+speech_target_seconds = 15.0
 
 [vad]
 aggressiveness = 2

@@ -112,6 +112,42 @@ class BusyRuntime:
 
 
 class NativeLifetimeTests(unittest.TestCase):
+    def test_shutdown_signal_during_final_cleanup_preserves_guardian_acknowledgement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            program = '''import sys,time
+from pathlib import Path
+from maltose.runtime.lifetime import NativeRuntimeLifetime
+base=Path(sys.argv[1])
+original=NativeRuntimeLifetime._request
+def delayed(self,method,**params):
+ if method=='finish':
+  (base/'finishing').touch()
+  time.sleep(.3)
+ return original(self,method,**params)
+NativeRuntimeLifetime._request=delayed
+sys.argv=['maltose','--native-text-only','--brain','echo','--config',str(base/'none.toml')]
+from maltose.desktop import main
+main()
+'''
+            process = subprocess.Popen([sys.executable, '-c', program, directory], stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=directory,
+                env={**os.environ, 'PYTHONPATH': str(Path(__file__).resolve().parents[1])})
+            try:
+                for identifier, method in [('init', 'initialize'), ('stop', 'shutdown')]:
+                    process.stdin.write(json.dumps(dict(schemaVersion=1, requestID=identifier, method=method, params={}))+'\n')
+                process.stdin.flush()
+                BusyRuntime.wait(lambda: (base/'finishing').exists())
+                process.send_signal(signal.SIGTERM)
+                output, diagnostics = process.communicate(timeout=8)
+                self.assertEqual(process.returncode, 0, diagnostics)
+                self.assertNotIn('native_lifetime_final_cleanup_unconfirmed', diagnostics)
+                self.assertTrue(any(json.loads(line).get('requestID') == 'stop' for line in output.splitlines()))
+                with RuntimeLease(base): pass
+            finally:
+                if process.poll() is None: process.kill()
+                process.communicate(timeout=3)
+
     def test_owner_eof_interrupts_busy_model_cleans_detached_worker_and_releases_lease(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture=BusyRuntime(directory)

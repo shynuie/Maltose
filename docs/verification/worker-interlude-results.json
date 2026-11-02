@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "capability": {
+    "workerResultVersion": 1,
+    "requiresTaskResumptionVersion": 1,
+    "requiresWorkerEvidenceVersion": 1,
+    "requiresResultDeliveryVersion": 1,
+    "defaultProductEnabled": true
+  },
+  "sourceSnapshot": {
+    "files": 300,
+    "pythonAST": 233,
+    "sha256": "fe491313b5f4f6e9d7eefd0e4e35c1404795a4ce1579e6dce3e790cd39128161",
+    "manifest": "/tmp/maltose-worker-interlude-compatibility-source.json",
+    "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map",
+    "verifiedUnchangedAfterFull": true
+  },
+  "pythonFocused": {
+    "passed": 80,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 0.668,
+    "log": "/tmp/maltose-worker-interlude-legacy-canonical-focused-python.log"
+  },
+  "nativeFocused": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 77.373,
+    "log": "/tmp/maltose-worker-interlude-legacy-focused-native.log",
+    "gui": true,
+    "configuredMain": true
+  },
+  "nativeContract": {
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 0.086,
+    "log": "/tmp/maltose-worker-interlude-final-contract-native.log"
+  },
+  "pythonFull": {
+    "status": "passed",
+    "log": "/tmp/maltose-worker-interlude-compatibility-full-python.log",
+    "docker": true,
+    "passed": 574,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 51.063
+  },
+  "nativeFull": {
+    "status": "one_missing_independent_panel_nonmutation_proof_case",
+    "log": "/tmp/maltose-worker-interlude-compatibility-full-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true,
+    "docker": true,
+    "cases": 277,
+    "passed": 276,
+    "failedCases": 1,
+    "failures": 2,
+    "assertionFailures": 1,
+    "unexpected": 1,
+    "skipped": 0,
+    "seconds": 833.966
+  },
+  "verifiedBehaviors": [
+    "Typed independent question can finish before original worker publications resume in the same ProductTask and original requirements version",
+    "Runtime principal remains unknown; native offers only existing product worker/attempt scopes and private store derives the actual original result owner without changing Memory principal",
+    "Scoped queries compare real attempt workflow and immutable saved publication reference; unrelated owners/workers/versions remain inaccessible",
+    "Worker terminal facts and publication metadata precede rendering; native writer rechecks current input, versions, control, digest and actual delivered standalone answer",
+    "Prepared and delivered worker metadata survive fresh native store reopening and do not change producer identity or payload",
+    "New input at actual writer refuses old worker output; loss after journal write replays same publication without duplicate body or rerunning worker",
+    "Undelivered worker results block premature assessment/continuation; ACK completion has a durable separate followup checkpoint",
+    "Followup targets actual latest outcome and real original notification FK, including when final delivered body is older than latest worker report",
+    "Valid original work reads missing third source and completes without adding a human input, creating another worker or restoring speaker identity",
+    "needs_input/new-task interludes and held/cancelled/replanned/stopped source refuse worker delivery or continuation",
+    "Configured actual Main resumes source reading and semantic completion over real stdio/native store; controlled race tests retain exact execution counts",
+    "Explicit native managedResults provenance separates v1 followup from accepted legacy notifications; old generated-continuation SIGKILL/store restart remains compatible",
+    "Lost worker assessment ACK keeps the full later native-delivered source in earlier-triggered followup while execution still waits for actual trigger ACK"
+  ],
+  "boundaries": [
+    "No full solution for a continuation generated before an interlude and interrupted before delivery; output stays saved and is not blindly rerun",
+    "No general cold-runtime unknown-principal bootstrap for pending private worker scopes; native delivery authority must be current before private result access",
+    "Unknown running side effects and interrupted work still require reconciliation rather than automatic replay",
+    "Schedule provenance, recurring grants, all panel capability positives, other autonomous presentations, paused Codex short speech, human microphone acceptance and formal packaging remain open",
+    "Capability v0 preserves legacy result route; unlinked/progress notifications keep compatibility adapter",
+    "No new public model-facing worker delivery tool or owner override; Memory/KDB/personal task tools preserve original identity requirements",
+    "No commit, packaging, deployment or formal user-state mutation in this batch"
+  ],
+  "intermediateFailures": [
+    {
+      "log": "/tmp/maltose-worker-interlude-initial-native.log",
+      "reason": "New fixture script insertion used wrong existing helper signature; no test-source change was written, old coexistence test passed",
+      "fix": "Use actual required needsRead signature"
+    },
+    {
+      "log": "/tmp/maltose-worker-interlude-typed-native.log",
+      "cases": 3,
+      "failedCases": 1,
+      "failures": 4,
+      "unexpected": 0,
+      "seconds": 24.064,
+      "reason": "Writer validated only foreground/continuation prefixes; race fixture also intercepted unlinked progress",
+      "fix": "Worker source check at actual native writer; inject only registered managed worker publication"
+    },
+    {
+      "log": "/tmp/maltose-worker-interlude-writer-native.log",
+      "cases": 3,
+      "failedCases": 1,
+      "failures": 3,
+      "unexpected": 0,
+      "seconds": 18.412,
+      "reason": "Last worker facts allowed task synthesis before delayed older worker body was acknowledged",
+      "fix": "Persist pending publication metadata before admission; undelivered results block early assessment and continuation"
+    },
+    {
+      "log": "/tmp/maltose-worker-interlude-causal-native.log",
+      "cases": 3,
+      "failedCases": 1,
+      "failures": 2,
+      "unexpected": 1,
+      "seconds": 41.381,
+      "reason": "Delayed older body could not assess older outcome after newer worker report, correctly rejected by native latest-outcome guard",
+      "fix": "Keep older body delivery independent; durable post-ACK followup addresses actual latest source outcome using real worker notification trigger"
+    },
+    {
+      "log": "/tmp/maltose-worker-interlude-focused-python.log",
+      "reason": "Initial new test had invalid dictionary syntax before running tests",
+      "fix": "Correct syntax; later 78 focused Python tests pass"
+    },
+    {
+      "log": "/tmp/maltose-worker-interlude-complete-focused-native.log",
+      "reason": "Fixture called nonexistent held/cancel helper names during compilation",
+      "fix": "Use real setProductHeld and markProductCancelled methods"
+    },
+    {
+      "kind": "full-suite compatibility",
+      "log": "/tmp/maltose-worker-interlude-full-native.log",
+      "reason": "New followup checkpoint tried to adopt already accepted v0 worker bodies on an old generated-continuation restart lacking v1 body readback wiring; prepared metadata then blocked original recovery.",
+      "fix": "Only explicit native-registered publications enter new post-ACK followup; legacy accepted notifications continue their original generated recovery without implicit re-registration"
+    },
+    {
+      "kind": "fixture source identity",
+      "log": "/tmp/maltose-worker-interlude-legacy-focused-python.log",
+      "reason": "Second same-owner seed selected first pending notification instead of its own new task",
+      "fix": "Select real notification by task ID and require the two actual notification IDs to differ"
+    }
+  ],
+  "artifacts": {
+    "unchangedExecutableSHA256": {
+      "dist/Maltose.app/Contents/MacOS/MaltoseApp": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+      "dist/trials/build17/Maltose.app/Contents/MacOS/MaltoseApp": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301"
+    },
+    "formalBuild": 15,
+    "trialBuild": 17,
+    "repackaged": false,
+    "deployed": false,
+    "committed": false
+  },
+  "remainingGoalStatus": "active",
+  "initialSourceFull": {
+    "sourceSnapshot": {
+      "files": 300,
+      "pythonAST": 233,
+      "sha256": "1f4ceecbff1efadb4ee6848482434fa6592e64b3efdd49e8e11ebd5586f1cf55",
+      "manifest": "/tmp/maltose-worker-interlude-final-source.json",
+      "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map"
+    },
+    "python": {
+      "status": "passed",
+      "log": "/tmp/maltose-worker-interlude-full-python.log",
+      "docker": true,
+      "passed": 572,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 48.232
+    },
+    "native": {
+      "cases": 276,
+      "passed": 275,
+      "failedCases": 1,
+      "failures": 2,
+      "unexpected": 1,
+      "skipped": 0,
+      "seconds": 800.262,
+      "log": "/tmp/maltose-worker-interlude-full-native.log"
+    },
+    "reason": "New followup checkpoint tried to adopt already accepted v0 worker bodies on an old generated-continuation restart lacking v1 body readback wiring; prepared metadata then blocked original recovery."
+  },
+  "configuredMainObservedScope": {
+    "fixture": ".cache/main-live/maltose-session-CA25F72F-0038-4653-A0D9-8E9F428A3197",
+    "principal": {
+      "user": "unknown",
+      "status": "unknown"
+    },
+    "continuationPayloads": [
+      {
+        "mode": "work",
+        "sourceInputID": "fixture-voice-input",
+        "inputSource": "voice",
+        "deliverySource": "native",
+        "resumeAfterID": "main-result:47f11f29905d256257ce069382689fe0",
+        "deliveredResults": 2
+      }
+    ],
+    "workerInvocations": 2,
+    "supplementReads": 1
+  },
+  "unresolvedFullCase": {
+    "name": "testConfiguredPublicSourcePlannerPreservesReadProofAndOriginalProductTask",
+    "response": ".cache/main-live/maltose-session-22279BD0-2330-4CFD-B567-34BA5A247951/config/public-source-real-responses.jsonl",
+    "actual": "Source read and exact chart delivered; configured reviewer returns valid partial because publication-owned write scope alone does not independently prove no other existing panel was modified",
+    "next": "Expose precise native policy/snapshot/claim evidence for existing-panel Agent mutation scope. Do not waive completion criteria or accept self-report as proof."
+  },
+  "closingChecks": {
+    "sourceFilesUnchanged": 300,
+    "pythonAST": 233,
+    "verificationJSON": 19,
+    "canonicalMarkdown": 5,
+    "localLinks": true,
+    "diffCheck": true
+  }
+}

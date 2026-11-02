@@ -19,7 +19,8 @@ struct MarkdownDocumentBlock: Identifiable {
 
 @MainActor final class MarkdownDocumentModel: ObservableObject {
     @Published private(set) var mode: WorkspaceMode = .grid
-    let blocks: [MarkdownDocumentBlock]
+    @Published private(set) var blocks: [MarkdownDocumentBlock]
+    private(set) var resultTitle: String?
 
     init(markdown: String? = nil) {
         let source = markdown ?? Self.loadBundledSample()
@@ -27,6 +28,11 @@ struct MarkdownDocumentBlock: Identifiable {
     }
 
     func configure(mode: WorkspaceMode) { self.mode = mode }
+
+    func loadResult(title: String, markdown: String) {
+        resultTitle = title
+        blocks = MarkdownDocumentParser.parse("# \(title)\n\n" + markdown)
+    }
 
     private static func loadBundledSample() -> String {
         guard let url = Bundle.module.url(forResource: "sample-document", withExtension: "md"),

@@ -1,0 +1,98 @@
+{
+  "status": "passed_scoped_batch",
+  "sourceSnapshot": {
+    "files": 300,
+    "pythonAST": 233,
+    "sha256": "fa4b9c5380357c549918e6e764c608a51780b60621995d91b05944086497ed77",
+    "manifest": "/tmp/maltose-panel-boundary-source.json"
+  },
+  "focused": {
+    "python": {
+      "passed": 69,
+      "seconds": 0.811,
+      "log": "/tmp/maltose-panel-boundary-focused-python.log"
+    },
+    "native": {
+      "passed": 16,
+      "seconds": 31.864,
+      "log": "/tmp/maltose-panel-boundary-focused-native-v2.log"
+    },
+    "sealedNative": {
+      "passed": 3,
+      "seconds": 1.628,
+      "log": "/tmp/maltose-panel-boundary-sealed-focused-native.log"
+    }
+  },
+  "full": {
+    "python": {
+      "status": "passed",
+      "log": "/tmp/maltose-panel-boundary-full-python.log",
+      "passed": 574,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 48.824
+    },
+    "native": {
+      "status": "passed",
+      "log": "/tmp/maltose-panel-boundary-full-native.log",
+      "gui": true,
+      "configuredMain": true,
+      "configuredCodex": true,
+      "docker": true,
+      "cases": 280,
+      "passed": 280,
+      "failedCases": 0,
+      "failures": 0,
+      "unexpected": 0,
+      "skipped": 0,
+      "seconds": 842.325
+    }
+  },
+  "scope": [
+    "Only guarded native Agent panel entrypoints for exact captured input/runtime until Main result prepare",
+    "Claims and operation ledger must both be empty to prove no admitted existing-panel actions",
+    "Snapshot, runtime or capability gaps remain unknown",
+    "Publication-owned writer delivery remains independently observed",
+    "Sealed boundary is reused on replay; legacy reports are not retroactively certified"
+  ],
+  "limitations": [
+    "No proof of unchanged human edits, dynamic content, files, other inputs/runtimes or future executions",
+    "Public static-source chart path remains limited to actually read complete tables; no PDF/JS/multi-table research claim",
+    "Remaining P2–P5 work, human microphone acceptance and packaging are not complete"
+  ],
+  "intermediateFailures": [
+    {
+      "log": "/tmp/maltose-panel-boundary-focused-native.log",
+      "reason": "New test called nonexistent CodexTaskStore.conversation accessor",
+      "fix": "Use actual conversations collection"
+    }
+  ],
+  "remainingGoalStatus": "active",
+  "artifacts": {
+    "committed": false,
+    "repackaged": false,
+    "deployed": false,
+    "unchangedExecutableSHA256": {
+      "dist/Maltose.app/Contents/MacOS/MaltoseApp": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+      "dist/trials/build17/Maltose.app/Contents/MacOS/MaltoseApp": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301"
+    }
+  },
+  "configuredReviewObservedScope": {
+    "fixture": ".cache/main-live/maltose-session-E32BF24D-AA1D-4528-955C-7D4ADBFCE413/config/public-source-real-responses.jsonl",
+    "status": "completed",
+    "witnesses": [
+      "e1: actual complete public-source table read",
+      "e2: host-observed native guarded panel action boundary",
+      "e3: saved text and publication-owned new panel delivery"
+    ],
+    "note": "Controlled fictional six-month table, real configured presentation/review model. Not external validation of actual polling."
+  },
+  "closingChecks": {
+    "sourceFilesUnchanged": 300,
+    "pythonAST": 233,
+    "verificationJSON": 20,
+    "canonicalMarkdown": 5,
+    "localLinks": true,
+    "diffCheck": true
+  }
+}

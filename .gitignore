@@ -13,6 +13,8 @@ dist/
 # Maltose runtime: local state and environments are never source artifacts
 .env
 .env.*
+*.env
+*.env.*
 runtime/.venvs/
 runtime/maltose.toml
 runtime/myagent.toml

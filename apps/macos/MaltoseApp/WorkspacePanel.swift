@@ -2,12 +2,17 @@ import AppKit
 import SwiftUI
 
 /// UI-only model. Content has no dependency on the Host or an Agent document.
-struct WorkspacePanel: Identifiable {
+struct WorkspacePanel: Identifiable, Codable {
     enum Kind: String, Codable, CaseIterable {
-        case canvas, notes, chart, table, conversationHistory, document, imageGallery, browser, agentIdentity, agentCoreTest
+        case canvas, notes, chart, table, conversationHistory, document, imageGallery, browser, agentIdentity, agentCoreTest, agentActivity, taskProgress
+
+        var canClose: Bool { self != .agentIdentity && self != .conversationHistory }
+        var scrollsContentInGrid: Bool {
+            [.conversationHistory, .document, .agentActivity, .taskProgress].contains(self)
+        }
 
         var allowsMultipleInstances: Bool {
-            self != .agentIdentity && self != .conversationHistory && self != .agentCoreTest
+            self != .agentIdentity && self != .conversationHistory && self != .agentCoreTest && self != .agentActivity && self != .taskProgress
         }
 
         var defaultInstanceTitle: String {
@@ -22,6 +27,8 @@ struct WorkspacePanel: Identifiable {
             case .browser: "網頁"
             case .agentIdentity: "形象"
             case .agentCoreTest: "核心動畫測試"
+            case .agentActivity: "工作日誌"
+            case .taskProgress: "任務進度"
             }
         }
     }
@@ -48,7 +55,8 @@ struct WorkspacePanel: Identifiable {
                                     imageGalleryModel: ImageGalleryModel? = nil,
                                     browserModel: BrowserPanelModel? = nil,
                                     flowchartModel: FlowchartCanvasModel? = nil,
-                                    sampleContentModel: WorkspaceSampleContentModel? = nil) -> NSView {
+                                    sampleContentModel: WorkspaceSampleContentModel? = nil,
+                                    workMonitor: AgentWorkMonitor? = nil) -> NSView {
         let view: NSView
         switch kind {
         case .chart:
@@ -95,6 +103,16 @@ struct WorkspacePanel: Identifiable {
             hostingView.layer?.backgroundColor = NSColor.clear.cgColor
             hostingView.layer?.isOpaque = false
             view = hostingView
+        case .agentActivity:
+            let hosting = NSHostingView(rootView: AgentActivityPanelView(model: workMonitor ?? AgentWorkMonitor()))
+            hosting.sizingOptions = []; hosting.wantsLayer = true
+            hosting.layer?.backgroundColor = NSColor.clear.cgColor; hosting.layer?.isOpaque = false
+            view = hosting
+        case .taskProgress:
+            let hosting = NSHostingView(rootView: TaskProgressPanelView(model: workMonitor ?? AgentWorkMonitor()))
+            hosting.sizingOptions = []; hosting.wantsLayer = true
+            hosting.layer?.backgroundColor = NSColor.clear.cgColor; hosting.layer?.isOpaque = false
+            view = hosting
         case .agentCoreTest:
             view = NSHostingView(rootView: AgentCoreAnimationTestView())
         default:
@@ -112,9 +130,14 @@ struct WorkspacePanel: Identifiable {
         return view
     }
 
+    static var required: [WorkspacePanel] { samples.filter { !$0.kind.canClose } }
+    static var initial: [WorkspacePanel] { samples.filter { !$0.kind.canClose || $0.kind == .agentActivity } }
+
     static let samples: [WorkspacePanel] = [
         .init(id: "agent-identity", title: "形象", kind: .agentIdentity),
         .init(id: "chat", title: "聊天", kind: .conversationHistory),
+        .init(id: "agent-activity", title: "工作日誌", kind: .agentActivity),
+        .init(id: "task-progress", title: "任務進度", kind: .taskProgress),
         .init(id: "document", title: "文檔", kind: .document),
         .init(id: "gallery", title: "圖片", kind: .imageGallery),
         .init(id: "browser-youtube", title: "YouTube", kind: .browser,
@@ -176,7 +199,7 @@ private struct WorkspaceSampleContent: View {
                         }
                     }
                 }
-            case .chart, .conversationHistory, .document, .imageGallery, .browser, .agentCoreTest, .agentIdentity:
+            case .chart, .conversationHistory, .document, .imageGallery, .browser, .agentCoreTest, .agentIdentity, .agentActivity, .taskProgress:
                 EmptyView()
             }
         }

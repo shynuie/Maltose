@@ -12,6 +12,24 @@ import XCTest
               delegation: .init(objective: "Add fixture behavior", constraints: ["Preserve current edits"], acceptanceCriteria: ["Fixture check passes"]))
     }
 
+    func testPanelMutationClaimsSurviveRestartAndCannotBeRemovedReboundOrDuplicated() throws {
+        let url=try location();defer {try? FileManager.default.removeItem(at:url.deletingLastPathComponent())}
+        let store=CodexTaskStore(url:url);try store.open()
+        let conversation=try store.ensureConversation()
+        _ = try store.enqueue(.init(id:"human-update",text:"更新筆記",author:.user,origin:.native,speakerID:nil,speakerStatus:nil,runtimeSessionID:nil,recipient:.maltose,delivery:.accepted),conversationID:conversation.id)
+        let source=NativePanelSource(runtimeSessionID:"original-runtime",executor:.maltose,inputID:"human-update",scopeID:"original-invocation")
+        let claim=NativePanelMutationClaim(inputID:"human-update",targetID:"notes",category:"content",source:source)
+        try store.updateConversation(conversation.id) {$0.panelMutationClaims=[claim]}
+        store.close()
+        let restored=CodexTaskStore(url:url);try restored.open();defer {restored.close()}
+        XCTAssertEqual(restored.conversations.first?.panelMutationClaims,[claim])
+        XCTAssertThrowsError(try restored.updateConversation(conversation.id) {$0.panelMutationClaims=[]})
+        var rebound=claim;rebound.source.runtimeSessionID="new-runtime"
+        XCTAssertThrowsError(try restored.updateConversation(conversation.id) {$0.panelMutationClaims=[rebound]})
+        XCTAssertThrowsError(try restored.updateConversation(conversation.id) {$0.panelMutationClaims=[claim,claim]})
+        XCTAssertEqual(restored.conversations.first?.panelMutationClaims,[claim])
+    }
+
     func testAtomicPrivateSnapshotRestoresThreadWorktreeAndMessageProvenance() throws {
         let url = try location(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let store = CodexTaskStore(url: url); try store.open()
@@ -103,7 +121,8 @@ import XCTest
         XCTAssertEqual(restored.activeConversation?.stopRequested, true)
         XCTAssertEqual(restored.activeConversation?.recipient, .codex)
         let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
-        XCTAssertEqual(saved["schemaVersion"] as? Int, 2)
+        XCTAssertEqual(saved["schemaVersion"] as? Int, 3)
+        XCTAssertNotNil(upgraded.migrationBackupURL)
     }
 
     func testInputReviewRetainsUncertainDeliveryAndRejectsChangedRuntimeProvenance() throws {

@@ -11,6 +11,7 @@ from maltose.ui import MaltoseBridge
 from maltose.ui.native import NativeRuntimeBridge
 from maltose.ui.native_tools import NativePanelToolAdapter
 from maltose.codex.native_tools import NativeCodexToolAdapter
+from maltose.ui.workflow import NativeWorkflowToolAdapter
 from maltose.agent.brain import EchoBrain, OpenClawBrain
 from maltose.agent.config import AgentConfig, load_cli_defaults
 from maltose.agent.environment import EnvironmentTools
@@ -363,6 +364,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stt-max-gain", type=float, default=4.0)
     parser.add_argument("--tts-voice", help="macOS voice name.")
     parser.add_argument("--tts-rate", type=int, help="macOS speech rate.")
+    parser.add_argument("--speech-mode", choices=("auto", "summary", "mute"), default="auto",
+                        help="Result speech preference: voice summaries, all-input summaries, or silent.")
+    parser.add_argument("--speech-target-seconds", type=float, default=15.0,
+                        help="Target maximum duration of the default spoken summary (1–30 seconds).")
     parser.add_argument(
         "--no-interruptible-tts",
         action="store_true",
@@ -495,6 +500,8 @@ def _main(resources: ExitStack, *, native_owner_lost=None, native_control_ready=
         stt_max_gain=args.stt_max_gain,
         tts_voice=args.tts_voice,
         tts_rate=args.tts_rate,
+        speech_mode=args.speech_mode,
+        speech_target_seconds=args.speech_target_seconds,
         interruptible_tts=not args.no_interruptible_tts,
         output_dir=args.output_dir,
         wake_word_detector=wake_word_detector,
@@ -561,6 +568,8 @@ def _main(resources: ExitStack, *, native_owner_lost=None, native_control_ready=
         if native_bridge is not None:
             capability_adapters.append(NativePanelToolAdapter(native_bridge))
             capability_adapters.append(NativeCodexToolAdapter(native_bridge))
+            if native_bridge.workflow_version == 1:
+                capability_adapters.append(NativeWorkflowToolAdapter(native_bridge))
         if maltose_bridge is not None:
             capability_adapters.append(maltose_bridge)
         if args.filesystem_enabled:
@@ -823,6 +832,13 @@ def _main(resources: ExitStack, *, native_owner_lost=None, native_control_ready=
     if native_bridge is not None:
         native_bridge.file_service = filesystem_service
         native_bridge.attach(agent, brain)
+        if native_bridge.workflow_version == 1 and callable(getattr(brain, 'process_result', None)):
+            workflow = NativeWorkflowToolAdapter(native_bridge)
+            brain.workflow_context_provider = workflow.snapshot
+            brain.product_plan_observer = workflow.prepared_workers
+        if native_bridge.presentation_version == 1:
+            agent.result_handler = native_bridge.present_result
+            agent.durable_result_delivery = native_bridge.result_delivery_version == 1
     if maltose_bridge is not None:
         maltose_bridge.attach(agent,brain)
     web_server: WebServer | None = None

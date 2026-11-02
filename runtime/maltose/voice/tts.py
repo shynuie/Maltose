@@ -7,7 +7,7 @@ import tempfile
 import threading
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -20,6 +20,7 @@ class TTSRequest:
     voice: str | None = None
     rate: int | None = None
     output_path: Path | None = None
+    cancel_event: threading.Event | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -198,6 +199,9 @@ class MacOSSayTTS:
 
         command.append(text)
         with self._lock:
+            # Set by the result output owner before calling stop(). Checking
+            # under the process lock closes the cancel-before-Popen race.
+            if request.cancel_event is not None and request.cancel_event.is_set(): return
             self.stop()
             process = subprocess.Popen(command)
             cancel_event = threading.Event()

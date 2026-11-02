@@ -232,8 +232,8 @@ class NativeCollaborationTests(unittest.TestCase):
             params = dict(ownerID=CONTROL_OWNER,leaseID=lease['leaseID'],taskID='fixture',ownerSpeakerID='owner',
                           tool='maltose_read_panel',arguments={'panelID': 'notes'})
             bridge.call_panel = lambda command: calls.append(command) or {'ok': True}
-            # A persisted task owner must not inherit a previous brain's private identity.
-            self.assertEqual(bridge._dispatch('execute_codex_panel', params)['error']['code'], 'identity_required')
+            # Standing panel access is independent of a persisted owner or Memory identity.
+            self.assertTrue(bridge._dispatch('execute_codex_panel', params)['ok'])
             bridge.brain._identity_is_known = lambda: False
             self.assertTrue(bridge._dispatch('execute_codex_panel', {**params, 'uiContextConsent': True})['ok'])
             self.assertEqual(bridge._voice_scope, None, 'UI consent must not create a verified speaker')
@@ -244,7 +244,8 @@ class NativeCollaborationTests(unittest.TestCase):
             self.assertEqual(calls, [{'read_panel': {'panelID': 'notes'}}])
             invalid = {**params, 'arguments': {'panelID': 'notes', 'unexpected': True}}
             self.assertEqual(bridge._dispatch('execute_codex_panel', invalid)['error']['code'], 'invalid_argument')
-            self.assertEqual(bridge._dispatch('execute_codex_panel', {**params, 'ownerSpeakerID': 'other'})['error']['code'], 'identity_required')
+            self.assertTrue(bridge._dispatch('execute_codex_panel', {**params, 'ownerSpeakerID': 'other'})['ok'])
+            calls.pop()
             with self.assertRaises(PermissionError): bridge._dispatch('execute_codex_panel', {**params,'leaseID': 'stale'})
             with self.assertRaises(ValueError): bridge._dispatch('execute_codex_panel', {**params,'tool': 'unsafe_filesystem_read'})
             # The same FileService boundary applies; Swift never opens an arbitrary path.
@@ -253,7 +254,11 @@ class NativeCollaborationTests(unittest.TestCase):
             self.assertEqual(denied['error']['code'], 'access_denied')
             self.assertEqual(len(calls), 1)
             bridge.observe_voice_context(TurnContext(speaker_status='unknown'))
-            self.assertEqual(bridge._dispatch('execute_codex_panel', params)['error']['code'], 'identity_required')
+            self.assertTrue(bridge._dispatch('execute_codex_panel', params)['ok'])
+            self.assertEqual(bridge._voice_scope, (None, 'unknown'), 'Panel access must not promote an unidentified speaker')
+            bridge.tool_definitions.append(dict(name='maltose_flowchart_save', command='flowchart_save', inputSchema=schema))
+            export = bridge._dispatch('execute_codex_panel', {**params, 'tool': 'maltose_flowchart_save', 'arguments': {'panelID': 'canvas'}})
+            self.assertEqual(export['error']['code'], 'identity_required')
 
     def test_async_controller_does_not_block_reader_rejects_resume_and_deduplicates(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -85,3 +85,24 @@ class NativePanelFileTests(unittest.TestCase):
         self.assertTrue(result['ok'])
         self.assertFalse(result['result']['panelAcknowledgement']['ok'])
         self.assertEqual(path.read_bytes(), b'flow snapshot')
+
+    def test_private_agent_source_is_preserved_across_load_export_and_saved_phases(self):
+        source=dict(runtimeSessionID='runtime',executor='maltose',inputID='human',scopeID='invocation',controlEpoch=0)
+        seen=[]
+        def call(command, *, file_transfer, agent_source):
+            seen.append((file_transfer['mode'],dict(agent_source)))
+            return self.call_panel(command,file_transfer=file_transfer)
+        self.bridge.call_panel=call
+        adapter=NativePanelFileAdapter(self.bridge,source=source)
+        read=self.root/'source.csv';read.write_text('X,A\n1,2\n2,3')
+        self.assertTrue(adapter.call('chart_open_csv',dict(panelID='chart',path=str(read)))['ok'])
+        target=self.root/'source.maltoseflow.json'
+        self.assertTrue(adapter.call('flowchart_save',dict(panelID='canvas',path=str(target)))['ok'])
+        self.assertEqual([mode for mode,_ in seen],['load','export','saved'])
+        self.assertTrue(all(saved==source for _,saved in seen))
+
+    def test_native_panel_denial_before_export_never_creates_or_overwrites_a_file(self):
+        self.bridge.call_panel=lambda *args,**kwargs:dict(ok=False,error=dict(code='update_not_authorized'))
+        path=self.root/'denied.maltoseflow.json'
+        result=NativePanelFileAdapter(self.bridge,source=dict(inputID='human')).call('flowchart_save',dict(panelID='canvas',path=str(path)))
+        self.assertFalse(result['ok']);self.assertFalse(path.exists())

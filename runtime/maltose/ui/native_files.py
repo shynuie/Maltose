@@ -11,7 +11,13 @@ from pathlib import Path
 class NativePanelFileAdapter:
     maximum_file_bytes = 2 * 1024 * 1024
 
-    def __init__(self, bridge): self.bridge = bridge
+    def __init__(self, bridge, *, source=None):
+        self.bridge = bridge
+        self.source = source
+
+    def _panel(self, command, *, file_transfer):
+        return self.bridge.call_panel(command, file_transfer=file_transfer,
+            **({'agent_source': self.source} if self.source is not None else {}))
 
     def _resolve(self, raw_path: str, *, must_exist: bool):
         service = self.bridge.file_service
@@ -39,14 +45,14 @@ class NativePanelFileAdapter:
             arguments['path'] = str(resolved.path)
             result = service.read_bytes(root, resolved.relative_path,
                 max_bytes=min(service.policy.max_read_bytes, self.maximum_file_bytes))
-            response = self.bridge.call_panel({command: arguments}, file_transfer={
+            response = self._panel({command: arguments}, file_transfer={
                 'mode': 'load', 'data': base64.b64encode(result['data']).decode('ascii')})
             return response
         service, root, resolved = self._resolve(arguments['path'], must_exist=False)
         arguments['path'] = str(resolved.path)
         # Authorize before exporting UI data; FileService rechecks with size and CAS at write.
         service.policy.require_allowed(root, 'write', target=resolved)
-        exported = self.bridge.call_panel({command: arguments}, file_transfer={'mode': 'export'})
+        exported = self._panel({command: arguments}, file_transfer={'mode': 'export'})
         if not exported.get('ok'): return exported
         result = exported['result']
         data = base64.b64decode(result['data'], validate=True)
@@ -55,7 +61,7 @@ class NativePanelFileAdapter:
         expected = expected if expected is not None else result.get('knownFileSHA256')
         written = service.write_bytes(root, resolved.relative_path, data, expected_sha256=expected)
         try:
-            acknowledged = self.bridge.call_panel({command: arguments}, file_transfer={
+            acknowledged = self._panel({command: arguments}, file_transfer={
                 'mode': 'saved', 'documentID': result['documentID'], 'fingerprint': result['fingerprint'],
                 'fileSHA256': written['sha256']})
         except (ConnectionError, TimeoutError) as error:

@@ -170,7 +170,9 @@ class CodexWorkspaceManager:
                 or status_before != self._git(repository, 'status', '--porcelain=v1', '-z', '--untracked-files=all') \
                 or index_before != self._git(repository, 'diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv'):
                 raise CodexWorkspaceError('Source changed during preparation; preserve this attempt and prepare a fresh task')
-            receipt.update(phase='ready', entries=copied)
+            receipt.update(phase='ready', entries=copied,
+                           sourceIndexSHA256=hashlib.sha256(index_before).hexdigest(),
+                           sourceStatusSHA256=hashlib.sha256(status_before).hexdigest())
             self._save(receipt_path, receipt)
             return receipt
         except BaseException:
@@ -232,4 +234,23 @@ class CodexWorkspaceManager:
             changes.append(entry)
         # A concurrent edit invalidates this report rather than attributing a mixed snapshot.
         if current != self._snapshot(workspace): raise CodexWorkspaceError('Workspace changed while collecting results')
-        return dict(taskID=task_id, head=receipt['head'], changes=changes)
+        return dict(taskID=task_id, head=receipt['head'], changes=changes, sourceState=self._source_state(receipt))
+
+    def _source_state(self, receipt):
+        """Read-only provenance; source edits are reported, never reset/staged."""
+        source = Path(receipt['repository'])
+        try:
+            if source.is_symlink() or source.resolve(strict=True) != source: raise CodexWorkspaceError('Source identity changed')
+            head = self._git(source, 'rev-parse', 'HEAD').decode().strip()
+            files = self._snapshot(source)
+            index = self._git(source, 'diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv')
+            status = self._git(source, 'status', '--porcelain=v1', '-z', '--untracked-files=all')
+            stable = head == self._git(source, 'rev-parse', 'HEAD').decode().strip() and files == self._snapshot(source) \
+                and index == self._git(source, 'diff', '--cached', '--binary', '--no-ext-diff', '--no-textconv') \
+                and status == self._git(source, 'status', '--porcelain=v1', '-z', '--untracked-files=all')
+            return dict(checked=stable, headMatchesBaseline=head == receipt['head'] if stable else None,
+                filesMatchBaseline=files == receipt['entries'] if stable else None,
+                indexMatchesBaseline=hashlib.sha256(index).hexdigest() == receipt['sourceIndexSHA256'] if stable and 'sourceIndexSHA256' in receipt else None,
+                statusMatchesBaseline=hashlib.sha256(status).hexdigest() == receipt['sourceStatusSHA256'] if stable and 'sourceStatusSHA256' in receipt else None)
+        except (OSError, CodexWorkspaceError):
+            return dict(checked=False, note='Original source state could not be verified; it was not modified by this inspection.')

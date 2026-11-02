@@ -77,6 +77,24 @@ enum RuntimeLaunchError: LocalizedError {
     private(set) var processID: Int32?
     var onStateChange: ((State) -> Void)?
     var onEvent: ((Data) -> Void)?
+    var workflowEnabled = false
+    var continuationsEnabled = true
+    var visualPlanningEnabled = true
+    var panelPolicyEnabled = true
+    private(set) var panelPolicyVersion = 0
+    private(set) var panelOperationVersion = 0
+    private(set) var publicWebSourceVersion = 0
+    private(set) var workerResultVersion = 0
+    private(set) var visualPlanningVersion = 0
+    var taskResumptionsEnabled = true
+    private(set) var taskResumptionVersion = 0
+    var foregroundContinuationsEnabled = true
+    private(set) var foregroundContinuationVersion = 0
+    private(set) var inputScopeVersion = 0
+    // Negotiated only with the native workflow; legacy hosts keep their adapter.
+    var foregroundResultsEnabled = true
+    private(set) var foregroundResultVersion = 0
+    var onWorkflowRequest: ((ProductWorkflowRequest) throws -> [String: UserViewValue])?
     var onPanelCommand: ((WorkspaceAgentRequest, NativePanelFileTransfer?) async -> WorkspaceAgentResponse)?
     var toolDefinitions = WorkspaceAgentToolDefinitions.all
     private var process: Process?
@@ -165,7 +183,21 @@ enum RuntimeLaunchError: LocalizedError {
         }
         processID = child.processIdentifier
         var initialize: [String: Any] = ["clientInfo": ["name": "maltose", "version": MaltoseProduct.version], "tools": tools,
-                                         "inputRouting": inputRoutingEnabled]
+                                         "inputRouting": inputRoutingEnabled, "presentationVersion": 1, "resultDeliveryVersion": 1]
+        initialize["resultChartVersion"] = 1
+        initialize["panelPolicyVersion"] = panelPolicyEnabled ? 1 : 0
+        initialize["panelOperationVersion"] = panelPolicyEnabled ? 1 : 0
+        initialize["publicWebSourceVersion"] = workflowEnabled && foregroundResultsEnabled ? 1 : 0
+        initialize["visualPlanningVersion"] = workflowEnabled && foregroundResultsEnabled && visualPlanningEnabled ? 1 : 0
+        initialize["workflowVersion"] = workflowEnabled ? 1 : 0
+        initialize["taskProgressVersion"] = workflowEnabled ? 1 : 0
+        initialize["inputScopeVersion"] = workflowEnabled ? 1 : 0
+        initialize["foregroundResultVersion"] = workflowEnabled && foregroundResultsEnabled ? 1 : 0
+        initialize["foregroundContinuationVersion"] = workflowEnabled && foregroundResultsEnabled && continuationsEnabled && foregroundContinuationsEnabled ? 1 : 0
+        initialize["taskResumptionVersion"] = workflowEnabled && foregroundResultsEnabled && continuationsEnabled && foregroundContinuationsEnabled && taskResumptionsEnabled ? 1 : 0
+        initialize["workerResultVersion"] = initialize["taskResumptionVersion"]
+        initialize["workerEvidenceVersion"] = workflowEnabled ? 1 : 0
+        initialize["continuationVersion"] = workflowEnabled && continuationsEnabled ? 1 : 0
         if let initialAutonomyOwner { initialize["initialAutonomyOwner"] = initialAutonomyOwner }
         if let conversationID { initialize["conversationID"] = conversationID }
         request("initialize", params: initialize)
@@ -282,6 +314,15 @@ enum RuntimeLaunchError: LocalizedError {
                     guard ok, let id = result["sessionID"] as? String, !id.isEmpty,
                           let pid = result["pid"] as? Int32, pid == processID else { fail("主 Agent 握手身分不相符。"); return }
                     sessionID = id
+                    inputScopeVersion = (result["inputScopeVersion"] as? Int) == 1 ? 1 : 0
+                    foregroundResultVersion = (result["foregroundResultVersion"] as? Int) == 1 ? 1 : 0
+                    visualPlanningVersion = (result["visualPlanningVersion"] as? Int) == 1 ? 1 : 0
+                    panelPolicyVersion = (result["panelPolicyVersion"] as? Int) == 1 ? 1 : 0
+                    panelOperationVersion = panelPolicyVersion == 1 && (result["panelOperationVersion"] as? Int) == 1 ? 1 : 0
+                    publicWebSourceVersion = (result["publicWebSourceVersion"] as? Int) == 1 ? 1 : 0
+                    taskResumptionVersion = (result["taskResumptionVersion"] as? Int) == 1 ? 1 : 0
+                    workerResultVersion = (result["workerResultVersion"] as? Int) == 1 ? 1 : 0
+                    foregroundContinuationVersion = (result["foregroundContinuationVersion"] as? Int) == 1 ? 1 : 0
                     if let group = result["processGroupID"] as? Int32, group == pid { ownedProcessGroup = group }
                 }
                 if let sessionID, message["sessionID"] as? String != sessionID { fail("主 Agent 回應不屬於目前連線。"); return }
@@ -325,8 +366,16 @@ enum RuntimeLaunchError: LocalizedError {
                 let token = generation
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let response = await self.onPanelCommand?(request, fileTransfer) ?? WorkspaceAgentResponse(requestID: requestID, ok: false,
-                        error: .init(code: "unavailable", message: "原生面板尚未連線。"))
+                    let response: WorkspaceAgentResponse
+                    if case let .workflow(operation) = request.command {
+                        do {
+                            guard fileTransfer == nil, let handler = self.onWorkflowRequest else { throw CodexTaskStoreError.unavailable("共同任務服務尚未連接。") }
+                            response = .init(requestID: requestID, ok: true, result: try handler(operation))
+                        } catch { response = .init(requestID: requestID, ok: false, error: .init(code: "workflow_rejected", message: error.localizedDescription)) }
+                    } else {
+                        response = await self.onPanelCommand?(request, fileTransfer) ?? WorkspaceAgentResponse(requestID: requestID, ok: false,
+                            error: .init(code: "unavailable", message: "原生面板尚未連線。"))
+                    }
                     guard self.generation == token, self.process != nil else { return }
                     do {
                         let result = try JSONSerialization.jsonObject(with: JSONEncoder().encode(response))

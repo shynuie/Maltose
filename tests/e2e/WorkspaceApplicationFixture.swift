@@ -55,7 +55,11 @@ import XCTest
         configuration.createsNewApplicationInstance = true; configuration.activates = true
         configuration.arguments = ["--ui-only", "--workspace-test-snapshot=" + output.path, "--workspace-test-nonce=" + nonce]
         configuration.environment = ["MALTOSE_DATA_DIR": directory.appendingPathComponent("unused-data").path]
+        // The launcher may own the active test windows. Cooperatively transfer
+        // activation on macOS 14 instead of assuming LS launch guarantees focus.
+        NSApp.yieldActivation(toApplicationWithBundleIdentifier: bundleID)
         let application = try await NSWorkspace.shared.openApplication(at: app, configuration: configuration)
+        let activationAllowed = application.activate(from: .current, options: [])
         defer {
             if !application.isTerminated { application.forceTerminate() }
         }
@@ -68,7 +72,8 @@ import XCTest
             if application.isTerminated { break }
             try await Task.sleep(for: .milliseconds(100))
         }
-        let value = try XCTUnwrap(snapshot, "UI-only product did not produce the scoped native snapshot")
+        var value = try XCTUnwrap(snapshot, "UI-only product did not produce the scoped native snapshot")
+        value.diagnostics.append("fixture cooperative activation allowed=\(activationAllowed)")
         XCTAssertEqual(value.schemaVersion, 1)
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("unused-data").path), "UI-only fixture must not initialize Agent data")
         let shutdown = Date().addingTimeInterval(5)

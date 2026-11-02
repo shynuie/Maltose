@@ -1,0 +1,271 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "capability": {
+    "panelOperationVersion": 1,
+    "requiresPanelPolicyVersion": 1,
+    "defaultEnabled": true
+  },
+  "sourceSnapshot": {
+    "files": 293,
+    "sha256": "0c2e2cfc791ca78d789d9c58ec9b009cdbad33b2560968d15d1fde30f8157708",
+    "pythonAST": 229,
+    "manifest": "/tmp/maltose-panel-operation-final-source.json",
+    "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map"
+  },
+  "pythonFull": {
+    "passed": 544,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 45.912,
+    "log": "/tmp/maltose-panel-operation-recovery-full-python.log",
+    "docker": true
+  },
+  "nativeFocused": {
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 30.63,
+    "log": "/tmp/maltose-panel-operation-read-proof-focused-native.log",
+    "gui": true,
+    "configuredMain": true
+  },
+  "nativeFull": {
+    "cases": 265,
+    "passed": 264,
+    "failedCases": 1,
+    "assertionFailures": 7,
+    "unexpected": 0,
+    "skipped": 0,
+    "seconds": 696.767,
+    "log": "/tmp/maltose-panel-operation-closing-full-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true,
+    "docker": true,
+    "status": "one_unresolved_intermittent_fullscreen_activation_case"
+  },
+  "verifiedBehaviors": [
+    "Actual Main transport and native Codex dispatch references reject held, cancelled and changed plan versions",
+    "Existing-panel operation prepared before writer; original request and terminal response immutable",
+    "Lost ACK recovers receipt without repeating mutation; private token removed before model result",
+    "Known unchanged CSV failure resumes in admitted original foreground continuation and closes task after actual readback",
+    "Prepared and uncertain operations survive store reopening without becoming no-change retry permission",
+    "Failure after actual panel write returns outcome_unknown with native operationID",
+    "Writer rebuild preserves historical completion without claiming present panel content restored",
+    "Unnegotiated clients do not receive the new journal or ACK barrier",
+    "Native deictic pointing facts are captured by kind in actual source composer screen; authorization assessment no longer demands CSV inside the human request",
+    "Fresh CodexTaskStore instances restore completed, no-change and unknown operation history; forged historical grants remain rejected",
+    "Internal model work uses an explicit API input data envelope; it does not append canonical human input or chat history, change identity, or authorize new work"
+  ],
+  "boundaries": [
+    "Journal currently excludes new panels, their initial fill, and external flowchart_save filesystem phase",
+    "Unknown side effects require readback; no general manual reconciliation or explicit retry UI implemented",
+    "Foreground repair fixture uses controlled model and actual stdio/store/continuation, not live-provider autonomous repair acceptance",
+    "No new cancellation UI, recurring update grant or full cross-window natural-language matrix",
+    "No microphone/human listening acceptance, packaging, deployment, commit or formal user-state mutation in this batch"
+  ],
+  "intermediateFailures": [
+    {
+      "log": "/tmp/maltose-panel-lifecycle-task-states-native.log",
+      "kind": "fixture compile error",
+      "reason": "Attempted to mutate immutable plan.steps",
+      "fix": "Reconstruct complete immutable plan"
+    },
+    {
+      "log": "/tmp/maltose-panel-operation-focused-native.log",
+      "kind": "fixture compile error",
+      "reason": "CSVLineChartData does not conform to Equatable",
+      "fix": "Compare series, date labels and numeric rows individually"
+    },
+    {
+      "log": "/tmp/maltose-panel-operation-intent-focused-native.log",
+      "kind": "focused fixture screen-source error",
+      "cases": 19,
+      "failedCases": 1,
+      "assertionFailures": 5,
+      "reason": "New positive deictic test captured the OS active screen instead of its composer screen in a multi-screen fixture",
+      "fix": "Capture through the actual submitText(from:) path; keep source-screen guards unchanged"
+    },
+    {
+      "log": "/tmp/maltose-panel-operation-composer-fixture-focused.log",
+      "kind": "fixture compile error",
+      "reason": "Helper signature replacement did not match its actual default text",
+      "fix": "Add explicit optional captureInput parameter; retain default behavior of other fixtures"
+    },
+    {
+      "log": "/tmp/maltose-panel-operation-fresh-store-reproduction.log",
+      "kind": "real restoration bug",
+      "cases": 3,
+      "failedCases": 2,
+      "unexpected": 2,
+      "reason": "Cold store treated already persisted terminal journal rows as newly inserted operations that must be prepared",
+      "fix": "Snapshot restoration validates saved history; live transactions still require prepared insertion and immutable transition proof"
+    }
+  ],
+  "intermediateFullNative": {
+    "cases": 261,
+    "passed": 260,
+    "failedCases": 1,
+    "assertionFailures": 5,
+    "unexpected": 0,
+    "skipped": 0,
+    "seconds": 637.917,
+    "log": "/tmp/maltose-panel-operation-canonical-full-native.log",
+    "sourceSnapshot": {
+      "files": 293,
+      "sha256": "18de64867a2350e9b4958f468d3882f458360d31c17fce1a1f880bcd90556388",
+      "manifest": "/tmp/maltose-panel-operation-canonical-source.json",
+      "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map"
+    },
+    "reason": "Live intent assessor required CSV in the human input and rejected a uniquely selected chart; authorization and pointing facts are being separated from data availability"
+  },
+  "initialNativeFocused": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 13.544,
+    "log": "/tmp/maltose-panel-operation-canonical-focused-native-final.log"
+  },
+  "initialPythonFull": {
+    "passed": 544,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 46.38,
+    "docker": true,
+    "log": "/tmp/maltose-panel-operation-canonical-full-python.log"
+  },
+  "secondIntermediateFullNative": {
+    "cases": 262,
+    "passed": 261,
+    "failedCases": 1,
+    "assertionFailures": 4,
+    "unexpected": 0,
+    "skipped": 0,
+    "seconds": 657.023,
+    "log": "/tmp/maltose-panel-operation-final-full-native.log",
+    "sourceSnapshot": {
+      "files": 293,
+      "sha256": "b929cd370b999abd83e227ffb62094a3e4612728776477300819fc5a4aeeb37f",
+      "pythonAST": 229,
+      "manifest": "/tmp/maltose-panel-operation-pointing-source.json",
+      "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map"
+    },
+    "reason": "New unit fixture captured default-screen snapshot in connect before actual submitText; immutable capture correctly prevented later rebinding"
+  },
+  "intentFocused": {
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 30.154,
+    "log": "/tmp/maltose-panel-operation-intent-focused-native-final.log",
+    "configuredMain": true
+  },
+  "thirdIntermediateFullNative": {
+    "cases": 262,
+    "passed": 261,
+    "failedCases": 1,
+    "assertionFailures": 2,
+    "unexpected": 1,
+    "skipped": 0,
+    "seconds": 777.189,
+    "log": "/tmp/maltose-panel-operation-verified-full-native.log",
+    "sourceSnapshot": {
+      "files": 293,
+      "sha256": "b85b4c9ff760d03e8252d8642969da9bf98646f791162e0c95ce68d16d9c8472",
+      "pythonAST": 229,
+      "manifest": "/tmp/maltose-panel-operation-third-full-source.json",
+      "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map"
+    },
+    "reason": "Configured Main repeatedly reported a missing readable file instead of invoking the available tool; internal request was encoded as last assistant output"
+  },
+  "composerFocused": {
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 7.362,
+    "log": "/tmp/maltose-panel-operation-composer-fixture-focused-final.log",
+    "gui": true
+  },
+  "continuationPythonFocused": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 0.052,
+    "log": "/tmp/maltose-panel-operation-internal-request-focused-python.log"
+  },
+  "beforeInternalRequestPythonFull": {
+    "passed": 544,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 45.865,
+    "log": "/tmp/maltose-panel-operation-final-full-python.log",
+    "docker": true
+  },
+  "fourthIntermediateFullNative": {
+    "cases": 265,
+    "passed": 264,
+    "failedCases": 1,
+    "assertionFailures": 1,
+    "unexpected": 0,
+    "skipped": 0,
+    "seconds": 675.61,
+    "log": "/tmp/maltose-panel-operation-recovery-full-native.log",
+    "sourceSnapshot": {
+      "files": 293,
+      "sha256": "61880589429a567f6c748726b8067b9945f27abfe2b356c0765bfe0656fec316",
+      "pythonAST": 229,
+      "manifest": "/tmp/maltose-panel-operation-recovery-source.json",
+      "digestEncoding": "SHA256 of sorted compact JSON path-to-file-SHA256 map"
+    },
+    "reason": "Live independent-answer resumption correctly rechecked first.txt in an admitted work scope; exact total read count was not a human requirement. Tests now verify complete required sources, unchanged source files, original task and proof; controlled crash/replay tests keep exact counters"
+  },
+  "recoveryFocused": {
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 22.73,
+    "log": "/tmp/maltose-panel-operation-recovery-focused-native.log",
+    "gui": true,
+    "configuredMain": true
+  },
+  "pythonSourceSnapshot": {
+    "files": 229,
+    "sha256": "2fbfdab71b83f18275cf2af41b0753e51fcb25f41bd36f7106775a8c7ab6c06b",
+    "unchangedSinceFullRun": true
+  },
+  "nativeFullscreenFocused": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 4.714,
+    "log": "/tmp/maltose-panel-operation-fullscreen-activation-check.log",
+    "sameSource": true,
+    "sourceUnchanged": true
+  },
+  "artifacts": [
+    {
+      "path": "dist/Maltose.app",
+      "build": "15",
+      "sha256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+      "unchanged": true
+    },
+    {
+      "path": "dist/trials/build17/Maltose.app",
+      "build": "17",
+      "sha256": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+      "unchanged": true
+    }
+  ],
+  "overallGoalComplete": false,
+  "remainingFullscreenAcceptance": "Full suite could not activate native fullscreen fixture; same-source focused run passed. Full-suite failure retained, not claimed all green. IOConsoleLocked was false in a later read-only check.",
+  "finalChecks": {
+    "sourceFiles": 293,
+    "sourceUnchanged": true,
+    "pythonAST": 229,
+    "verificationJSON": 17,
+    "documents": 5,
+    "localLinks": 66,
+    "diffCheck": true
+  }
+}

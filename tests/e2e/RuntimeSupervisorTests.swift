@@ -11,7 +11,8 @@ import XCTest
     }
     private var project: URL { URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent() }
 
-    private func config(arguments: [String]? = nil, timeout: Duration = .seconds(5)) throws -> RuntimeLaunchConfiguration {
+    private func config(arguments: [String]? = nil, timeout: Duration = .seconds(5),
+                        shutdownGrace: Duration = .seconds(3)) throws -> RuntimeLaunchConfiguration {
         let python = project.appendingPathComponent("runtime/.venv/bin/python")
         guard FileManager.default.isExecutableFile(atPath: python.path) else { throw XCTSkip("Run scripts/setup-runtime.sh before runtime integration tests") }
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("maltose-supervisor-\(UUID().uuidString)")
@@ -20,7 +21,7 @@ import XCTest
                      arguments: arguments ?? ["-m", "maltose.desktop", "--native-text-only", "--brain", "echo", "--config", directory.appendingPathComponent("none.toml").path],
                      directory: directory, moduleDirectory: project.appendingPathComponent("runtime"),
                      logURL: directory.appendingPathComponent("runtime.log"), startupTimeout: timeout,
-                     shutdownGrace: .milliseconds(100))
+                     shutdownGrace: shutdownGrace)
     }
 
     private func waitFor(_ condition: () -> Bool, seconds: Double = 8, file: StaticString = #filePath, line: UInt = #line) async throws {
@@ -38,6 +39,8 @@ import XCTest
         try supervisor.start(configuration: configuration)
         try await waitFor { supervisor.state == .ready }
         XCTAssertNotNil(supervisor.sessionID)
+        XCTAssertTrue(supervisor.foregroundResultsEnabled, "Foreground delivery is enabled only when the native workflow is also enabled")
+        XCTAssertEqual(supervisor.foregroundResultVersion, 0)
         let pid = supervisor.processID
         try supervisor.start(configuration: configuration)
         XCTAssertEqual(supervisor.processID, pid, "Starting twice must not create another writer")
@@ -53,7 +56,8 @@ import XCTest
         var stopped = false
         supervisor.stop { stopped = true }
         try await waitFor { stopped && supervisor.processID == nil }
-        XCTAssertEqual(supervisor.state, .stopped)
+        XCTAssertEqual(supervisor.state, .stopped,
+                       (try? String(contentsOf: configuration.logURL, encoding: .utf8)) ?? "No runtime diagnostics")
         XCTAssertFalse(supervisor.submitText("offline"))
     }
 
@@ -211,7 +215,7 @@ import XCTest
 
     func testTimeoutAndInvalidProtocolReapOnlyTheOwnedChild() async throws {
         for program in ["import time; time.sleep(30)", "import time; print('not protocol',flush=True); time.sleep(30)"] {
-            let configuration = try config(arguments: ["-c", program], timeout: .milliseconds(100))
+            let configuration = try config(arguments: ["-c", program], timeout: .milliseconds(100), shutdownGrace: .milliseconds(100))
             let supervisor = RuntimeSupervisor()
             try supervisor.start(configuration: configuration)
             try await waitFor { supervisor.processID == nil }
@@ -221,7 +225,7 @@ import XCTest
     }
 
     func testStopDuringInitializationFinishesBeforeReportingStopped() async throws {
-        let configuration = try config(arguments: ["-c", "import time; time.sleep(30)"])
+        let configuration = try config(arguments: ["-c", "import time; time.sleep(30)"], shutdownGrace: .milliseconds(100))
         defer { try? FileManager.default.removeItem(at: configuration.directory) }
         let supervisor = RuntimeSupervisor()
         try supervisor.start(configuration: configuration)
@@ -242,4 +246,173 @@ import XCTest
         XCTAssertNil(supervisor.processID)
         XCTAssertEqual(supervisor.state, .stopped)
     }
+    func testStructuredResultCrossesManagedRuntimeAndCreatesNewDocumentWithoutOverwriting() async throws {
+        guard ProcessInfo.processInfo.environment["MALTOSE_GUI_TESTS"] == "1" else { throw XCTSkip("Requires native output panels") }
+        _ = NSApplication.shared
+        let manager = WorkspaceWindowManager(automaticallyFullscreen: false)
+        manager.synchronize()
+        defer { manager.stop() }
+        let original = try XCTUnwrap(manager.panels["document"]?.markdownDocumentModel)
+        let originalCount = original.blocks.count
+        let program = """
+        import json,sys
+        from maltose.agent import cli
+        from maltose.desktop import main
+        class ScriptedModel:
+            def stream(self, messages, tools):
+                import time
+                assert 'spoken_summary' in messages[0]['content']
+                result=dict(schemaVersion=1,title='整合結果',full_text='完整結果內容。\\n\\n'*40+'https://example.com/source',
+                    spoken_summary='已完成整理，仍有一項待確認。',kind='partial',visual='document',limitations=['資料時間仍需確認'])
+                raw=json.dumps(result,ensure_ascii=False)
+                boundary=raw.index('完整結果內容。')+len('完整結果內容。')
+                yield {'choices':[{'delta':{'content':raw[:boundary]}}]}
+                time.sleep(.15)
+                yield {'choices':[{'delta':{'content':raw[boundary:]}}]}
+        cli.OpenAICompatibleTaskModel=lambda **kwargs:ScriptedModel()
+        sys.argv=['maltose','--config','not-present.toml','--native-text-only','--brain','taskbrain',
+            '--speaker-recognition','none','--taskbrain-embedding','none','--taskbrain-search','none']
+        main()
+        """
+        let configuration = try config(arguments: ["-c", program])
+        defer { try? FileManager.default.removeItem(at: configuration.directory) }
+        try manager.prepareLiveConversation(at: configuration.directory.appendingPathComponent("conversation.jsonl"))
+        let supervisor = RuntimeSupervisor()
+        var applied = false
+        var events: [[String: Any]] = []
+        supervisor.onEvent = { data in
+            let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            if let event = message?["event"] as? [String: Any] {
+                events.append(event)
+                if event["type"] as? String == "result_presentation",
+                   let payload = event["payload"] as? [String: Any], payload["status"] as? String == "panel_applied" { applied = true }
+            }
+            try? manager.receiveRuntimeEvent(data)
+        }
+        supervisor.onPanelCommand = { request, transfer in
+            await manager.agentInterface.handle(request, fileTransfer: transfer, requiresFileTransfer: true)
+        }
+        try supervisor.start(configuration: configuration)
+        try await waitFor { supervisor.state == .ready }
+        XCTAssertTrue(supervisor.submitText("請整理完整結果"))
+        try await waitFor {
+            applied && events.contains { event in
+                event["type"] as? String == "speech_summary" && (event["payload"] as? [String: Any])?["content"] as? String == ""
+            }
+        }
+        let resultPanels = manager.panels.values.compactMap(\.markdownDocumentModel).filter { $0.resultTitle == "整合結果" }
+        XCTAssertEqual(resultPanels.count, 1)
+        XCTAssertEqual(original.blocks.count, originalCount)
+        XCTAssertTrue(manager.panels["document"]?.markdownDocumentModel === original)
+        let text = try XCTUnwrap(manager.liveConversationModel?.currentSession?.messages.last?.text)
+        XCTAssertTrue(text.contains("https://example.com/source"))
+        XCTAssertTrue(text.contains("資料時間仍需確認"))
+        XCTAssertFalse(text.hasPrefix("{\"schemaVersion"))
+        XCTAssertEqual(manager.liveConversationModel?.currentSession?.messages.count, 2,
+                       "Durable final delivery must upsert the streamed answer, not add a duplicate")
+        let streamedText = events.compactMap { event -> String? in
+            guard event["type"] as? String == "assistant_delta" else { return nil }
+            return (event["payload"] as? [String: Any])?["content"] as? String
+        }
+        XCTAssertGreaterThan(streamedText.count, 1, "Full text must stream before the final envelope completes")
+        XCTAssertEqual(streamedText.first, "完整結果內容。")
+        XCTAssertFalse(streamedText.contains { $0.contains("schemaVersion") || $0.contains("spoken_summary") })
+        XCTAssertTrue(events.contains { event in
+            event["type"] as? String == "speech_summary" && (event["payload"] as? [String: Any])?["content"] as? String == ""
+        }, "Native keyboard input must not trigger unsolicited speech")
+        supervisor.stop()
+        try await waitFor { supervisor.processID == nil }
+    }
+
+    func testBackgroundWorkerCompletesWhileIdleAndLostDeliveryAckRecoversAcrossAppAndRuntimeRestartWithoutRerun() async throws {
+        guard ProcessInfo.processInfo.environment["MALTOSE_GUI_TESTS"] == "1" else { throw XCTSkip("Requires native result panels") }
+        _ = NSApplication.shared
+        let program = """
+        import os,time
+        from pathlib import Path
+        from types import SimpleNamespace
+        from maltose.agent import AgentConfig,VoiceAgent,TaskBrain,TaskManager,TaskStore,MemoryStore,FunctionTaskWorker
+        from maltose.runtime import EventHub
+        from maltose.ui.native import NativeRuntimeBridge
+        if os.getpgrp()!=os.getpid(): os.setsid()
+        base=Path.cwd(); hub=EventHub(); bridge=NativeRuntimeBridge(hub)
+        bridge.start(); bridge.wait_for_initialize()
+        store=TaskStore(base/'tasks.sqlite3'); manager=TaskManager(store,control_gate=bridge.control)
+        def work(data):
+            count=base/'worker-count'
+            count.write_text(str(int(count.read_text())+1 if count.exists() else 1))
+            deadline=time.monotonic()+10
+            while not (base/'release-worker').exists():
+                if time.monotonic()>deadline: raise RuntimeError('Fixture worker did not receive release')
+                time.sleep(.01)
+            return '背景完整原文。\\n'*100+'https://example.com/background'
+        manager.register_worker('fixture',FunctionTaskWorker(work))
+        if not store.list('verified-fixture'):
+            manager.create_plan([dict(title='背景整合結果',worker_type='fixture')],user_id='verified-fixture')
+        brain=TaskBrain(SimpleNamespace(),memory=MemoryStore(base/'memory.json'),task_manager=manager,control_gate=bridge.control)
+        # Fixture identity is supplied by this test, never by a native text packet.
+        brain._active_user_id='verified-fixture'; brain._active_speaker_status='identified'; brain._active_input_source='native'
+        agent=VoiceAgent(config=AgentConfig(),brain=brain,event_hub=hub,voice_enabled=False,control_gate=bridge.control)
+        original_ack=brain.acknowledge_task_result
+        def acknowledged(identity):
+            result=original_ack(identity)
+            (base/'delivery-ack').touch()
+            return result
+        brain.acknowledge_task_result=acknowledged
+        bridge.attach(agent,brain); agent.result_handler=bridge.present_result; agent.durable_result_delivery=True
+        try: agent.run()
+        finally: manager.shutdown(); bridge.close(); store.close()
+        """
+        let configuration = try config(arguments: ["-u", "-c", program])
+        defer { try? FileManager.default.removeItem(at: configuration.directory) }
+        let journal = configuration.directory.appendingPathComponent("conversation.jsonl")
+        let first = WorkspaceWindowManager(automaticallyFullscreen: false)
+        first.synchronize(); try first.prepareLiveConversation(at: journal)
+        let supervisor = RuntimeSupervisor()
+        supervisor.conversationID = "background-conversation"
+        var uncertain = false
+        supervisor.onEvent = { data in
+            try? first.receiveRuntimeEvent(data)
+            if let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let event = value["event"] as? [String: Any], event["type"] as? String == "result_presentation",
+               let payload = event["payload"] as? [String: Any], payload["chatStored"] as? Bool == false { uncertain = true }
+        }
+        supervisor.onPanelCommand = { request, transfer in
+            let actual = await first.agentInterface.handle(request, fileTransfer: transfer, requiresFileTransfer: true)
+            guard actual.ok else { return actual }
+            // The native journal/panel succeeded, but the runtime never receives that ACK.
+            return WorkspaceAgentResponse(requestID: request.requestID, ok: false, error: .init(code: "fixture_lost_ack", message: "Simulated lost delivery acknowledgement"))
+        }
+        try supervisor.start(configuration: configuration)
+        try await waitFor { supervisor.state == .ready }
+        try Data().write(to: configuration.directory.appendingPathComponent("release-worker"))
+        try await waitFor { uncertain }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: configuration.directory.appendingPathComponent("delivery-ack").path))
+        let record = try XCTUnwrap(first.liveConversationModel?.resultDeliveries.values.first)
+        XCTAssertTrue(record.markdown.contains("https://example.com/background"))
+        XCTAssertTrue(record.markdown.contains("整體需求的完成條件仍需核對"))
+        XCTAssertEqual(first.liveConversationModel?.currentSession?.messages.count, 1)
+        supervisor.stop(); try await waitFor { supervisor.processID == nil }
+        XCTAssertEqual(supervisor.state, .stopped)
+        first.stop()
+
+        let restored = WorkspaceWindowManager(automaticallyFullscreen: false)
+        restored.synchronize(); try restored.prepareLiveConversation(at: journal)
+        defer { restored.stop() }
+        XCTAssertNotNil(restored.panels[record.panelID!])
+        let restarted = RuntimeSupervisor()
+        restarted.conversationID = "background-conversation"
+        restarted.onEvent = { try? restored.receiveRuntimeEvent($0) }
+        restarted.onPanelCommand = { request, transfer in await restored.agentInterface.handle(request, fileTransfer: transfer, requiresFileTransfer: true) }
+        try restarted.start(configuration: configuration)
+        try await waitFor { restarted.state == .ready && FileManager.default.fileExists(atPath: configuration.directory.appendingPathComponent("delivery-ack").path) }
+        // Flush the runtime event stream through a real request, not a fixed sleep.
+        _ = try await restarted.call("snapshot")
+        restarted.stop(); try await waitFor { restarted.processID == nil }
+        XCTAssertEqual(try String(contentsOf: configuration.directory.appendingPathComponent("worker-count"), encoding: .utf8), "1")
+        XCTAssertEqual(restored.liveConversationModel?.sessions.flatMap(\.messages).count, 1)
+        XCTAssertEqual(restored.liveConversationModel?.resultDeliveries.count, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: configuration.directory.appendingPathComponent("memory.json").path))
+    }
+
 }

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "status": "passed",
+  "releaseTag": "0.0.0",
+  "scope": "Before release commit: all candidate files and every locally stored Git object, including unreachable objects",
+  "candidateFilesScanned": 510,
+  "gitObjectsScanned": {
+    "blob": 9649,
+    "tree": 2759,
+    "commit": 88
+  },
+  "configuredCredentialValuesChecked": 2,
+  "envFilesFound": 0,
+  "actualCredentialFindings": 0,
+  "reviewedPatternMatches": [
+    {
+      "object": "a960b2f3c5f3d11fc9ae43638da9877d635e8d91",
+      "rule": "credential_url",
+      "classification": "third-party URL parser documentation example; literal username/password placeholders, not service credentials"
+    },
+    {
+      "object": "d9b082d6577724faf1b9a1d0f242d8719b007f3c",
+      "rule": "credential_url",
+      "classification": "third-party URL parser documentation example; literal username/password placeholders, not service credentials"
+    }
+  ],
+  "methods": [
+    "Exact local configured credential matching without printing values",
+    "Credential provider, private key, credential URL and credential-assignment heuristics",
+    "Git tree filename checks for .env and .env.*",
+    "Manual review of pattern findings"
+  ],
+  "gitignoreExtendedTo": [
+    "*.env",
+    "*.env.*"
+  ],
+  "validation": {
+    "nativeTests": 292,
+    "nativeFailures": 0,
+    "build21ProductSourcesUnchanged": true,
+    "pythonBaselineTests": 577,
+    "pythonSourcesUnchanged": true
+  },
+  "historyRewritten": false
+}

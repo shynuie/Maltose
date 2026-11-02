@@ -74,6 +74,20 @@ class CodexWorkspaceTests(unittest.TestCase):
         self.assertLessEqual(sum(len(entry.get('diff', '')) for entry in bounded['changes']), 8)
         self.assertTrue(any(entry.get('truncated') for entry in bounded['changes']))
 
+    def test_source_provenance_distinguishes_later_user_edits_without_changing_or_resetting_them(self):
+        receipt = self.prepare()
+        before = self.manager.changes(receipt['taskID'])['sourceState']
+        self.assertTrue(before['checked']); self.assertTrue(before['headMatchesBaseline'])
+        self.assertTrue(before['filesMatchBaseline']); self.assertTrue(before['indexMatchesBaseline'])
+        (self.repo / 'code.py').write_text('later user edit\n'); self.git('add', 'code.py')
+        status = self.git('status', '--porcelain=v1', '-z'); index = self.git('diff', '--cached', '--binary')
+        after = self.manager.changes(receipt['taskID'])['sourceState']
+        self.assertTrue(after['checked']); self.assertTrue(after['headMatchesBaseline'])
+        self.assertFalse(after['filesMatchBaseline']); self.assertFalse(after['indexMatchesBaseline'])
+        self.assertEqual(self.git('status', '--porcelain=v1', '-z'), status)
+        self.assertEqual(self.git('diff', '--cached', '--binary'), index)
+        self.assertEqual((self.repo / 'code.py').read_text(), 'later user edit\n')
+
     def test_authorization_target_reuse_nested_root_and_special_files_are_rejected(self):
         other = self.root / 'other'; other.mkdir()
         with self.assertRaises(PermissionError): self.manager.prepare(other, str(uuid.uuid4()))

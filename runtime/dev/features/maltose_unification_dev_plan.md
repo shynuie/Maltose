@@ -4,6 +4,8 @@
 
 詳細規格與驗收以 [主計畫](../../../plans/maltose-unification-and-codex.md) 為準。決策見 [ADR 004](../decisions/ADR-004-unified-maltose.md)。
 
+2026-11-01 後續追加的任務銜接、資訊輸出、簡短語音與「預設新增面板、明確要求才更新」另見 [新 feature plan](task_workflow_and_presentation_dev_plan.md)。目前僅規劃，不改變本頁既有完成／未完成驗收。
+
 - [x] 保全原始歷史、未提交修改與私有資料，執行原生／Python 基準。
 - [x] 以子目錄匯入來源歷史，按校驗清單保留現有工作，來源倉庫不變。
 - [x] 改名為 `maltose` 套件與公開命令，保留舊設定讀取相容。

@@ -2,6 +2,8 @@
 
 > 本文件追蹤 VoiceAgent、TTS、STT、wake、interrupt 與語音互動 lifecycle 的開發。
 
+2026-11-01 追加的「短口頭摘要、完整文字／面板、輸出來源偏好與過期語音取消」由 [任務工作流與資訊輸出計畫](task_workflow_and_presentation_dev_plan.md) 統一追蹤；本頁保留既有 renderer／player、延遲與打斷進度，新功能沿用此管線。
+
 ## 文件狀態
 
 - 狀態：`in_progress`

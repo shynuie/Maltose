@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "status": "ready_with_recorded_research_assessment_flake",
+  "build": "20",
+  "version": "0.7.0",
+  "trialApp": "dist/trials/build20/Maltose.app",
+  "sourceSnapshot": {
+    "manifest": "/tmp/maltose-build20-source.json",
+    "files": 304,
+    "sha256": "156574fdd894bca35b87a7533e0bb5c7e503d9105a870fd531e5bcec572c18b2",
+    "pythonAST": 234
+  },
+  "focusedNative": {
+    "passed": 29,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 35.546,
+    "log": "/tmp/maltose-work-panels-focused4.log"
+  },
+  "finalMonitorFocused": {
+    "passed": 9,
+    "failures": 0,
+    "seconds": 4.216,
+    "log": "/tmp/maltose-work-panels-final-focused.log"
+  },
+  "pythonFull": {
+    "passed": 577,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 42.625,
+    "log": "/tmp/maltose-work-panels-python-full.log",
+    "docker": true
+  },
+  "nativeFull": {
+    "tests": 284,
+    "passedCases": 283,
+    "failedCases": [
+      "testConfiguredPublicSourcePlannerPreservesReadProofAndOriginalProductTask"
+    ],
+    "assertionFailures": 2,
+    "unexpectedFailures": 1,
+    "skipped": 0,
+    "seconds": 956.875,
+    "log": "/tmp/maltose-work-panels-native-full.log",
+    "gui": true,
+    "configuredMain": true,
+    "authenticatedCodex": true,
+    "docker": true
+  },
+  "scope": [
+    "Transparent singleton Agent activity and task progress panels",
+    "Multi-task trees, actual step progress, indeterminate and paused rings, completion ring-to-check animation",
+    "Current conversation task-store projection, versioned Main progress reports and actual Codex turn plans",
+    "Summary-only current-launch activity entries, bounded to 500, with 30-second reading protection and task navigation"
+  ],
+  "limitations": [
+    "Activity history is scoped to this App launch",
+    "Codex fine-step plans are refreshed from current-turn notifications; execution state remains available after restart",
+    "Task controls continue through existing chat and task actions"
+  ],
+  "earlierAttempts": [
+    "Test assessment initializer used the wrong field order/name; fixed before running new tests.",
+    "Transport fixture initially used six serial model rounds, exceeding the unchanged production budget; batch calls now exercise progress with actual work inside that budget.",
+    "A local sort helper lost MainActor isolation; replaced with a direct ordering table; final monitor tests passed."
+  ],
+  "formalDeployed": false,
+  "committed": false,
+  "previousBuildsUnchanged": {
+    "15": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+    "17": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+    "18": "89b52da65224411e83555c5ccef76d2b0315cc3be3857c72f4db15048e82dbdf",
+    "19": "9c000b96c227c9cbfad2c2ee1904c773427e851bfbd3af754425e386c4839553"
+  },
+  "researchAssessmentFailure": {
+    "test": "AgentSessionCoordinatorTests.testConfiguredPublicSourcePlannerPreservesReadProofAndOriginalProductTask",
+    "initialStatus": "failed_completion_expectation",
+    "observedToolCalls": [
+      "set_task_plan",
+      "read_web_page"
+    ],
+    "newProgressToolUsed": false,
+    "assessment": {
+      "checks": [
+        {
+          "criterion": "讀取 http://example.org/survey 的完整半年虛構調查表並整理趨勢；A／B 方法分開，缺值不補零，保留來源與未外部查核的限制。只知道月份，不要補成每月一日。不要更新原有面板，不要建立背景工作或開發程式。",
+          "evidenceIDs": [
+            "tool:351a86438d6e45bdb012f63e2e72be55",
+            "panel-boundary:main-result:b4a33cd5ce828b0cb1c7b27a61cb6838"
+          ]
+        }
+      ],
+      "explanation": "e1 證明已讀取完整的一頁來源及完整六列表格；e3 的交付內容保留了所有月份、A/B 分組、缺值、來源、未外部查核限制，並明確未推定為每月一日。e2 只證明在受控原生 Agent 面板入口沒有接納既有面板操作，不能排除其他工具操作；而 e3 明確顯示成果文件與圖表面板已套用，因此不能判定整體要求完成。",
+      "remaining": [
+        "不要更新原有面板的要求未完全滿足：answer_delivery 顯示建立並套用了成果文件與圖表面板；需避免對既有面板以外的面板寫入，或提供符合要求的僅文字交付。",
+        "未有可接受證據證明沒有建立背景工作或開發程式。"
+      ],
+      "resolvedFailures": {},
+      "status": "partial",
+      "summary": "已完整讀取並整理調查表，分開呈現 A／B、保留缺值、來源與未外部查核限制，且未將月份補成每月一日；但成果交付建立了新的成果文件與圖表面板，未完全符合不要更新原有面板的要求，且缺乏證據證明未建立背景工作或開發程式。"
+    },
+    "isolatedRerun": {
+      "passed": 1,
+      "failures": 0,
+      "seconds": 9.134,
+      "log": "/tmp/maltose-work-panels-research-rerun.log",
+      "productionChangesBetweenFullAndRerun": false
+    },
+    "fixture": ".cache/main-live/maltose-session-B5B91CE8-E521-4E56-8B3F-CDECFD2A3235"
+  },
+  "workPanelTestsInFull": {
+    "passed": 9,
+    "failures": 0,
+    "includesActualTransport": true
+  },
+  "visualQA": {
+    "actualSwiftUIRendered": true,
+    "data": "isolated fictional task fixture",
+    "running": "dist/trials/build20/work-panels-running.png",
+    "completed": "dist/trials/build20/work-panels-completed.png",
+    "reviewed": [
+      "transparent content, no cards or fills",
+      "active tasks first, tree indentation and independent collapse",
+      "determinate rings and completion checkmarks",
+      "completed task name preserved and collapsed"
+    ]
+  },
+  "package": {
+    "version": "0.7.0",
+    "build": "20",
+    "bundleFiles": 156,
+    "runtimeFiles": 140,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "uiSmoke": {
+    "uiOnlyLaunch": "passed",
+    "applicationRunning": true,
+    "windowCount": 2,
+    "nativeFullscreen": false,
+    "agentStarted": false,
+    "microphoneUsed": false,
+    "normalExit": true,
+    "newPanelKinds": [
+      "agentActivity",
+      "taskProgress"
+    ]
+  },
+  "releaseBuildSeconds": 55.3,
+  "packaged": true,
+  "executableSHA256": "f7d044c551cc6cb22af5bba47e8ddf774df4b93ed07a22cbe965a8a7a0aceda5",
+  "sourceUnchangedAfterTestsAndPackaging": true
+}

@@ -2,23 +2,25 @@ import Foundation
 
 enum WorkspaceMode: String, Codable { case grid, focused, sidebar }
 
-struct WorkspaceGridPosition: Equatable, Hashable {
+struct WorkspaceGridPosition: Equatable, Hashable, Codable {
     var row: Int
     var column: Int
 }
 
 /// Presentation belongs to a screen-sized window, independently of document/selection state.
-struct WorkspaceLayoutState {
+struct WorkspaceLayoutState: Codable {
     var panelIDs: [String] = []
     var primaryID: String?
     var selectedIDs: Set<String> = []
     var mode: WorkspaceMode = .grid
     var identityPosition = WorkspaceGridPosition(row: 0, column: 0)
+    var panelPositions: [String: WorkspaceGridPosition]? = nil
 
     mutating func reconcile(_ ids: [String]) {
         panelIDs = panelIDs.filter { ids.contains($0) } + ids.filter { !panelIDs.contains($0) }
         if !panelIDs.contains(primaryID ?? "") { primaryID = panelIDs.first }
         selectedIDs.formIntersection(panelIDs)
+        panelPositions = panelPositions?.filter { panelIDs.contains($0.key) }
         if selectedIDs.isEmpty, let primaryID { selectedIDs.insert(primaryID) }
         if panelIDs.isEmpty { mode = .grid }
     }
@@ -85,7 +87,9 @@ struct WorkspaceLayoutState {
         let boundedIndex = min(remaining.count, insertionIndex)
         remaining.insert(contentsOf: moving, at: boundedIndex)
         if let identityIndex { remaining.insert(identityID, at: min(identityIndex, remaining.count)) }
-        guard remaining != panelIDs else { return false }
+        let removedPin = ids.contains { panelPositions?[$0] != nil }
+        for id in ids { panelPositions?.removeValue(forKey: id) }
+        guard remaining != panelIDs || removedPin else { return false }
         panelIDs = remaining
         return true
     }

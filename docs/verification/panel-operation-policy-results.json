@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "capability": {
+    "panelPolicyVersion": 1,
+    "defaultEnabled": true
+  },
+  "sourceSnapshot": {
+    "files": 291,
+    "sha256": "7efca68b678d0918f9012bcc14341c9eef9ecd53f5d838d7c8768415595bde5c",
+    "pythonAST": 229
+  },
+  "pythonFull": {
+    "passed": 540,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 47.532,
+    "log": "/tmp/maltose-panel-policy-canonical-full-python.log"
+  },
+  "nativeFull": {
+    "passed": 251,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 580.298,
+    "log": "/tmp/maltose-panel-policy-canonical-full-native.log",
+    "gui": true,
+    "configuredMain": true,
+    "realCodex": true,
+    "docker": true
+  },
+  "intermediateFull": {
+    "passed": 248,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 613.868,
+    "log": "/tmp/maltose-panel-policy-full-native.log",
+    "sourceChangedDuringRun": true,
+    "finalEvidence": false
+  },
+  "focused": {
+    "nativeBoundary": {
+      "passed": 9,
+      "failed": 0,
+      "seconds": 3.977,
+      "log": "/tmp/maltose-panel-policy-dirty-final-focused.log"
+    },
+    "configuredNaturalActionsAndComposer": {
+      "passed": 7,
+      "failed": 0,
+      "seconds": 24.253,
+      "log": "/tmp/maltose-panel-policy-composer-source-focused.log"
+    },
+    "actualCodexAndConfiguredIntent": {
+      "passed": 8,
+      "failed": 0,
+      "seconds": 35.853,
+      "log": "/tmp/maltose-panel-policy-actual-focused.log"
+    }
+  },
+  "acceptance": {
+    "allAdvertisedMutationsHaveNativeGateSimulation": true,
+    "modelCannotSupplyProvenanceOrUpdateFlag": true,
+    "mainContextLocalInvocationAndCapturedEpoch": true,
+    "codexNativeConnectionTaskTurnAndPausedLease": true,
+    "nativeHumanInputSnapshotBeforeFirstTool": true,
+    "closedComposerCannotRetargetInput": true,
+    "sameInvocationInitialFillOnly": true,
+    "focusCloseMoveSaveNotGrantedByCreation": true,
+    "explicitHumanActionAndTargetSpans": true,
+    "naturalVocabularySemanticGrounding": true,
+    "modelCannotDeclareSemanticVerification": true,
+    "unsavedDiscardRequiresSeparateHumanSpan": true,
+    "permissionCacheIncludesExactArguments": true,
+    "knownOwnLayoutAdvancesWithoutErasingHumanChanges": true,
+    "claimsPersistBeforeOldPanelWrite": true,
+    "claimsImmutableAcrossReopen": true,
+    "fileLoadExportSavedKeepSource": true,
+    "fileExportDenialDoesNotWrite": true,
+    "chartUpdatePreservesZoomPanSeriesAndBands": true,
+    "humanJSONSemanticsPreserved": true
+  },
+  "intermediateFailures": [
+    {
+      "log": "/tmp/maltose-panel-policy-native-focused.log",
+      "cause": "Human JSON fixture omitted required schemaVersion; corrected fixture, not the production decoder."
+    },
+    {
+      "log": "/tmp/maltose-panel-policy-shared-focused.log",
+      "cause": "Legacy fake delegation had no actual human input; panel fixture now records its real voice input ID before delegation."
+    },
+    {
+      "log": "/tmp/maltose-panel-policy-semantic-focused.log",
+      "cause": "Actual intent model returned allow while explaining that new research must use a new panel; native action/target grounding added."
+    },
+    {
+      "log": "/tmp/maltose-panel-policy-final-focused.log",
+      "cause": "Focus was misread as keyboard focus; native command semantics clarified. Ambiguity fixture now has two genuinely identical named charts."
+    },
+    {
+      "log": "/tmp/maltose-panel-policy-natural-actions-focused.log",
+      "cause": "Window focus snapshot referred to another screen; composer now supplies its actual originating screen before dispatch."
+    },
+    {
+      "log": "/tmp/maltose-panel-policy-source-final-focused.log",
+      "cause": "Failed dirty-document operation restored unchanged view and emitted revisions; restoration now happens only after successful mutation."
+    }
+  ],
+  "remaining": [
+    "Broader per-panel natural-language and cross-window acceptance",
+    "Known-failed/unknown mutation reconciliation and authorized continuation lifecycle",
+    "Explicit recurring updates",
+    "Remaining workflow and presentation P2-P5 gates",
+    "Human and final packaged App acceptance",
+    "Full Codex product-held/version combinations and grants across authorized continuation"
+  ],
+  "deployment": {
+    "packaged": false,
+    "deployed": false,
+    "committed": false,
+    "formalExecutableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+    "trial17ExecutableSHA256": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301"
+  },
+  "sourceUnchangedDuringCanonicalFull": true,
+  "validation": {
+    "pythonAST": 229,
+    "verificationJSON": true,
+    "localDocumentLinks": true,
+    "gitDiffCheck": true
+  }
+}

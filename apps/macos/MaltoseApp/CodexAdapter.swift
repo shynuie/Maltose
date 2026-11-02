@@ -18,6 +18,7 @@ struct CodexModelChoice: Equatable, Identifiable {
     var onIssue: ((String) -> Void)?
     var turnOutputSchema: UserViewValue?
     var developerInstructions: String?
+    var workflowContext: ((UUID) throws -> UserViewValue?)?
     var modelID: String?
     var panelTools: [WorkspaceAgentToolDefinition] = []
     var onPanelTool: ((UUID, CodexServerRequest, String, [String: UserViewValue]) async throws -> UserViewValue)?
@@ -170,8 +171,13 @@ struct CodexModelChoice: Equatable, Identifiable {
         do {
             try store.append(.init(id: messageID, author: author, origin: origin, content: text, threadID: thread,
                                    turnID: active, delivery: .prepared), to: id)
-            var params: [String: UserViewValue] = ["threadId": .string(thread), "clientUserMessageId": .string(messageID),
-                "input": .array([.object(["type": .string("text"), "text": .string(text)])])]
+            var input: [UserViewValue] = [.object(["type": .string("text"), "text": .string(text)])]
+            if let context = try workflowContext?(id) {
+                let data = try JSONEncoder().encode(context)
+                guard data.count <= 128 * 1024 else { throw CodexTaskStoreError.invalid("共同任務的委派摘要超出限制。") }
+                input.append(.object(["type": .string("text"), "text": .string(String(decoding: data, as: UTF8.self))]))
+            }
+            var params: [String: UserViewValue] = ["threadId": .string(thread), "clientUserMessageId": .string(messageID), "input": .array(input)]
             if let active { params["expectedTurnId"] = .string(active) }
             else if let turnOutputSchema { params["outputSchema"] = turnOutputSchema }
             let response = try await connection.request(active == nil ? "turn/start" : "turn/steer", params: .object(params))
@@ -480,6 +486,9 @@ struct CodexModelChoice: Equatable, Identifiable {
             case "item/completed":
                 guard let turn = value["turnId"]?.stringValue, turn == task.activeTurnID, let item = value["item"] else { return }
                 try saveItem(item, taskID: task.id, turnID: turn)
+            case "item/started":
+                guard let turn = value["turnId"]?.stringValue, turn == task.activeTurnID, let item = value["item"] else { return }
+                try saveProductOrigin(item, taskID: task.id, turnID: turn)
             case "serverRequest/resolved":
                 guard let rawID = value["requestId"], let data = try? JSONEncoder().encode(rawID),
                       let requestID = try? JSONDecoder().decode(CodexRPCID.self, from: data),
@@ -506,6 +515,23 @@ struct CodexModelChoice: Equatable, Identifiable {
             try store.append(.init(id: "codex:\(turnID):\(itemID)", author: .tool, origin: .codex,
                                    content: String(decoding: data, as: UTF8.self), threadID: task.threadID, turnID: turnID), to: taskID)
         }
+    }
+
+    private func saveProductOrigin(_ item: UserViewValue, taskID: UUID, turnID: String) throws {
+        guard let itemID = item["id"]?.stringValue, let type = item["type"]?.stringValue,
+              ["commandExecution", "fileChange"].contains(type), let task = store.task(taskID),
+              let product = task.productTaskID.flatMap(store.productTask) else { return }
+        let accepted = task.messages.last { ($0.author == .user || $0.author == .maltose) && $0.turnID == turnID && $0.delivery == .accepted }
+        let starting = task.pendingOperation?.kind == .startTurn ? task.pendingOperation?.clientMessageID : nil
+        guard let inputID = accepted?.id ?? starting,
+              let execution = product.executions.last(where: { $0.engine == .codex && $0.externalID == taskID.uuidString && $0.inputID == inputID }) else { return }
+        let origin = CodexProductObservationOrigin(itemID: itemID, itemType: type, executionID: execution.id,
+            requirementsRevision: execution.requirementsRevision, planVersion: execution.planVersion, command: item["command"]?.stringValue)
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        let identity = CodexProductObservation.originID(turn: turnID, item: itemID)
+        if task.messages.contains(where: { $0.id == identity }) { return }
+        try store.append(.init(id: identity, author: .integration, origin: .synchronization,
+            content: String(decoding: try encoder.encode(origin), as: UTF8.self), threadID: task.threadID, turnID: turnID, delivery: .accepted), to: taskID)
     }
     private func finishTurn(_ turn: UserViewValue, taskID: UUID) throws {
         guard let id = turn["id"]?.stringValue, let status = turn["status"]?.stringValue,

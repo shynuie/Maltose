@@ -14,6 +14,8 @@ class TurnContext:
     speaker_score: float | None = None
     speaker_status: str = "unknown"
     input_source: str | None = None
+    response_format: str | None = None
+    input_id: str | None = None
 
 
 class AgentBrain(Protocol):

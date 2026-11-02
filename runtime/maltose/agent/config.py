@@ -71,6 +71,7 @@ def load_cli_defaults(path: Path) -> dict[str, Any]:
         "tts_voice": "tts_voice", "tts_rate": "tts_rate",
         "interruptible_tts": "interruptible_tts",
     })
+    copy("presentation", {"speech_mode": "speech_mode", "speech_target_seconds": "speech_target_seconds"})
     copy("wake", {
         "config": "wake_config", "frame_ms": "kws_frame_ms", "ack": "wake_ack", "ack_delay": "wake_ack_delay",
         "buffer_ms": "wake_buffer_ms",
@@ -116,6 +117,8 @@ class AgentConfig:
     stt_device: str = "cpu"
     tts_voice: str | None = None
     tts_rate: int | None = None
+    speech_mode: str = 'auto'
+    speech_target_seconds: float = 15.0
     output_dir: Path = field(default_factory=lambda: Path("recordings"))
     wake_word_detector: WakeWordDetector | None = None
     wake_keywords: tuple[str, ...] = ("麥芽糖", "麦芽糖")
@@ -127,3 +130,9 @@ class AgentConfig:
     stt_target_peak: int = 12000
     stt_min_peak: int = 6000
     stt_max_gain: float = 4.0
+
+    def __post_init__(self):
+        if not isinstance(self.speech_mode, str) or self.speech_mode not in {'auto', 'summary', 'mute'}:
+            raise ValueError('Invalid presentation speech mode')
+        if type(self.speech_target_seconds) not in (int, float) or not 1 <= self.speech_target_seconds <= 30:
+            raise ValueError('Presentation speech budget must be between 1 and 30 seconds')

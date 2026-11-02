@@ -15,12 +15,13 @@ if [ -d data/imgs/demo ]; then
     cp data/imgs/demo/* "$stage/Contents/Resources/GallerySamples/"
 fi
 python3 - <<'PY'
+import os
 import plistlib
 from pathlib import Path
 path = Path('.cache/ui-preview/Maltose.app/Contents/Info.plist')
 data = dict(CFBundleExecutable='MaltoseApp', CFBundleIdentifier='local.maltose.app',
             CFBundleName='Maltose', CFBundleDisplayName='Maltose',
-            CFBundlePackageType='APPL', CFBundleShortVersionString='0.7.0', CFBundleVersion='15',
+            CFBundlePackageType='APPL', CFBundleShortVersionString='0.7.0', CFBundleVersion=os.environ.get('MALTOSE_PACKAGE_BUILD', '15'),
             LSMinimumSystemVersion='14.0', NSHighResolutionCapable=True,
             NSMicrophoneUsageDescription='Maltose 使用麥克風接收語音指令、辨識喚醒詞與說話者。')
 with path.open('wb') as file:

@@ -92,9 +92,18 @@ enum CSVLineChartParser {
         ["note", "notes", "備註", "註記", "註釋"].contains(value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
     }
 
-    private static func xAxisValue(_ value: String) -> Double? {
+    static func xAxisValue(_ value: String) -> Double? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if let number = Double(trimmed) { return number }
+        if trimmed.range(of: "^[0-9]{4}-[0-9]{2}$", options: .regularExpression) != nil {
+            let parts = trimmed.split(separator: "-").compactMap { Int($0) }
+            guard parts.count == 2, (1...9999).contains(parts[0]), (1...12).contains(parts[1]) else { return nil }
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+            // A calendar coordinate for spacing only. The original month label
+            // and source note stay unchanged; this does not assert a survey day.
+            return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: 1))?.timeIntervalSince1970
+        }
         let iso = ISO8601DateFormatter()
         if let date = iso.date(from: trimmed) { return date.timeIntervalSince1970 }
         for format in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd", "HH:mm:ss", "HH:mm"] {
@@ -107,7 +116,7 @@ enum CSVLineChartParser {
         return nil
     }
 
-    private static func records(from source: String) -> [[String]] {
+    static func records(from source: String) -> [[String]] {
         let characters = Array(source.hasPrefix("\u{feff}") ? source.dropFirst() : source[...])
         var records: [[String]] = []
         var record: [String] = []
@@ -162,6 +171,8 @@ enum CSVLineChartParser {
 
 @MainActor final class CSVLineChartModel: ObservableObject {
     @Published private(set) var data: CSVLineChartData
+    private(set) var resultPublicationID: String?
+    @Published private(set) var resultCaption: String?
     @Published private(set) var sourceName = "內建範例"
     @Published private(set) var errorMessage: String?
     @Published private(set) var visibleSeries: Set<Int>
@@ -184,6 +195,18 @@ enum CSVLineChartParser {
         let parsed = (try? CSVLineChartParser.parse(sample)) ?? CSVLineChartData(xTitle: "X", seriesNames: [], rows: [])
         self.data = parsed
         self.visibleSeries = Set(parsed.seriesNames.indices)
+    }
+
+    func loadResult(_ chart: ResultChart, publicationID: String) throws {
+        try chart.validate()
+        let positions = chart.rows.map { CSVLineChartParser.xAxisValue($0.x) }
+        let numeric = positions.allSatisfy { $0 != nil }
+        data = .init(xTitle: chart.xTitle, seriesNames: chart.series, rows: chart.rows.enumerated().map { index, row in
+            .init(id: index, xLabel: row.x, xValue: numeric ? positions[index]! : Double(index), values: row.values, note: row.note)
+        })
+        visibleSeries = Set(chart.series.indices); filledBands = [:]
+        xZoom = 1; xPan = 0; hoveredPoint = nil; errorMessage = nil
+        sourceName = chart.title; resultCaption = chart.caption; resultPublicationID = publicationID
     }
 
     func toggleSeries(_ index: Int) {
@@ -259,6 +282,7 @@ enum CSVLineChartParser {
     func loadCSV(contents: String, sourceName: String = "Agent CSV") throws {
         data = try CSVLineChartParser.parse(contents)
         self.sourceName = sourceName
+        resultCaption = nil
         visibleSeries = Set(data.seriesNames.indices)
         filledBands = [:]
         setXAxisViewport(zoom: 1, pan: 0)
@@ -301,6 +325,13 @@ struct CSVLineChartPanelView: View {
                 Spacer()
                 Button("載入 CSV", systemImage: "doc.badge.plus") { model.chooseCSV() }
                     .buttonStyle(.bordered).controlSize(.small)
+            }
+
+            if let caption = model.resultCaption {
+                Text(caption).font(.system(size: 12)).foregroundStyle(.white.opacity(0.68))
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                Text("指向資料點可查看來源與備註；完整資料與連結見聊天或結果文檔。")
+                    .font(.system(size: 10)).foregroundStyle(.white.opacity(0.45))
             }
 
             ScrollView(.horizontal) {

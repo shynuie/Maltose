@@ -35,6 +35,7 @@ struct ConversationSession: Identifiable {
     private var lastSequences: [String: Int] = [:]
     private var liveSessionID: String?
     private var liveMode = false
+    private(set) var resultDeliveries: [String: ResultDeliveryRecord] = [:]
     private var scrollStates: [String: ConversationAutoScrollState] = [:]
 
     func scrollState(for sessionID: String) -> ConversationAutoScrollState {
@@ -79,14 +80,17 @@ struct ConversationSession: Identifiable {
         let previousSequences = liveMode ? lastSequences : [:]
         let previousCurrent = liveMode ? currentSessionID : ""
         let previousLive = liveSessionID
+        let previousResults = resultDeliveries
         liveMode = true
         sessions = []; currentSessionID = ""; lastSequences = [:]
+        resultDeliveries = [:]
         do {
             try storage.open { try self.applyRuntimeEvent($0, persist: false) }
             journal?.close(); journal = storage
         } catch {
             sessions = previous; currentSessionID = previousCurrent
             lastSequences = previousSequences; liveSessionID = previousLive
+            resultDeliveries = previousResults
             storage.close(); throw error
         }
     }
@@ -97,9 +101,40 @@ struct ConversationSession: Identifiable {
             throw RuntimeLaunchError.unavailable("對話事件版本或識別碼不正確。")
         }
         guard envelope.sequence > (lastSequences[envelope.sessionID] ?? 0) else { return }
-        let type = envelope.event.type
-        if persist { try journal?.append(data, durable: ["user_message", "assistant_end", "assistant_message", "error"].contains(type)) }
+        var type = envelope.event.type
+        var payload = envelope.event.payload
+        var delivery: ResultDeliveryRecord?
+        if type == "result_delivery" {
+            guard let value = payload["record"] else { throw RuntimeLaunchError.unavailable("成果交付紀錄缺少內容。") }
+            let record = try JSONDecoder().decode(ResultDeliveryRecord.self, from: JSONEncoder().encode(value))
+            try record.validate()
+            guard record.conversationID == envelope.conversationID,
+                  resultDeliveries[record.publicationID].map({ $0.matches(record) }) ?? true,
+                  !resultDeliveries.values.contains(where: { $0.publicationID != record.publicationID && $0.conversationID == record.conversationID && $0.messageID == record.messageID }) else {
+                throw RuntimeLaunchError.unavailable("成果交付識別碼不可覆寫另一份內容。")
+            }
+            delivery = resultDeliveries[record.publicationID] ?? record
+        } else if ["result_closed", "result_panel_applied", "result_chart_closed", "result_chart_applied"].contains(type) {
+            guard let id = payload["publicationID"]?.stringValue, let record = resultDeliveries[id],
+                  (type.hasPrefix("result_chart_") ? record.chart != nil : record.createDocument),
+                  record.conversationID == envelope.conversationID else { throw RuntimeLaunchError.unavailable("成果面板回執找不到原始發表。") }
+        }
+        if persist { try journal?.append(data, durable: ["user_message", "assistant_end", "assistant_message", "error", "result_delivery", "result_closed", "result_panel_applied", "result_chart_closed", "result_chart_applied"].contains(type)) }
         lastSequences[envelope.sessionID] = envelope.sequence
+        if let delivery {
+            resultDeliveries[delivery.publicationID] = delivery
+            type = "assistant_end"
+            payload = ["message_id": .string(delivery.messageID), "content": .string(delivery.markdown), "source": .string("maltose-result")]
+        } else if ["result_closed", "result_panel_applied", "result_chart_closed", "result_chart_applied"].contains(type), let id = payload["publicationID"]?.stringValue {
+            if type.hasPrefix("result_chart_") {
+                if type == "result_chart_closed" { resultDeliveries[id]?.chartClosed = true }
+                else { resultDeliveries[id]?.chartApplied = true }
+            } else {
+                if type == "result_closed" { resultDeliveries[id]?.closed = true }
+                else { resultDeliveries[id]?.panelApplied = true }
+            }
+            return
+        }
         guard ["user_message", "assistant_start", "assistant_delta", "assistant_end", "assistant_message", "error"].contains(type) else { return }
         let id = envelope.conversationID ?? envelope.sessionID
         if !sessions.contains(where: { $0.id == id }) {
@@ -109,7 +144,7 @@ struct ConversationSession: Identifiable {
         liveSessionID = id
         guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
         func string(_ key: String) -> String {
-            if case let .string(value) = envelope.event.payload[key] { return value }; return ""
+            if case let .string(value) = payload[key] { return value }; return ""
         }
         let content = string("content")
         let streamID = string("message_id")
@@ -132,6 +167,37 @@ struct ConversationSession: Identifiable {
     }
 
     func showLiveSession() { if let liveSessionID { currentSessionID = liveSessionID } }
+
+    @discardableResult func saveResult(_ record: ResultDeliveryRecord) throws -> ResultDeliveryRecord {
+        try record.validate()
+        guard !resultDeliveries.values.contains(where: { $0.publicationID != record.publicationID && $0.conversationID == record.conversationID && $0.messageID == record.messageID }) else {
+            throw RuntimeLaunchError.unavailable("新成果不能重用另一份成果的聊天訊息識別碼。")
+        }
+        if let previous = resultDeliveries[record.publicationID] {
+            guard previous.matches(record) else { throw RuntimeLaunchError.unavailable("同一成果識別碼不能替換內容或對話。") }
+            return previous
+        }
+        let value = try JSONDecoder().decode(UserViewValue.self, from: JSONEncoder().encode(record))
+        try appendResultEvent("result_delivery", conversationID: record.conversationID, payload: ["record": value])
+        return resultDeliveries[record.publicationID]!
+    }
+
+    func markResultPanel(_ id: String, closed: Bool, chart: Bool = false) throws {
+        guard let record = resultDeliveries[id] else { throw RuntimeLaunchError.unavailable("找不到成果紀錄。") }
+        if chart ? (closed ? record.chartClosed == true : record.chartApplied == true) : (closed ? record.closed : record.panelApplied) { return }
+        let event = chart ? (closed ? "result_chart_closed" : "result_chart_applied") : (closed ? "result_closed" : "result_panel_applied")
+        try appendResultEvent(event, conversationID: record.conversationID, payload: ["publicationID": .string(id)])
+    }
+
+    private func appendResultEvent(_ type: String, conversationID: String, payload: [String: UserViewValue]) throws {
+        guard journal != nil else { throw RuntimeLaunchError.unavailable("成果必須先連接持久對話紀錄。") }
+        let session = "result-delivery:\(conversationID)"
+        let encoded = try JSONEncoder().encode(UserViewValue.object([
+            "schemaVersion": .number(1), "sessionID": .string(session), "conversationID": .string(conversationID),
+            "sequence": .number(Double((lastSequences[session] ?? 0) + 1)),
+            "event": .object(["type": .string(type), "payload": .object(payload), "timestamp": .string(ISO8601DateFormatter().string(from: Date()))])]))
+        try applyRuntimeEvent(encoded)
+    }
     func closeLiveStorage() { journal?.close(); journal = nil }
 
     static let samples: [ConversationSession] = [

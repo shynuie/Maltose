@@ -149,6 +149,23 @@ class VoiceAgent:
         self.control_gate = control_gate
         self.input_router = input_router
         self.voice_context_observer = None
+        self.input_observer = None
+        self.result_handler = None
+        self.result_preparer = None
+        self.foreground_result_handler = None
+        self.foreground_result_due = None
+        self.durable_result_delivery = False
+        self.product_continuation_handler = None
+        self.product_continuation_due = None
+        self._notification_retry_after = {}
+        self._pending_notification_turn = None
+        self._next_notification_poll = 0
+        self._last_result = None
+        self._last_result_scope = None
+        self._output_lock = threading.Lock()
+        self._output_generation = 0
+        self._output_cancel = None
+        self._result_speech_muted = False
         self._assistant_stream_id = None
         self._assistant_stream_text = ''
         self._observe_speech = observe_speech
@@ -181,18 +198,32 @@ class VoiceAgent:
             raise ValueError("Agent text input cannot be empty")
         if source not in {"web", "native"}: raise ValueError("Unknown Agent text input source")
         if message_id is not None and (not isinstance(message_id, str) or not message_id or len(message_id) > 128): raise ValueError('Invalid input ID')
+        self._invalidate_result_speech()
         self._command_queue.put(QueuedAgentInput(text, source, self.control_gate.epoch if self.control_gate else None, message_id or uuid.uuid4().hex))
 
     def submit_routed_voice(self, text: str, *, message_id: str, context_provider: Callable[[], TurnContext | None]) -> None:
         """Re-admit a runtime-verified voice input after the controller hands back."""
         if not text.strip() or not message_id or not callable(context_provider): raise ValueError('Invalid routed voice input')
+        self._invalidate_result_speech()
         self._command_queue.put(QueuedAgentInput(text, 'voice', self.control_gate.epoch if self.control_gate else None,
                                                  message_id, context_provider))
 
     def request_shutdown(self) -> None:
         """Cooperatively wake the listener and stop this runtime, not another process."""
         self._shutdown_requested.set()
+        self._invalidate_result_speech()
         self.state = AgentState.SHUTDOWN
+
+    def _invalidate_result_speech(self):
+        with self._output_lock:
+            self._output_generation += 1
+            cancel = self._output_cancel
+            if cancel is not None: cancel.set()
+        if cancel is not None:
+            stop = getattr(self._speaker, 'stop', None)
+            if callable(stop):
+                try: stop()
+                except Exception: logger.exception('result_speech_stop_failed')
 
     @property
     def audio_input_active(self) -> bool:
@@ -253,6 +284,9 @@ class VoiceAgent:
                 )
                 self._speak_task_notifications()
 
+                if pending_turn is None and self._pending_notification_turn is not None:
+                    pending_turn, self._pending_notification_turn = self._pending_notification_turn, None
+
                 captured_utterance = pending_turn.utterance if pending_turn else None
                 captured_epoch = pending_turn.captured_epoch if pending_turn and pending_turn.captured_epoch is not None else self.control_gate.epoch if self.control_gate else None
                 pretranscribed_turn = pending_turn
@@ -290,6 +324,9 @@ class VoiceAgent:
                             break
                         except queue.Empty:
                             pass
+                        if self.state == AgentState.STANDBY and self._task_result_due():
+                            listener_stop.set()
+                            break
                         try:
                             event = listening_events.get(timeout=0.05)
                         except queue.Empty:
@@ -424,6 +461,7 @@ class VoiceAgent:
                     self._publish('voice_wake_observed', {'recipient': 'current'})
                     continue
                 input_id = external_message_id or uuid.uuid4().hex
+                turn_context = replace(turn_context, input_id=input_id)
                 input_text = result.text if external_text is not None else result.text.strip()
                 if external_voice_context is None and self.input_router and self.input_router(input_text, turn_context, source, captured_epoch, input_id):
                     continue
@@ -434,6 +472,7 @@ class VoiceAgent:
                         if not brain_session_open:
                             self._begin_brain_session(); brain_session_open = True
                         self._publish("user_message", {"message_id": input_id, "content": input_text, "source": source})
+                        if self.input_observer is not None: self.input_observer(input_text, turn_context)
                         reply_text, interrupted_utterance, streamed_reply = self._respond_to_input(result.text, turn_context)
                         if interrupted_utterance and interrupted_utterance.captured_epoch is None:
                             interrupted_utterance = replace(interrupted_utterance, captured_epoch=captured_epoch)
@@ -495,6 +534,8 @@ class VoiceAgent:
             interrupted_utterance = self._speak_reply(TTSRequest(
                 text=reply_text, voice=self.config.tts_voice, rate=self.config.tts_rate))
             streamed_reply = False
+        elif self.result_handler is not None and callable(getattr(self.brain, 'process_result', None)):
+            return self._respond_with_result(text, turn_context)
         else:
             stream_process = getattr(self.brain, "process_stream", None)
             if callable(stream_process):
@@ -507,12 +548,132 @@ class VoiceAgent:
                 streamed_reply = False
         return reply_text, interrupted_utterance, streamed_reply
 
+    def _respond_with_result(self, text, context):
+        from maltose.presentation import SpeechControl
+        control = SpeechControl.parse(text)
+        source = getattr(context, 'input_source', None)
+        scope = (getattr(context, 'user_id', None), getattr(context, 'speaker_status', None), source)
+        mode = control.mode or self.config.speech_mode
+        self._result_speech_muted = mode == 'mute'
+        with self._output_lock: generation = self._output_generation
+        if control.read_previous or control.request is None:
+            result = self._last_result if self._last_result_scope == scope else None
+            content = ('我會朗讀上一則結果。' if result else '目前沒有可朗讀的結果，請先指定內容。') if control.read_previous else '這次先用文字回覆。'
+            self._publish('assistant_message', {'content': content})
+            pending = self._speak_result(result, source=source, mode='read', generation=generation) if control.read_previous and result else None
+            return content, pending, True
+
+        message_id = self._start_assistant_stream()
+        stream_process = getattr(self.brain, 'process_result_stream', None)
+        if callable(stream_process):
+            stream = stream_process(control.request, context=context)
+            try:
+                while True:
+                    try: delta = next(stream)
+                    except StopIteration as finished:
+                        result = finished.value
+                        break
+                    if self._shutdown_requested.is_set(): raise AutonomyPaused('Runtime is shutting down')
+                    if delta.reset:
+                        self._reset_assistant_stream(message_id)
+                    if delta.content: self._publish_assistant_delta(message_id, delta.content)
+            finally:
+                stream.close()
+        else:
+            result = self.brain.process_result(control.request, context=context)
+        result = replace(result, chat_message_id=message_id)
+        durable = callable(self.result_preparer)
+        if durable: result = self.result_preparer(result, context=context, user_text=text)
+        with self.control_gate.activity('presentation') if self.control_gate else nullcontext():
+            if self._shutdown_requested.is_set(): raise AutonomyPaused('Runtime is shutting down')
+            if not durable: self._complete_result_chat(message_id, result)
+            receipt = self._present_result(result)
+            if durable:
+                if receipt.get('chatStored') is not True or receipt.get('workflowStored') is not True:
+                    return result.display_text, None, True
+                # The native journal already replaced the draft with the full
+                # body. A late delta would briefly append the answer twice.
+                self._finish_assistant_stream(message_id, result.display_text)
+                if receipt.get('foregroundSpeechAllowed') is not True: return result.display_text, None, True
+            assessment = receipt.get('workflowAssessment', {})
+            from maltose.presentation import with_assessment
+            result = with_assessment(result, assessment)
+            from maltose.presentation import SpeechPolicy
+            policy = SpeechPolicy(target_seconds=self.config.speech_target_seconds, words_per_minute=self.config.tts_rate or 175)
+            repair = getattr(self.brain, 'repair_spoken_summary', None)
+            with self._output_lock: current = generation == self._output_generation
+            if callable(repair) and current and mode not in {'read', 'mute'} and (mode == 'summary' or source not in {'native', 'web'}):
+                result = repair(result, policy)
+            self._last_result, self._last_result_scope = result, scope
+            pending = self._speak_result(result, source=source, mode=mode, generation=generation)
+        return result.display_text, pending, True
+
+    def _reset_assistant_stream(self, message_id):
+        self._assistant_stream_text = ''
+        # Existing clients replace an existing message on assistant_start.
+        self._publish('assistant_start', {'message_id': message_id})
+
+    def _complete_result_chat(self, message_id, result):
+        content = result.display_text
+        if not content.startswith(self._assistant_stream_text): self._reset_assistant_stream(message_id)
+        remainder = content[len(self._assistant_stream_text):]
+        if remainder: self._publish_assistant_delta(message_id, remainder)
+        self._finish_assistant_stream(message_id, content)
+
+    def _present_result(self, result):
+        try: receipt = self.result_handler(result)
+        except AutonomyPaused: raise
+        except Exception as error:
+            logger.exception('result_presentation_unconfirmed')
+            receipt = {'status': 'panel_unknown', 'error': type(error).__name__}
+        self._publish('result_presentation', {'result_id': result.result_id, **receipt})
+        return receipt
+
+    def _speak_result(self, result, *, source, mode=None, generation=None):
+        from maltose.presentation import SpeechPolicy
+        policy = SpeechPolicy(target_seconds=self.config.speech_target_seconds, words_per_minute=self.config.tts_rate or 175)
+        speech = policy.choose(result, source=source, mode=mode or self.config.speech_mode)
+        with self._output_lock:
+            obsolete = (generation is not None and generation != self._output_generation) or self._shutdown_requested.is_set() or not self._command_queue.empty()
+            cancel = threading.Event()
+            if not obsolete: self._output_cancel = cancel
+        if obsolete:
+            self._publish('speech_cancelled', {'result_id': result.result_id, 'reason': 'new_input_or_shutdown'})
+            return None
+        self._publish('speech_summary', {'result_id': result.result_id, 'content': speech, 'mode': mode or self.config.speech_mode})
+        try:
+            if not speech or not self._voice_enabled: return None
+            # Explicit long reading is bounded per request and can be stopped
+            # between sections. Default summaries remain one short request.
+            segments = [speech[index:index + 600] for index in range(0, len(speech), 600)] if mode == 'read' else [speech]
+            for segment in segments:
+                if cancel.is_set(): break
+                if self.control_gate: self.control_gate.checkpoint()
+                pending = self._speak_reply(TTSRequest(text=segment, voice=self.config.tts_voice,
+                                                      rate=self.config.tts_rate, cancel_event=cancel))
+                if pending is not None:
+                    if pending.interrupt_requested: self._result_speech_muted = True
+                    return pending
+            if cancel.is_set(): self._publish('speech_cancelled', {'result_id': result.result_id, 'reason': 'new_input_or_shutdown'})
+            return None
+        except AutonomyPaused: raise
+        except Exception as error:
+            # Playback failure cannot invalidate or rerun a completed task.
+            logger.exception('result_speech_failed')
+            self._publish('speech_failed', {'result_id': result.result_id, 'error': type(error).__name__})
+            return None
+        finally:
+            with self._output_lock:
+                if self._output_cancel is cancel: self._output_cancel = None
+
     def _begin_brain_session(self) -> None:
+        self._last_result = self._last_result_scope = None
         begin_session = getattr(self.brain, "begin_session", None)
         if callable(begin_session):
             begin_session()
 
     def _end_brain_session(self) -> None:
+        self._last_result = self._last_result_scope = None
         end_session = getattr(self.brain, "end_session", None)
         if callable(end_session):
             end_session()
@@ -528,8 +689,8 @@ class VoiceAgent:
             raise ValueError("block_type cannot be empty")
         self._publish("ui_block", {"block_type": block_type, **payload})
 
-    def _start_assistant_stream(self) -> str:
-        message_id = uuid.uuid4().hex
+    def _start_assistant_stream(self, message_id=None) -> str:
+        message_id = message_id or uuid.uuid4().hex
         self._assistant_stream_id = message_id; self._assistant_stream_text = ''
         self._publish("assistant_start", {"message_id": message_id})
         return message_id
@@ -616,13 +777,37 @@ class VoiceAgent:
                 self._speak_admitted_notifications()
         except AutonomyPaused: return
 
+    def _task_result_due(self):
+        now = time.monotonic()
+        if not self.durable_result_delivery or now < self._next_notification_poll: return False
+        self._next_notification_poll = now + .5
+        if self.control_gate and not self.control_gate.active: return False
+        if callable(self.foreground_result_due) and self.foreground_result_due(): return True
+        pending = getattr(self.brain, 'pending_task_result_ids', None)
+        followup=getattr(self,'worker_result_followup_due',None)
+        if callable(followup) and followup():return True
+        if callable(self.product_continuation_due) and self.product_continuation_due(): return True
+        return callable(pending) and any(now >= self._notification_retry_after.get(identity, 0) for identity in pending())
+
     def _speak_admitted_notifications(self) -> None:
+        # Do not drain notifications ahead of a queued human input or shutdown.
+        # Native uses acknowledged delivery below; CLI/Web retains its adapter.
+        if self.result_handler is not None and (not self._command_queue.empty() or self._shutdown_requested.is_set()): return
+        if self.durable_result_delivery and callable(self.foreground_result_handler):
+            self.foreground_result_handler()
+        if self.durable_result_delivery and callable(getattr(self.brain, 'pending_task_results', None)):
+            self._deliver_task_results()
+            followup=getattr(self,'worker_result_followup',None)
+            if callable(followup) and self._command_queue.empty() and not self._shutdown_requested.is_set():followup()
+            if callable(self.product_continuation_handler) and self._command_queue.empty() and not self._shutdown_requested.is_set():
+                self.product_continuation_handler()
+            return
         consume = getattr(self.brain, "consume_task_notifications", None)
         if not callable(consume):
             return
         for text in consume():
             logger.info("task_notification text=%s", text)
-            if not self._voice_enabled:
+            if not self._voice_enabled or (self.result_handler is not None and (self._result_speech_muted or self.config.speech_mode == 'mute')):
                 self._publish("assistant_message", {"content": text})
                 continue
             self.speaker.synthesize(
@@ -632,6 +817,50 @@ class VoiceAgent:
                     rate=self.config.tts_rate,
                 )
             )
+
+    def _deliver_task_results(self):
+        from maltose.presentation import SpeechPolicy
+        with self._output_lock: generation = self._output_generation
+        for delivery in self.brain.pending_task_results():
+            if not self._command_queue.empty() or self._shutdown_requested.is_set(): return
+            if self.control_gate: self.control_gate.checkpoint()
+            identity, result = delivery['notification_id'], delivery['result']
+            if time.monotonic() < self._notification_retry_after.get(identity, 0): continue
+            managed=getattr(self,'result_publication_managed',None)
+            if not callable(managed) or not managed(result):
+                message_id = self._start_assistant_stream(result.chat_message_id or result.result_id)
+                self._complete_result_chat(message_id, result)
+            receipt = self._present_result(result)
+            if receipt.get('chatStored') is not True or receipt.get('workflowStored') is False:
+                self._notification_retry_after[identity] = time.monotonic() + 5
+                continue
+            self._notification_retry_after.pop(identity, None)
+            ack=getattr(self,'background_result_ack',None)
+            may_speak = ack(identity,delivery['delivery_owner']) if delivery.get('delivery_owner') and callable(ack) else self.brain.acknowledge_task_result(identity)
+            if receipt.get('productRecapManaged'): continue
+            if not may_speak or delivery['recovered'] or delivery.get('cancelled'):
+                self._publish('speech_cancelled', {'result_id': result.result_id, 'reason': 'cancelled_task' if delivery.get('cancelled') else 'recovered_or_claimed_notification'})
+                continue
+            source = getattr(self.brain, '_active_input_source', None) or 'voice'
+            mode = 'mute' if self._result_speech_muted else self.config.speech_mode
+            assessment = receipt.get('workflowAssessment', {})
+            if assessment.get('status') == 'completed':
+                # Keep the original full worker report; only the spoken status
+                # adopts the host-accepted whole-task assessment.
+                result = replace(result, spoken_summary=assessment.get('summary') or '背景成果已完成核對，詳情與限制保留在畫面中。', kind='answer',
+                    limitations=tuple(value for value in result.limitations if value != '這是背景工作的執行回報，整體需求的完成條件仍需核對。'))
+            else:
+                from maltose.presentation import with_assessment
+                result = with_assessment(result, assessment)
+            if mode not in {'mute', 'read'} and (mode == 'summary' or source not in {'native', 'web'}):
+                result = self.brain.repair_spoken_summary(result, SpeechPolicy(target_seconds=self.config.speech_target_seconds, words_per_minute=self.config.tts_rate or 175))
+            self._last_result = result
+            self._last_result_scope = (getattr(self.brain, '_active_user_id', None), getattr(self.brain, '_active_speaker_status', None), source)
+            pending = self._speak_result(result, source=source, mode=mode, generation=generation)
+            if pending is not None:
+                if not pending.interrupt_requested:
+                    self._pending_notification_turn = replace(pending, captured_epoch=self.control_gate.epoch if self.control_gate else None)
+                return
 
     def _speak_stream(self, chunks: Iterator[str]) -> tuple[str, PendingTurn | None]:
         """Coordinate LLM streaming, sentence TTS, and optional barge-in listening."""
@@ -1204,6 +1433,8 @@ class VoiceAgent:
             "等一下",
             "停一下",
             "先別說了",
+            "先別說話",
+            "先别说话",
             "先不要說了",
             "不要繼續",
             "停止播放",

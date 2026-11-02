@@ -63,7 +63,7 @@ import SwiftUI
         tipsDropdown = NSHostingView(rootView: WorkspaceTipsDropdown())
         settingsPlaceholder = NSHostingView(rootView: WorkspaceSettingsPlaceholder())
         super.init(frame: .zero)
-        chrome.onSubmitText = { [weak manager] text in manager?.submitText(text) ?? false }
+        chrome.onSubmitText = { [weak manager] text in manager?.submitText(text, from: screenID) ?? false }
         chrome.onPresentationChange = { [weak self] in self?.arrange(animated: true) }
         model.onTestCommand = { [weak manager] in manager?.runAgentInteractionTest() }
         autoresizingMask = [.width, .height]
@@ -314,7 +314,8 @@ import SwiftUI
         }
         var pinnedPositions: [Int: WorkspaceGridPosition] = [:]
         for (index, id) in state.panelIDs.enumerated() {
-            if (manager?.catalog.first(where: { $0.id == id })?.globalGridRowSpan ?? 1) > 1 {
+            if let position = state.panelPositions?[id] { pinnedPositions[index] = position }
+            else if (manager?.catalog.first(where: { $0.id == id })?.globalGridRowSpan ?? 1) > 1 {
                 pinnedPositions[index] = state.identityPosition
             }
         }
@@ -434,7 +435,7 @@ import SwiftUI
                                                  isCovered: tipsDropdown.frame.contains(point) || settingsPlaceholder.frame.contains(point),
                                                  isInsideScrollablePanel: panel(at: event).flatMap { panel in
                                                      manager?.catalog.first(where: { $0.id == panel.surfaceID })?.kind
-                                                 }.map { [.conversationHistory, .document].contains($0) } ?? false,
+                                                 }.map(\.scrollsContentInGrid) ?? false,
                                                  controlPressed: useControl, deltaY: delta)
         switch action {
         case .passThrough: return false
@@ -508,6 +509,16 @@ import SwiftUI
 
     func setGlobalZoom(_ value: CGFloat) {
         gridZoom = min(1, max(0, value))
+        arrange(animated: false)
+    }
+
+    var savedGridZoom: Double { Double(gridZoom < 0 ? 0.5 : gridZoom) }
+
+    func applyInitialGrid() {
+        guard state.panelIDs.contains("agent-activity") else { return }
+        let columns = globalGridGeometry.columns
+        // Keep the existing tall identity/chat panels; place the journal in the lower right cell.
+        state.panelPositions = ["agent-activity": .init(row: columns > 2 ? 1 : 2, column: columns - 1)]
         arrange(animated: false)
     }
 

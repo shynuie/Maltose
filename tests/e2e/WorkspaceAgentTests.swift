@@ -345,32 +345,34 @@ final class WorkspaceAgentContractTests: XCTestCase {
         XCTAssertEqual(target.state.mode, .grid)
     }
 
-    func testSingletonPanelsCanBeClosedAndRecreatedWithoutDuplicatingModels() async throws {
+    func testFixedPanelsCannotBeClosedOrDuplicated() async throws {
         let manager = try manager(); defer { manager.stop() }
         let screenID = try XCTUnwrap(manager.assignments["notes"])
         for kind in [WorkspacePanel.Kind.conversationHistory, .agentIdentity] {
             let id = try XCTUnwrap(manager.catalog.first(where: { $0.kind == kind })?.id)
             try await send(.create_panel(kind: kind, screenID: screenID), to: manager, code: "panel_limit")
-            try await send(.close_panel(panelID: id, discardChanges: false), to: manager)
-            try await send(.create_panel(kind: kind, screenID: screenID), to: manager)
+            let original = manager.panels[id]
+            try await send(.close_panel(panelID: id, discardChanges: true), to: manager, code: "protected_panel")
+            XCTAssertFalse(manager.closePanel(id))
             XCTAssertEqual(manager.catalog.filter { $0.kind == kind }.count, 1)
             XCTAssertNotNil(manager.panels[id])
+            XCTAssertTrue(manager.panels[id] === original)
         }
         try await send(.create_panel(kind: .agentCoreTest, screenID: screenID), to: manager, code: "panel_limit")
     }
 
-    func testClosingChatDoesNotDiscardIncomingRuntimeMessages() async throws {
+    func testRejectedChatCloseKeepsReceivingRuntimeMessages() async throws {
         let manager = try manager(); defer { manager.stop() }
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("maltose-closed-chat-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
         try manager.prepareLiveConversation(at: directory.appendingPathComponent("chat.jsonl"))
         let shared = try XCTUnwrap(manager.liveConversationModel)
         let screenID = try XCTUnwrap(manager.assignments["chat"])
-        try await send(.close_panel(panelID: "chat", discardChanges: false), to: manager)
+        try await send(.close_panel(panelID: "chat", discardChanges: false), to: manager, code: "protected_panel")
         let data = try JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "sessionID": "test", "sequence": 1,
             "event": ["type": "assistant_message", "timestamp": "now", "payload": ["content": "arrived while chat closed"]]])
         try manager.receiveRuntimeEvent(data)
-        try await send(.create_panel(kind: .conversationHistory, screenID: screenID), to: manager)
+        try await send(.create_panel(kind: .conversationHistory, screenID: screenID), to: manager, code: "panel_limit")
         XCTAssertTrue(manager.panels["chat"]?.conversationHistoryModel === shared)
         XCTAssertEqual(shared.currentSession?.messages.last?.text, "arrived while chat closed")
     }

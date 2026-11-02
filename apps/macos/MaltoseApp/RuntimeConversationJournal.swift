@@ -41,8 +41,16 @@ import Foundation
     func append(_ data: Data, durable: Bool = false) throws {
         guard let writer else { throw RuntimeLaunchError.unavailable("對話紀錄尚未開啟。") }
         var line = data; line.append(10)
-        try writer.write(contentsOf: line)
-        if durable { try writer.synchronize() }
+        do {
+            try writer.write(contentsOf: line)
+            if durable { try writer.synchronize() }
+        } catch {
+            // A partial write must remain the recoverable tail, never become
+            // the middle of a later line after an automatic delivery retry.
+            self.writer = nil
+            try? writer.close()
+            throw error
+        }
     }
 
     func close() { try? writer?.synchronize(); try? writer?.close(); writer = nil }

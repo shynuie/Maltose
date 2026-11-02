@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 
 /// Transport-independent v1 contract. Codable enums use {"case_name": {"argument": value}}.
 /// All calls run on the same MainActor and model instances as native UI actions.
@@ -6,6 +7,7 @@ struct WorkspaceAgentRequest: Codable {
     var schemaVersion = 1
     var requestID: String?
     var command: WorkspaceAgentCommand
+    var source: NativePanelSource?
 }
 
 enum WorkspaceAgentCommand: Codable {
@@ -13,6 +15,11 @@ enum WorkspaceAgentCommand: Codable {
     case list_capabilities
     case read_panel(panelID: String)
     case create_panel(kind: WorkspacePanel.Kind, screenID: String?)
+    // Runtime-only final-result publication; not a model-facing mutable document tool.
+    case publish_document(publicationID: String, title: String, markdown: String)
+    case deliver_result(publicationID: String, title: String, markdown: String, createDocument: Bool, conversationID: String, messageID: String, chart: ResultChart? = nil)
+    case workflow(request: ProductWorkflowRequest)
+    case acknowledge_panel_operations(receipts: [NativePanelOperationReceipt])
     case close_panel(panelID: String, discardChanges: Bool)
     case select_panel(panelID: String, extending: Bool)
     case focus_panel(panelID: String)
@@ -54,6 +61,10 @@ enum WorkspaceAgentCommand: Codable {
         case .list_capabilities: "list_capabilities"
         case .read_panel: "read_panel"
         case .create_panel: "create_panel"
+        case .publish_document: "publish_document"
+        case .deliver_result: "deliver_result"
+        case .workflow: "workflow"
+        case .acknowledge_panel_operations: "acknowledge_panel_operations"
         case .close_panel: "close_panel"
         case .select_panel: "select_panel"
         case .focus_panel: "focus_panel"
@@ -110,11 +121,13 @@ struct WorkspaceAgentResponse: Codable {
     var result: [String: UserViewValue] = [:]
     var view: UserViewSnapshot?
     var capabilities: [WorkspaceAgentCapability]?
+    var operationReceipts: [NativePanelOperationReceipt]?
 }
 
 struct WorkspaceAgentFailure: Error, Codable, LocalizedError {
     var code: String
     var message: String
+    var operationID: String?
     var errorDescription: String? { message }
 }
 
@@ -131,7 +144,15 @@ struct NativePanelFileTransfer: Codable {
 
 @MainActor final class WorkspaceAgentInterface {
     private unowned let manager: WorkspaceWindowManager
+    private var publications: [String: (digest: String, panelID: String)] = [:]
+    lazy var panelPolicy = NativePanelPolicy(manager: manager)
     init(manager: WorkspaceWindowManager) { self.manager = manager }
+
+    func handleAgent(_ request: WorkspaceAgentRequest, fileTransfer: NativePanelFileTransfer? = nil) async -> WorkspaceAgentResponse {
+        await panelPolicy.perform(request) { preserve in
+            await self.handle(request, fileTransfer: fileTransfer, requiresFileTransfer: true, preservingAgentView: preserve)
+        }
+    }
 
     func handleJSON(_ json: String) async -> String {
         let response: WorkspaceAgentResponse
@@ -147,12 +168,16 @@ struct NativePanelFileTransfer: Codable {
         catch { return #"{"schemaVersion":1,"ok":false,"error":{"code":"encoding_failed","message":"無法編碼回應"}}"# }
     }
 
-    func handle(_ request: WorkspaceAgentRequest, fileTransfer: NativePanelFileTransfer? = nil, requiresFileTransfer: Bool = false) async -> WorkspaceAgentResponse {
+    func handle(_ request: WorkspaceAgentRequest, fileTransfer: NativePanelFileTransfer? = nil, requiresFileTransfer: Bool = false, preservingAgentView: Bool = false) async -> WorkspaceAgentResponse {
         do {
             guard request.schemaVersion == 1 else { throw failure("unsupported_version", "不支援的指令版本。") }
+            let restoreView = preservingAgentView ? retainedView(for: request.command) : nil
+            var didMutate = false
+            defer { if didMutate { restoreView?() } }
             var response = WorkspaceAgentResponse(requestID: request.requestID, ok: true)
             if let fileTransfer {
                 response.result = try transferFile(request.command, transfer: fileTransfer)
+                didMutate = true
                 return response
             }
             if requiresFileTransfer {
@@ -166,12 +191,38 @@ struct NativePanelFileTransfer: Codable {
             case .get_user_view: response.view = try await manager.getUserView()
             case .list_capabilities: response.capabilities = capabilities()
             case let .read_panel(id): response.result = try await manager.readPanel(id)
-            default: response.result = try execute(request.command)
+            default:
+                response.result = try execute(request.command)
+                didMutate = true
             }
             return response
         } catch {
             return WorkspaceAgentResponse(requestID: request.requestID, ok: false,
-                error: (error as? WorkspaceAgentFailure) ?? failure("operation_failed", error.localizedDescription))
+                error: (error as? WorkspaceAgentFailure) ?? failure(error is CSVLineChartParser.ParseError && request.source != nil ? "invalid_csv" : "operation_failed", error.localizedDescription))
+        }
+    }
+
+    private func retainedView(for command: WorkspaceAgentCommand) -> (() -> Void)? {
+        switch command {
+        case let .chart_load_csv(id, _, _), let .chart_open_csv(id, _):
+            guard let model = manager.panels[id]?.chartModel else { return nil }
+            let zoom = model.xZoom, pan = model.xPan
+            let visible = model.visibleSeries.compactMap { model.data.seriesNames.indices.contains($0) ? model.data.seriesNames[$0] : nil }
+            let bands = model.filledBands.compactMap { band, opacity -> CSVLineChartBandRequest? in
+                guard model.data.seriesNames.indices.contains(band.firstSeries), model.data.seriesNames.indices.contains(band.secondSeries) else { return nil }
+                return .init(firstSeriesName: model.data.seriesNames[band.firstSeries], secondSeriesName: model.data.seriesNames[band.secondSeries], opacity: opacity)
+            }
+            return {
+                let remaining = visible.filter(model.data.seriesNames.contains)
+                if !remaining.isEmpty || visible.isEmpty { model.configureAgentVisibleSeries(remaining) }
+                model.configureAgentBands(bands.filter { model.data.seriesNames.contains($0.firstSeriesName) && model.data.seriesNames.contains($0.secondSeriesName) })
+                model.setXAxisViewport(zoom: zoom, pan: pan)
+            }
+        case let .flowchart_open(id, _, _), let .flowchart_new(id, _):
+            guard let model = manager.panels[id]?.flowchartModel else { return nil }
+            let zoom = model.zoom, pan = model.panOffset
+            return { model.setZoom(zoom); model.setPanOffset(pan) }
+        default: return nil
         }
     }
 
@@ -241,7 +292,7 @@ struct NativePanelFileTransfer: Codable {
             let id = panel.id
             func panelAdd(_ command: WorkspaceAgentCommand) { add(command, panelID: id) }
             panelAdd(.read_panel(panelID: id))
-            panelAdd(.close_panel(panelID: id, discardChanges: false))
+            if panel.kind.canClose { panelAdd(.close_panel(panelID: id, discardChanges: false)) }
             panelAdd(.select_panel(panelID: id, extending: false))
             if panel.supportsFocusedMode {
                 panelAdd(.focus_panel(panelID: id)); panelAdd(.toggle_panel(panelID: id))
@@ -278,7 +329,7 @@ struct NativePanelFileTransfer: Codable {
                 panelAdd(.flowchart_open(panelID: id, path: "/tmp/agent-test.maltoseflow.json", discardChanges: false))
                 panelAdd(.flowchart_save(panelID: id, path: "/tmp/agent-test.maltoseflow.json"))
             case .agentIdentity: panelAdd(.identity_set_state(panelID: id, state: .thinking))
-            case .document, .table, .agentCoreTest: break
+            case .document, .table, .agentCoreTest, .agentActivity, .taskProgress: break
             }
         }
         return result
@@ -288,16 +339,44 @@ struct NativePanelFileTransfer: Codable {
         guard manager.draggingID == nil, !manager.isAgentInteractionTestRunning else { throw failure("busy", "使用者正在拖曳面板或播放互動示範，請稍後重試。") }
         switch command {
         case .get_user_view, .list_capabilities, .read_panel: break // handled by async entry point
+        case .workflow, .acknowledge_panel_operations: throw failure("access_denied", "任務與操作回執只接受原生協調層的私有執行來源。")
+        case let .deliver_result(id, title, markdown, createDocument, conversationID, messageID, chart):
+            return try manager.deliverResult(.init(publicationID: id, conversationID: conversationID,
+                messageID: messageID, title: title, markdown: markdown, createDocument: createDocument, chart: chart))
         case let .create_panel(kind, screenID):
             let target = try root(screenID ?? manager.activeRoot?.screenID ?? "")
             guard let panel = manager.addPanel(kind: kind, to: target.screenID) else {
                 throw failure("panel_limit", "此面板為單例或無法在工作區建立。")
             }
             return ["panelID": .string(panel.id)]
+        case let .publish_document(publicationID, title, markdown):
+            guard publicationID.range(of: "^[A-Za-z0-9._:-]{1,128}$", options: .regularExpression) != nil,
+                  !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, title.utf8.count <= 200,
+                  title.rangeOfCharacter(from: .controlCharacters) == nil,
+                  !markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, markdown.utf8.count <= 256 * 1024 else {
+                throw failure("invalid_argument", "結果識別、標題或內容大小不正確。")
+            }
+            let encoded = try JSONEncoder().encode([title, markdown])
+            let digest = SHA256.hash(data: encoded).map { String(format: "%02x", $0) }.joined()
+            if let previous = publications[publicationID] {
+                guard previous.digest == digest else { throw failure("invalid_request", "同一發表識別不可改寫已發表內容。") }
+                guard manager.panels[previous.panelID] != nil else { throw failure("not_found", "結果面板已關閉，不自動重新開啟。") }
+                return ["panelID": .string(previous.panelID), "replayed": .boolean(true)]
+            }
+            guard publications.count < 512 else { throw failure("panel_limit", "本次工作區的結果發表數量已達上限。") }
+            let target = try root(manager.activeRoot?.screenID ?? "")
+            guard let created = manager.addPanel(kind: .document, to: target.screenID, title: title),
+                  let model = manager.panels[created.id]?.markdownDocumentModel else {
+                throw failure("panel_limit", "無法建立結果文檔面板。")
+            }
+            model.loadResult(title: title, markdown: markdown)
+            publications[publicationID] = (digest, created.id)
+            return ["panelID": .string(created.id), "replayed": .boolean(false)]
         case let .close_panel(id, discard):
             let panel = try panel(id)
+            guard manager.catalog.first(where: { $0.id == id })?.kind.canClose == true else { throw failure("protected_panel", "形象與聊天是固定面板，不能關閉。") }
             try checkDirty(panel.flowchartModel, discard: discard)
-            _ = manager.closePanel(id)
+            guard manager.closePanel(id) else { throw failure("operation_failed", "面板尚未關閉，無法保存關閉紀錄。") }
         case let .select_panel(id, extending):
             _ = try panel(id)
             if manager.catalog.first(where: { $0.id == id })?.supportsFocusedMode == false,

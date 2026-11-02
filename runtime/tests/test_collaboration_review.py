@@ -126,6 +126,63 @@ class CollaborationReviewTests(unittest.TestCase):
             with self.subTest(message=message),self.assertRaises(ValueError):
                 review_collaboration(SimpleNamespace(complete=lambda *_: {'choices':[{'message':message}]}),self.record())
 
+    def test_host_assessment_and_full_visual_content_are_separate_from_short_spoken_summary(self):
+        record = {**self.record(), 'productAssessment': dict(status='partial', hostVerified=False, summary='尚未驗證', remaining=['執行本次測試'])}
+        value = {**self.result(), 'summary': '完整成果。\n' * 100 + 'https://example.com/results',
+                 'spoken_summary': '成果已整理，仍需核對本次測試。', 'visual': 'document'}
+        result = review_collaboration(SimpleNamespace(complete=lambda *_: {'choices': [{'message': {'content': json.dumps(value)}}]}), record)
+        self.assertTrue(result['content'].startswith('任務核對：尚有未完成或未驗證事項。'))
+        self.assertIn('執行本次測試', result['content']); self.assertIn('https://example.com/results', result['content'])
+        self.assertEqual(result['spoken_summary'], value['spoken_summary']); self.assertEqual(result['visual'], 'document')
+        self.assertFalse(review_context(record)['productAssessment']['hostVerified'])
+
+    def test_negotiated_review_returns_publication_for_host_commit_without_emitting_an_early_question(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = self.service(directory); events = []; calls = []
+            bridge = NativeRuntimeBridge(EventHub(), output_stream=io.StringIO(), collaboration=service); self.addCleanup(bridge.close)
+            bridge.receive_line(json.dumps(dict(schemaVersion=1, requestID='init', method='initialize',
+                params=dict(presentationVersion=1, resultDeliveryVersion=1))))
+            bridge.hub.publish = lambda kind, payload: events.append((kind, payload))
+            bridge.brain = SimpleNamespace(review_collaboration=lambda record: calls.append('model') or dict(mode='model', content='完整回顧。\n' * 100 + '下一步要先檢查嗎？',
+                spoken_summary='成果已整理，下一步要先檢查嗎？', visual='document'))
+            lease = bridge.control.pause(CONTROL_OWNER)
+            params = dict(ownerID=CONTROL_OWNER, leaseID=lease['leaseID'], record=self.record(), review=True, presentationRequested=True,
+                question=dict(messageID='publication-question', content='fallback'))
+            first = bridge._dispatch('observe_codex', params)
+            second = bridge._dispatch('observe_codex', params)
+            self.assertEqual(first, second); self.assertEqual(calls, ['model'])
+            self.assertTrue(first['reviewPresentation']['createDocument'])
+            self.assertEqual(first['reviewPresentation']['publicationID'], 'publication-question')
+            self.assertEqual(first['reviewPresentation']['messageID'], 'publication-question')
+            self.assertFalse(any(kind == 'assistant_message' for kind, _ in events))
+            self.assertEqual(bridge.control.snapshot()['state'], 'paused')
+
+    def test_controller_only_product_assessment_does_not_enter_memory_tools_or_resume_and_reuses_saved_result(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = self.service(directory); service.workspace = lambda operation, identity: {'phase': 'ready'}
+            bridge = NativeRuntimeBridge(EventHub(), output_stream=io.StringIO(), collaboration=service); self.addCleanup(bridge.close)
+            calls = []
+            context = dict(complete=True, criteria=['測試通過'], evidence=[dict(id='actual', source='observed', kind='verification', verdict='passed', detail='Ran 1 test OK')])
+            def model(messages, tools):
+                calls.append(messages); self.assertEqual(tools, [])
+                self.assertNotIn('private-memory-sentinel', json.dumps(messages))
+                return {'choices': [{'message': {'content': json.dumps(dict(status='completed', summary='測試已核對', checks=[dict(criterion='測試通過', evidenceIDs=['actual'])],
+                    remaining=[], resolvedFailures={}, explanation='本次實際測試通過'))}}]}
+            brain = TaskBrain(SimpleNamespace(complete=model), memory=MemoryStore(Path(directory) / 'memory.json'), control_gate=bridge.control)
+            brain._session_messages = [dict(role='user', content='private-memory-sentinel')]
+            bridge.brain = brain
+            bridge.receive_line(json.dumps(dict(schemaVersion=1, requestID='init', method='initialize')))
+            lease = bridge.control.pause(CONTROL_OWNER)
+            params = dict(ownerID=CONTROL_OWNER, leaseID=lease['leaseID'], taskID='task', assessmentID='product-check', context=context, content='本次測試已執行。')
+            self.assertEqual(bridge._dispatch('assess_codex', params)['assessment']['status'], 'completed')
+            self.assertEqual(bridge._dispatch('assess_codex', params)['assessment']['status'], 'completed')
+            self.assertEqual(len(calls), 1); self.assertFalse(brain._identity_is_known())
+            self.assertEqual(bridge.control.snapshot()['state'], 'paused')
+            with self.assertRaises(PermissionError): bridge._dispatch('assess_codex', {**params, 'leaseID': 'old'})
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(list((service.directory / 'product-assessments').glob('*.json'))), 1)
+            self.assertFalse((service.directory / 'reviews').exists())
+
     def test_failed_initial_save_prevents_generation_and_failed_final_save_prevents_publication(self):
         with tempfile.TemporaryDirectory() as directory:
             service=self.service(directory); calls=[]

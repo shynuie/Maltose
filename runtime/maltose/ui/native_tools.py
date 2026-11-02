@@ -34,12 +34,13 @@ def validate_arguments(schema: dict, value: Any) -> None:
 
 
 class NativePanelToolAdapter:
-    private_reads = {'get_user_view', 'list_capabilities', 'read_panel', 'flowchart_save'}
+    private_reads = {'flowchart_save'}  # Local-file export retains identity/consent checks.
     file_operations = {'chart_open_csv', 'image_add_file', 'flowchart_open', 'flowchart_save'}
 
-    def __init__(self, bridge, *, identity_check=None):
+    def __init__(self, bridge, *, identity_check=None, source=None):
         self.bridge = bridge
         self.identity_check = identity_check
+        self.source = source
 
     def tools(self) -> list[CapabilityTool]:
         tools = []
@@ -53,12 +54,21 @@ class NativePanelToolAdapter:
             def dispatch(arguments, command=command, schema=schema):
                 validate_arguments(schema, arguments)
                 brain = self.bridge.brain
+                source = self.source
+                if getattr(self.bridge, 'panel_policy_version', 0) == 1 and source is None:
+                    source = self.bridge.panel_source()
                 verified = self.identity_check if self.identity_check is not None else getattr(brain, '_identity_is_known', None)
-                if command in self.private_reads and not (callable(verified) and verified()):
-                    return {'ok': False, 'error': {'code': 'identity_required', 'message': 'User identity is not verified; UI context access is unavailable.'}}
+                local_native = source is not None and source.get('executor') == 'maltose' and getattr(brain, '_active_input_source', None) == 'native'
+                if command in self.private_reads and not (local_native or (callable(verified) and verified())):
+                    return {'ok': False, 'error': {'code': 'identity_required', 'message': 'Local-file export requires verified identity or the existing native export authorization.'}}
                 if command in self.file_operations:
-                    return NativePanelFileAdapter(self.bridge).call(command, arguments)
-                return self.bridge.call_panel({command: arguments})
+                    result = NativePanelFileAdapter(self.bridge, source=source).call(command, arguments)
+                    if result.get("error", {}).get("code") == "outcome_unknown":
+                        result["retryable"] = False
+                    return result
+                result = self.bridge.call_panel({command: arguments}, **({'agent_source': source} if source is not None else {}))
+                if result.get('error',{}).get('code') == 'outcome_unknown': result['retryable'] = False
+                return result
             def call(arguments, operation=dispatch):
                 try:
                     return operation(arguments)

@@ -18,7 +18,14 @@ def main() -> None:
     if os.getpgrp() != os.getpid():
         os.setsid()
 
+    lifetime = None
+
     def terminate(_signal, _frame):
+        # stop() may escalate while atexit is already awaiting the independent
+        # guardian's cleanup ACK. Interrupting that bounded handshake converts a
+        # successful shutdown into exit 70. The host retains its SIGKILL deadline.
+        if lifetime is not None and lifetime.finishing:
+            return
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, terminate)

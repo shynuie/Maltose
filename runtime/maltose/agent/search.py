@@ -185,6 +185,9 @@ class WebResearchWorker:
                 freshness=freshness,
                 domains=domains,
             )
+            from maltose.tool_observations import observe_tool_return
+            observe_tool_return('search_web', dict(query=query, count=count, freshness=freshness, domains=domains),
+                dict(sources=[result.as_dict() for result in results], granularity='search_results', complete=True))
             for result in results:
                 unique_sources.setdefault(result.url, result.as_dict())
             report_progress(5 + int(index / len(queries) * 90))

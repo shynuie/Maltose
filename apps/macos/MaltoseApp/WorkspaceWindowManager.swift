@@ -8,7 +8,11 @@ private struct AgentWorkspaceSnapshot {
 }
 
 @MainActor final class WorkspaceWindowManager {
+    var sessionStore: WorkspaceSessionStore?
+    var restoresOpenPanelsOnly = false
+    let workMonitor = AgentWorkMonitor()
     var onSubmitText: ((String) -> Bool)?
+    private(set) var submittingScreenID: String?
     private var conversationStorageURL: URL?
     private(set) var liveConversationModel: ConversationHistoryModel?
     private var runtimeActivities: Set<String> = []
@@ -46,6 +50,10 @@ private struct AgentWorkspaceSnapshot {
     init(catalog: [WorkspacePanel] = WorkspacePanel.samples, automaticallyFullscreen: Bool = true) {
         self.catalog = catalog
         self.automaticallyFullscreen = automaticallyFullscreen
+        workMonitor.onProgressNeeded = { [weak self] in
+            guard let self, !self.catalog.contains(where: { $0.kind == .taskProgress }) else { return }
+            _ = self.addPanel(kind: .taskProgress, to: self.activeRoot?.screenID)
+        }
         screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.synchronize() }
         }
@@ -64,7 +72,11 @@ private struct AgentWorkspaceSnapshot {
         }
     }
 
-    @discardableResult func submitText(_ text: String) -> Bool {
+    @discardableResult func submitText(_ text: String, from screenID: String? = nil) -> Bool {
+        if let screenID, roots[screenID] == nil { return false }
+        let previous = submittingScreenID
+        submittingScreenID = screenID
+        defer { submittingScreenID = previous }
         guard onSubmitText?(text) == true else { return false }
         (liveConversationModel ?? panels["chat"]?.conversationHistoryModel)?.showLiveSession()
         return true
@@ -75,6 +87,67 @@ private struct AgentWorkspaceSnapshot {
         try model.enableLiveStorage(at: url)
         liveConversationModel = model
         conversationStorageURL = url
+        for record in model.resultDeliveries.values {
+            if record.createDocument && !record.closed && (!restoresOpenPanelsOnly || catalog.contains(where: { $0.id == record.panelID })) { try restoreResultDocument(record) }
+            if record.chart != nil && record.chartClosed != true && (!restoresOpenPanelsOnly || catalog.contains(where: { $0.id == record.chartPanelID })) { try restoreResultChart(record) }
+        }
+    }
+
+    var validateResultPublication: ((ResultDeliveryRecord) throws -> Void)?
+    func deliverResult(_ record: ResultDeliveryRecord) throws -> [String: UserViewValue] {
+        if record.publicationID.hasPrefix("task-continuation:") || record.publicationID.hasPrefix("main-result:") {
+            guard let validateResultPublication else { throw RuntimeLaunchError.unavailable("任務接續尚未連接共同狀態。") }
+            try validateResultPublication(record)
+        }
+        if record.publicationID.hasPrefix("task-result:") {try validateResultPublication?(record)}
+        guard let model = liveConversationModel else { throw RuntimeLaunchError.unavailable("成果交付尚未連接對話紀錄。") }
+        let replayed = model.resultDeliveries[record.publicationID] != nil
+        let saved = try model.saveResult(record)
+        var result: [String: UserViewValue] = ["publicationID": .string(record.publicationID), "chatStored": .boolean(true), "replayed": .boolean(replayed)]
+        if saved.closed { result["panelStatus"] = .string("closed") }
+        else if saved.createDocument {
+            try restoreResultDocument(saved)
+            result["panelStatus"] = .string("applied")
+        } else { result["panelStatus"] = .string("none") }
+        if let id = saved.panelID { result["panelID"] = .string(id) }
+        if let id = saved.chartPanelID {
+            if saved.chartClosed == true { result["chartStatus"] = .string("closed") }
+            else {
+                try restoreResultChart(saved)
+                result["chartStatus"] = .string("applied")
+            }
+            result["chartPanelID"] = .string(id)
+        }
+        return result
+    }
+
+    private func restoreResultDocument(_ record: ResultDeliveryRecord) throws {
+        guard !record.closed, let id = record.panelID else { return }
+        if let existing = catalog.first(where: { $0.id == id }) {
+            guard existing.kind == .document else { throw RuntimeLaunchError.unavailable("成果面板識別碼與既有面板衝突。") }
+        } else {
+            catalog.append(.init(id: id, title: record.title, kind: .document))
+            if let screen = activeRoot?.screenID { assignments[id] = screen }
+            synchronize()
+        }
+        guard let document = panels[id]?.markdownDocumentModel else { throw RuntimeLaunchError.unavailable("目前沒有可承載成果的工作區。") }
+        if document.resultTitle == nil { document.loadResult(title: record.title, markdown: record.markdown) }
+        try liveConversationModel?.markResultPanel(record.publicationID, closed: false)
+    }
+
+    private func restoreResultChart(_ record: ResultDeliveryRecord) throws {
+        guard record.chartClosed != true, let chart = record.chart, let id = record.chartPanelID else { return }
+        if let existing = catalog.first(where: { $0.id == id }) {
+            guard existing.kind == .chart else { throw RuntimeLaunchError.unavailable("圖表成果識別碼與既有面板衝突。") }
+        } else {
+            catalog.append(.init(id: id, title: chart.title, kind: .chart))
+            if let screen = activeRoot?.screenID { assignments[id] = screen }
+            synchronize()
+        }
+        guard let model = panels[id]?.chartModel else { throw RuntimeLaunchError.unavailable("目前沒有可承載圖表的工作區。") }
+        // A replay must not reset user changes to data, visibility, zoom or pan.
+        if model.resultPublicationID == nil { try model.loadResult(chart, publicationID: record.publicationID) }
+        try liveConversationModel?.markResultPanel(record.publicationID, closed: false, chart: true)
     }
 
     func receiveRuntimeEvent(_ data: Data) throws {
@@ -87,6 +160,7 @@ private struct AgentWorkspaceSnapshot {
         if runtimeSessionID != message.sessionID {
             runtimeSessionID = message.sessionID; runtimeWorkerFailed = false; runtimeActivities = []
         }
+        workMonitor.receive(message)
         let event = message.event
         switch event.type {
         case "model_started": runtimeActivities.insert("model")
@@ -179,6 +253,7 @@ private struct AgentWorkspaceSnapshot {
             if let window = windows.removeValue(forKey: id) { NSApp.removeWindowsItem(window); window.orderOut(nil) }
         }
         if automaticallyFullscreen { enterNextFullscreen() }
+        saveSessionIfEnabled()
     }
 
     func togglePanel(_ id: String) {
@@ -351,6 +426,9 @@ private struct AgentWorkspaceSnapshot {
 
     /// Summaries do not evaluate browser JavaScript or include hidden document bodies.
     private func panelSummary(_ panel: GlassPanelView) -> [String: UserViewValue] {
+        if let kind = catalog.first(where: { $0.id == panel.surfaceID })?.kind, kind == .agentActivity || kind == .taskProgress {
+            return workMonitor.summary(kind: kind)
+        }
         if let model = panel.conversationHistoryModel {
             return ["sessionID": .string(model.currentSessionID),
                     "sessionTitle": .string(model.currentSession?.title ?? ""),
@@ -384,11 +462,14 @@ private struct AgentWorkspaceSnapshot {
         guard let panel = panels[id], let entry = catalog.first(where: { $0.id == id }) else {
             throw WorkspaceAgentFailure(code: "not_found", message: "找不到指定面板。")
         }
-        return ["panelID": .string(id), "kind": .string(entry.kind.rawValue), "title": .string(panel.title),
+        return ["panelID": .string(id), "kind": .string(entry.kind.rawValue), "title": .string(panel.title), "canClose": .boolean(entry.kind.canClose),
                 "details": .object(await panelDetails(panel, presentation: "explicitRead", explicit: true))]
     }
 
     private func panelDetails(_ panel: GlassPanelView, presentation: String, explicit: Bool = false) async -> [String: UserViewValue] {
+        if let kind = catalog.first(where: { $0.id == panel.surfaceID })?.kind, kind == .agentActivity || kind == .taskProgress {
+            return workMonitor.details(kind: kind)
+        }
         if let model = panel.conversationHistoryModel {
             let session = model.currentSession
             let focused = !panel.isGlobal && !panel.isPreview
@@ -524,28 +605,44 @@ private struct AgentWorkspaceSnapshot {
         }
     }
 
+    func showWorkPanel(_ kind: WorkspacePanel.Kind) {
+        guard kind == .agentActivity || kind == .taskProgress else { return }
+        if !catalog.contains(where: { $0.kind == kind }) { _ = addPanel(kind: kind, to: activeRoot?.screenID) }
+        if let id = catalog.first(where: { $0.kind == kind })?.id { selectPanel(id) }
+    }
+
     /// Adds a new workspace panel instance and returns its stable identifier.
     /// Identity and chat are singleton panel types; the animation playground is not a workspace panel.
-    @discardableResult func addPanel(kind: WorkspacePanel.Kind, to screenID: String? = nil) -> WorkspacePanel? {
+    @discardableResult func addPanel(kind: WorkspacePanel.Kind, to screenID: String? = nil, title: String? = nil) -> WorkspacePanel? {
         guard kind != .agentCoreTest,
               kind.allowsMultipleInstances || !catalog.contains(where: { $0.kind == kind }) else { return nil }
         let id: String
         switch kind {
         case .agentIdentity: id = "agent-identity"
         case .conversationHistory: id = "chat"
+        case .agentActivity: id = "agent-activity"
+        case .taskProgress: id = "task-progress"
         default: id = "\(kind.defaultInstanceTitle.lowercased())-\(UUID().uuidString.lowercased())"
         }
         let instanceNumber = catalog.filter { $0.kind == kind }.count + 1
-        let panel = WorkspacePanel(id: id, title: "\(kind.defaultInstanceTitle) \(instanceNumber)", kind: kind)
+        let panel = WorkspacePanel(id: id, title: title ?? (kind.allowsMultipleInstances ? "\(kind.defaultInstanceTitle) \(instanceNumber)" : kind.defaultInstanceTitle), kind: kind)
         catalog.append(panel)
         if let screenID, windows[screenID] != nil { assignments[id] = screenID }
         synchronize()
         return panel
     }
 
-    /// Removes one panel instance. Singleton types may be closed and later recreated.
+    /// Removes one panel instance; identity and chat remain available throughout the session.
     @discardableResult func closePanel(_ id: String) -> Bool {
-        guard catalog.contains(where: { $0.id == id }) else { return false }
+        guard let record = catalog.first(where: { $0.id == id }), record.kind.canClose else { return false }
+        if let model = liveConversationModel, let record = model.resultDeliveries.values.first(where: { $0.panelID == id || $0.chartPanelID == id }) {
+            do { try model.markResultPanel(record.publicationID, closed: true, chart: record.chartPanelID == id) }
+            catch {
+                NSLog("Cannot persist result panel closure: %@", error.localizedDescription)
+                for root in roots.values { root.setRuntimeStatus("面板尚未關閉：無法保存關閉紀錄。") }
+                return false
+            }
+        }
         if draggingIDs.contains(id) { endDrag() }
         catalog.removeAll { $0.id == id }
         synchronize()
@@ -561,6 +658,7 @@ private struct AgentWorkspaceSnapshot {
                                    scrollOffset: $0.globalScrollOffset)
         }
         let assignmentSnapshot = assignments
+        let catalogSnapshot = catalog
         let selectedScreenID = activeRoot.screenID
         let chatScreenID = assignmentSnapshot["chat"] ?? selectedScreenID
         let chatModel = assignmentSnapshot["chat"] == selectedScreenID ? panels["chat"]?.conversationHistoryModel : nil
@@ -590,6 +688,7 @@ private struct AgentWorkspaceSnapshot {
             guard let self else { return }
             defer {
                 for id in addedPanelIDs.reversed() { _ = self.closePanel(id) }
+                self.catalog = catalogSnapshot
                 self.assignments = assignmentSnapshot
                 self.synchronize()
                 for (screenID, snapshot) in rootSnapshots {
@@ -890,7 +989,10 @@ private struct AgentWorkspaceSnapshot {
         dragCommitted = false
         for root in roots.values { root.pointerMoved() }
     }
+    func assignmentsForSession(_ id: String, screenID: String) { assignments[id] = screenID }
+
     func stop() {
+        saveSessionIfEnabled()
         fullscreenTask?.cancel()
         agentInteractionTestTask?.cancel()
         agentInteractionTestTask = nil

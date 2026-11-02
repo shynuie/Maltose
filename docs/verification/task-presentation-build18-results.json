@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "version": "0.7.0",
+  "build": "18",
+  "trialApp": "dist/trials/build18/Maltose.app",
+  "package": {
+    "version": "0.7.0",
+    "build": "18",
+    "bundleFiles": 156,
+    "runtimeFiles": 140,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "uiSmoke": {
+    "uiOnlyLaunch": "passed",
+    "applicationRunning": true,
+    "windowCount": 1,
+    "nativeFullscreen": false,
+    "agentStarted": false,
+    "microphoneUsed": false,
+    "normalExit": true
+  },
+  "sourceSnapshot": {
+    "files": 300,
+    "pythonAST": 233,
+    "sha256": "885c4b2e8de737705c6728004648b929ffedf39f4af3354a50810b4671628144",
+    "manifest": "/tmp/maltose-build18-source.json"
+  },
+  "productionBaseline": {
+    "sourceSHA256": "fa4b9c5380357c549918e6e764c608a51780b60621995d91b05944086497ed77",
+    "allProductionFilesMatch": true,
+    "filesByteIdentical": 299,
+    "testSourceDifference": [
+      "tests/e2e/AgentSessionCoordinatorTests.swift"
+    ],
+    "coordinatorCasesPreserved": 107,
+    "pythonFull": {
+      "passed": 574,
+      "failures": 0,
+      "skipped": 0,
+      "seconds": 48.824,
+      "log": "/tmp/maltose-panel-boundary-full-python.log"
+    },
+    "nativeFull": {
+      "passed": 280,
+      "failures": 0,
+      "skipped": 0,
+      "seconds": 842.325,
+      "log": "/tmp/maltose-panel-boundary-full-native.log"
+    }
+  },
+  "currentFocused": {
+    "python": {
+      "passed": 69,
+      "failures": 0,
+      "skipped": 0,
+      "seconds": 0.806,
+      "log": "/tmp/maltose-build18-focused-python.log"
+    },
+    "native": {
+      "passed": 28,
+      "failures": 0,
+      "skipped": 0,
+      "seconds": 50.107,
+      "log": "/tmp/maltose-build18-focused-native.log",
+      "configuredMain": true,
+      "gui": true
+    }
+  },
+  "deferred": {
+    "feature": "Cold worker scope and cold-ready delivery renewal",
+    "includedInBuild": false,
+    "archive": ".cache/deferred/cold-worker-scope-20261102",
+    "files": 9,
+    "archiveHashesVerified": true,
+    "originalReproStillUnfixed": true,
+    "evidence": "docs/verification/cold-worker-scope-results.json"
+  },
+  "scope": [
+    "Autonomous new charts over actual complete dated numeric data; source/method/month precision/missing values retained",
+    "Concrete missing-work or data explanation; only necessary human decisions require a question",
+    "Brief speech and complete on-screen text; existing panel and Codex control rules preserved"
+  ],
+  "remaining": [
+    "Real microphone/listening and gesture acceptance",
+    "Formal App cutover",
+    "Deferred advanced recovery and additional presentation features require separate work"
+  ],
+  "executableSHA256": "89b52da65224411e83555c5ccef76d2b0315cc3be3857c72f4db15048e82dbdf",
+  "formalBuildUnchanged": "15",
+  "previousTrialUnchanged": "17",
+  "formalExecutableSHA256": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+  "previousTrialExecutableSHA256": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+  "packaged": true,
+  "formalDeployed": false,
+  "committed": false,
+  "humanVoiceAcceptanceComplete": false,
+  "fullOriginalPlanComplete": false
+}

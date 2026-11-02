@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "status": "passed",
+  "build": "19",
+  "scope": [
+    "Standing panel access for Main and Codex without per-action permission, voice verification or an intent model",
+    "Existing local-file write/export policy retained",
+    "Current task/version and Main/Codex control checks retained"
+  ],
+  "sourceSnapshot": {
+    "files": 300,
+    "pythonAST": 233,
+    "sha256": "4164297ba7e63ee9012f3c01a13e586071881d88c5bc9078df4f2955180d1e02",
+    "manifest": "/tmp/maltose-build19-source.json"
+  },
+  "changedSinceBuild18": [
+    "apps/macos/MaltoseApp/AgentSessionPanelPolicy.swift",
+    "apps/macos/MaltoseApp/CodexTaskStore.swift",
+    "apps/macos/MaltoseApp/MaltoseApp.swift",
+    "apps/macos/MaltoseApp/NativePanelPolicy.swift",
+    "apps/macos/MaltoseApp/WorkspaceAgentToolDefinitions.swift",
+    "runtime/maltose/presentation.py",
+    "runtime/maltose/ui/native.py",
+    "runtime/maltose/ui/native_tools.py",
+    "runtime/tests/test_native_collaboration.py",
+    "runtime/tests/test_native_panel_tools.py",
+    "tests/e2e/AgentSessionCoordinatorTests.swift",
+    "tests/e2e/NativePanelOperationTests.swift",
+    "tests/e2e/NativePanelPolicyTests.swift"
+  ],
+  "focusedNative": {
+    "passed": 20,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 50.683,
+    "log": "/tmp/maltose-free-panels-focused-native.log"
+  },
+  "pythonFull": {
+    "passed": 574,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 46.839,
+    "log": "/tmp/maltose-free-panels-python.log",
+    "docker": true
+  },
+  "nativeFull": {
+    "passed": 275,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 846.171,
+    "log": "/tmp/maltose-free-panels-full-native.log",
+    "configuredMain": true,
+    "authenticatedCodex": true,
+    "gui": true,
+    "docker": true
+  },
+  "earlierAttempts": [
+    "Two obsolete native assertions expected the former human-revision permission boundary; adjusted to require receipt readback and then permit the in-app edit. Legacy claims are now reused without changing persisted history.",
+    "Python collaboration test still expected speaker authorization for panel reads; updated to assert standing read access without promoting speaker identity, and preserved the file-export identity rejection."
+  ],
+  "formalDeployed": false,
+  "committed": false,
+  "previousBuildsUnchanged": {
+    "15": "96f9147477677df65ec638de3b906275faba24c9f39aa7934b700525ce207d0f",
+    "17": "7c5b4d6cbf4efdc9de3a385af499fb2877ec4dcd887ee9aa9a24adca7bdfe301",
+    "18": "89b52da65224411e83555c5ccef76d2b0315cc3be3857c72f4db15048e82dbdf"
+  },
+  "trialApp": "dist/trials/build19/Maltose.app",
+  "version": "0.7.0",
+  "package": {
+    "version": "0.7.0",
+    "build": "19",
+    "bundleFiles": 156,
+    "runtimeFiles": 140,
+    "runtimeMatchesSource": true,
+    "configuredCredentialValuesChecked": 2,
+    "signature": "passed",
+    "independentRuntimeImport": "passed",
+    "agentStarted": false,
+    "microphoneUsed": false
+  },
+  "uiSmoke": {
+    "uiOnlyLaunch": "passed",
+    "applicationRunning": true,
+    "windowCount": 2,
+    "nativeFullscreen": false,
+    "agentStarted": false,
+    "microphoneUsed": false,
+    "normalExit": true
+  },
+  "releaseBuildSeconds": 54.37,
+  "packaged": true,
+  "humanVoiceAcceptanceComplete": false,
+  "fullOriginalPlanComplete": false,
+  "executableSHA256": "9c000b96c227c9cbfad2c2ee1904c773427e851bfbd3af754425e386c4839553",
+  "updatedPolicyTests": {
+    "previousStrictAuthorizationCases": 10,
+    "currentStandingPermissionCases": 5,
+    "reason": "Replaced superseded per-action human authorization requirements with coverage of all advertised in-app operations, unidentified readers, repeated invocations, file-transfer/export boundaries and current runtime/control checks."
+  },
+  "remaining": [
+    "Real microphone/listening and gesture acceptance",
+    "Formal App cutover",
+    "Previously deferred advanced recovery and presentation work remains separate"
+  ]
+}

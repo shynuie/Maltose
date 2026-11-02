@@ -131,14 +131,15 @@ class NativeCollaborationService:
             self.last_observation = enriched
             return enriched
 
-    def review(self, record, question, generate):
+    def review(self, record, question, generate, *, namespace='reviews'):
+        if namespace not in {'reviews', 'product-assessments'}: raise ValueError('Invalid review namespace')
         identity = question['messageID']
         # Delivery acknowledgement changes after projection; it is transport
         # metadata, not a different request to the read-only model.
         context = {key: value for key, value in record.items() if key != 'deliveredReviewID'}
         fingerprint = hashlib.sha256(json.dumps({'record': context, 'question': question},
             sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-        path = self.directory / 'reviews' / (hashlib.sha256(identity.encode()).hexdigest() + '.json')
+        path = self.directory / namespace / (hashlib.sha256(identity.encode()).hexdigest() + '.json')
         # Separate from the input/outbox lock: a model call must not block voice capture.
         with self._review_lock:
             if path.parent.is_symlink(): raise PermissionError('Review directory cannot be a symbolic link')
@@ -156,7 +157,7 @@ class NativeCollaborationService:
             result = generate()
             if not isinstance(result, dict) or result.get('mode') not in ('model', 'template') or not isinstance(result.get('content'), str):
                 raise ValueError('Invalid collaboration review result')
-            if not result['content'].strip() or len(result['content'].encode()) > 64 * 1024:
+            if not result['content'].strip() or len(result['content'].encode()) > 256 * 1024:
                 raise ValueError('Collaboration review result exceeds the content limit')
             CodexWorkspaceManager._save(path, {**state, 'status': 'complete', 'result': result})
             return result
